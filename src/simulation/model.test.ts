@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGES, evaluateChallenge } from './challenges';
-import { BASELINE } from './config';
+import { BASELINE, PARAMETERS } from './config';
 import {
   buildTargets,
   calculateAlgae,
@@ -17,10 +17,12 @@ import { formatSimulatedTime } from './time';
 import { evaluateMessages } from './messages';
 import type { SimulationState } from './types';
 
-function run(state: SimulationState, days: number, step = 0.1) {
+/** Roda a simulação por um número de dias simulados, em passos de `stepSeconds`. */
+function run(state: SimulationState, days: number, stepSeconds = 0.1) {
   let current = state;
-  const steps = Math.round(days / (step * current.speed));
-  for (let index = 0; index < steps; index += 1) current = tickSimulation(current, step);
+  const daysPerTick = stepSeconds * PARAMETERS.daysPerRealSecond * current.speed;
+  const steps = Math.max(1, Math.round(days / daysPerTick));
+  for (let index = 0; index < steps; index += 1) current = tickSimulation(current, stepSeconds);
   return current;
 }
 
@@ -62,8 +64,8 @@ describe('modelo de simulação', () => {
     fast.targets.temperature = 31;
     const afterNormal = tickSimulation(normal, 1);
     const afterFast = tickSimulation(fast, 0.1);
-    expect(afterNormal.elapsedDays).toBe(1);
-    expect(afterFast.elapsedDays).toBe(1);
+    expect(afterNormal.elapsedDays).toBeCloseTo(PARAMETERS.daysPerRealSecond);
+    expect(afterFast.elapsedDays).toBeCloseTo(PARAMETERS.daysPerRealSecond);
     expect(afterFast.env.temperature).toBeCloseTo(afterNormal.env.temperature);
   });
 
@@ -169,7 +171,6 @@ describe('modelo de simulação', () => {
 
     expect(calculateAlgae(dirty.env, dirty.health)).toBeGreaterThan(calculateAlgae(clean.env, clean.health));
     expect(pick(dirtyIndicators, 'algae')).toBeGreaterThan(pick(cleanIndicators, 'algae'));
-    expect(pick(dirtyIndicators, 'light')).toBeLessThan(pick(cleanIndicators, 'light'));
     expect(pick(dirtyIndicators, 'oxygen')).toBeLessThan(pick(cleanIndicators, 'oxygen'));
   });
 

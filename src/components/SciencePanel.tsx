@@ -2,6 +2,7 @@ import { Icon } from './Icons';
 import { FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
 import { calculateAlgae, calculateFishPressures, calculateTrophicBalance, countActiveFactors } from '../simulation/model';
 import { evaluateChallenge, type ChallengeProgress } from '../simulation/challenges';
+import { getMessageById } from '../simulation/messages';
 import { formatSimulatedTime } from '../simulation/time';
 import type {
   Challenge,
@@ -45,7 +46,7 @@ function topPressures(state: SimulationState, id: FishSpeciesId | 'coral') {
     ? state.pressures
     : calculateFishPressures(state.env);
   const sensitivity: Partial<Record<PressureId, number>> = id === 'coral'
-    ? { thermal: 1, acidification: 1, oil: 0.75, microplastics: 0.14, sewage: 0.55, turbidity: 0.6, fishing: 0.3 }
+    ? { thermal: 1, acidification: 1, oil: 0.75, microplastics: 0.14, sewage: 0.55 }
     : (FISH_SPECIES.find((item) => item.id === id)?.sensitivity ?? {});
 
   return (Object.keys(pressures) as PressureId[])
@@ -224,9 +225,9 @@ export function SciencePanel({
                 Equilíbrio da teia: <strong className={levelTone(trophic)}>{Math.round(trophic)}%</strong>
               </p>
               <p className="web-note">
-                Herbívoros raspam as algas e abrem espaço para o coral recrutar. Quando a pesca remove
-                esses peixes, as algas avançam e a teia fica mais curta: sobram poucos elos entre a
-                produção e os predadores de topo.
+                Herbívoros raspam as algas e abrem espaço para o coral recrutar. Quando as algas
+                avançam — por excesso de nutrientes ou pela perda de herbívoros — a teia fica mais
+                curta: sobram poucos elos entre a produção e os predadores de topo.
               </p>
             </article>
           </section>
@@ -267,7 +268,7 @@ export function SciencePanel({
                     {eventLog.map((event, index) => (
                       <li key={`${event.id}-${event.day}-${index}`}>
                         <span className="event-day">dia {event.day}</span>
-                        <span className="event-title">{event.id.replace(/_/g, ' ')}</span>
+                        <span className="event-title">{getMessageById(event.id).title}</span>
                       </li>
                     ))}
                   </ul>
@@ -299,7 +300,9 @@ export function SciencePanel({
                     >
                       <header>
                         <span className="challenge-title">{challenge.title}</span>
-                        <span className="challenge-days">{progress.daysHeld}/{challenge.windowDays} dias</span>
+                        <span className="challenge-days">
+                          {Math.min(progress.daysHeld, challenge.windowDays)}/{challenge.windowDays} dias
+                        </span>
                       </header>
                       <p>{challenge.brief}</p>
                       <div className="challenge-progress"><i style={{ width: `${progress.progress * 100}%` }} /></div>

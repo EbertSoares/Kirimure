@@ -11,11 +11,11 @@ export const CHALLENGES: readonly Challenge[] = [
   {
     id: 'clean-water',
     title: 'Água limpa por 30 dias',
-    brief: 'Mantenha esgoto abaixo de 15, turbidez até 10 e microplásticos até 10, por 30 dias seguidos.',
-    hint: 'Esgoto e sedimento se somam. Reduza os dois ao mesmo tempo em vez de focar em um só.',
+    brief: 'Mantenha esgoto abaixo de 15 e microplásticos até 10, por 30 dias seguidos.',
+    hint: 'Esgoto e plástico se somam. Reduza os dois ao mesmo tempo em vez de focar em um só.',
     windowDays: 30,
     holds: (_point: HistoryPoint, state: SimulationState) =>
-      state.env.sewage <= 15 && state.env.turbidity <= 10 && state.env.microplastics <= 10,
+      state.env.sewage <= 15 && state.env.microplastics <= 10,
   },
   {
     id: 'living-reef',
@@ -28,20 +28,18 @@ export const CHALLENGES: readonly Challenge[] = [
   {
     id: 'protected-fish',
     title: 'Peixes protegidos por 45 dias',
-    brief: 'Com a pesca em até 40, mantenha a comunidade de peixes em 75% ou mais por 45 dias.',
-    hint: 'O peixe-papagaio é o mais sensível à pesca. A recuperação ambiental ajuda a compensar.',
+    brief: 'Mantenha a comunidade de peixes em 75% ou mais por 45 dias seguidos.',
+    hint: 'O peixe-papagaio é o mais sensível às mudanças da água. Mantenha o estresse baixo para a comunidade se recuperar.',
     windowDays: 45,
-    holds: (point: HistoryPoint, state: SimulationState) =>
-      point.fish >= 75 && state.env.fishing <= 40,
+    holds: (point: HistoryPoint) => point.fish >= 75,
   },
   {
     id: 'restored-reef',
     title: 'Restaurar o recife em 30 dias',
-    brief: 'Com recuperação ambiental em 50 ou mais, leve a saúde geral a 70% e mantenha por 30 dias.',
-    hint: 'A proteção reduz o dano e aumenta o limite de estresse que o recife tolera antes de piorar.',
+    brief: 'Leve a saúde geral a 70% e mantenha por 30 dias seguidos.',
+    hint: 'Recuperar é mais lento do que degradar: devolva os fatores para perto do natural e espere.',
     windowDays: 30,
-    holds: (point: HistoryPoint, state: SimulationState) =>
-      state.env.recovery >= 50 && point.overall >= 70,
+    holds: (point: HistoryPoint) => point.overall >= 70,
   },
 ];
 

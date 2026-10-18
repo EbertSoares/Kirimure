@@ -58,7 +58,6 @@ export function BrazilMapScreen({ onSelectBahia }: BrazilMapScreenProps) {
     <main className="map-screen">
       <header className="kirimure-wordmark">
         <strong>Kirimurê</strong>
-        <span>Laboratório Digital Marinho</span>
       </header>
 
       <section className="map-selection" aria-label="Mapa do Brasil com o cenário da Bahia disponível">

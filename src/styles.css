@@ -85,7 +85,7 @@ button:focus-visible, input:focus-visible {
   z-index: 4;
   display: flex;
   align-items: baseline;
-  gap: 13px;
+  justify-content: center;
   padding: 24px 34px 0;
 }
 
@@ -94,14 +94,6 @@ button:focus-visible, input:focus-visible {
   font-size: 30px;
   font-weight: 850;
   letter-spacing: -.035em;
-}
-
-.kirimure-wordmark span {
-  color: var(--faint);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .16em;
-  text-transform: uppercase;
 }
 
 .map-selection {
@@ -1050,6 +1042,12 @@ button:focus-visible, input:focus-visible {
 
 .timeline-clock strong { color: var(--foam); font-size: 15px; font-weight: 800; }
 
+.timeline-clock .clock-scale {
+  letter-spacing: .02em;
+  text-transform: none;
+  font-weight: 800;
+}
+
 .timeline-event { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 .timeline-event .event-title {
@@ -1139,7 +1137,8 @@ button:focus-visible, input:focus-visible {
 
 .console-body {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Cinco fatores: cabem todos em uma linha no desktop. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px 16px;
   padding: 6px 14px 8px;
   animation: consoleOpen .2s ease-out;
@@ -1296,7 +1295,6 @@ input[type="range"]::-moz-range-thumb {
 
   .kirimure-wordmark { padding: 20px 20px 0; }
   .kirimure-wordmark strong { font-size: 26px; }
-  .kirimure-wordmark span { font-size: 11px; }
   .brazil-map { height: auto; width: min(100%, 560px); }
 
   .map-selection { grid-template-rows: auto auto minmax(0, 1fr); }
@@ -1377,7 +1375,7 @@ input[type="range"]::-moz-range-thumb {
   .console-toggle { font-size: 11.5px; padding: 8px 11px; }
   .speed-control button { min-width: 32px; height: 26px; padding: 0 4px; }
 
-  .kirimure-wordmark { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .kirimure-wordmark { align-items: center; }
   .map-selection { padding: 4px 14px 18px; }
 }
 

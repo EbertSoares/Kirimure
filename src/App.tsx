@@ -4,11 +4,10 @@ import { Icon } from './components/Icons';
 import { SciencePanel, type PanelTab } from './components/SciencePanel';
 import { TimelineBar } from './components/TimelineBar';
 import { MarineScene } from './scene/MarineScene';
-import { BASELINE, FACTOR_GROUPS, ITEM_DEFINITIONS } from './simulation/config';
+import { BASELINE, FACTOR_ORDER, ITEM_DEFINITIONS } from './simulation/config';
 import { CHALLENGES, evaluateChallenge } from './simulation/challenges';
 import {
   buildTargets,
-  countActiveFactors,
   createInitialState,
   deriveIndicators,
   isFactorActive,
@@ -21,8 +20,6 @@ import type { Environment, ItemId, SimulationSpeed } from './simulation/types';
 type AppScreen = 'map' | 'simulation';
 
 const DEPTH_SCALE = 30;
-
-const FACTOR_ORDER = FACTOR_GROUPS.flatMap((group) => group.items);
 
 function formatValue(id: ItemId, value: number) {
   if (id === 'temperature') return `${value.toFixed(1).replace('.0', '')}°C`;
@@ -94,17 +91,27 @@ function TeachingConsole({
   onApply,
 }: TeachingConsoleProps) {
   const [controls, setControls] = useState<Environment>(() => ({ ...initialControls }));
+  // O que já está valendo na simulação: serve para saber se há mudança pendente.
+  const [applied, setApplied] = useState<Environment>(() => ({ ...initialControls }));
 
   // "Reiniciar" devolve as barras para a posição inicial.
   useEffect(() => {
     setControls({ ...BASELINE });
+    setApplied({ ...BASELINE });
   }, [resetToken]);
 
   useEffect(() => {
     onControlsChange(controls);
   }, [controls, onControlsChange]);
 
-  const activeFactors = countActiveFactors(controls);
+  // Devolver uma barra ao natural também é uma mudança a aplicar.
+  const pendingChange = (Object.keys(controls) as ItemId[])
+    .some((id) => controls[id] !== applied[id]);
+
+  const apply = () => {
+    setApplied({ ...controls });
+    onApply(controls);
+  };
 
   return (
     <section className={`teaching-console ${open ? 'expanded' : 'collapsed'}`} aria-label="Controles do experimento">
@@ -113,8 +120,8 @@ function TeachingConsole({
         <button
           type="button"
           className="apply-button"
-          disabled={activeFactors === 0}
-          onClick={() => onApply(controls)}
+          disabled={!pendingChange}
+          onClick={apply}
         >
           <Icon name="play" /> Aplicar e observar
         </button>

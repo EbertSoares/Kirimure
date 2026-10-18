@@ -1,4 +1,5 @@
 import { Icon } from './Icons';
+import { PARAMETERS } from '../simulation/config';
 import { getMessageById } from '../simulation/messages';
 import { formatSimulatedTime, SIMULATION_SPEEDS } from '../simulation/time';
 import type { SimulationSpeed, SimulationState } from '../simulation/types';
@@ -19,6 +20,10 @@ export function TimelineBar({
   onToggleConsole,
 }: TimelineBarProps) {
   const lastEvent = state.events[state.events.length - 1];
+  const secondsPerDay = 1 / (PARAMETERS.daysPerRealSecond * state.speed);
+  const scaledPace = secondsPerDay >= 1
+    ? secondsPerDay.toFixed(1).replace('.', ',')
+    : secondsPerDay.toFixed(2).replace('.', ',');
 
   return (
     <section className="timeline-bar" aria-label="Linha do tempo da simulação">
@@ -44,6 +49,7 @@ export function TimelineBar({
       <div className="timeline-clock">
         <small>Tempo simulado</small>
         <strong>{formatSimulatedTime(state.elapsedDays)}</strong>
+        <small className="clock-scale">1 dia ≈ {scaledPace} s</small>
       </div>
 
       <div className="timeline-event">

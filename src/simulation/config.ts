@@ -23,7 +23,14 @@ export const PRESSURE_IDS: readonly PressureId[] = [
 
 export const PARAMETERS = {
   tickRate: 10,
-  daysPerRealSecond: 1,
+  /**
+   * Dias simulados por segundo real na velocidade 1×.
+   *
+   * 0,25 = um dia a cada 4 segundos: o relógio anda devagar de propósito, para
+   * a turma ver quanto tempo a consequência leva para aparecer. As velocidades
+   * 2× a 10× servem para adiantar a aula.
+   */
+  daysPerRealSecond: 0.25,
   tauDays: {
     temperature: 7,
     ph: 12,
@@ -73,7 +80,7 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
     id: 'blue-tang',
     label: 'Cirurgião-patela',
     role: 'herbívoro de algas rasas',
-    note: 'Sensível à água turva: depende da visão para se alimentar e se abrigar.',
+    note: 'Sensível ao calor: é o primeiro herbívoro a mostrar sinais quando a água esquenta.',
     collapseDays: 62,
     sensitivity: {
       thermal: 1.2,
@@ -105,7 +112,7 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
     id: 'parrotfish',
     label: 'Peixe-papagaio',
     role: 'herbívoro raspador',
-    note: 'Alvo frequente da pesca. Sem ele, as algas tomam o espaço do coral.',
+    note: 'Herbívoro raspador: cresce devagar e, sem ele, as algas tomam o espaço do coral.',
     collapseDays: 48,
     sensitivity: {
       thermal: 1.05,
@@ -119,38 +126,18 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
   },
 ];
 
-export interface FactorGroup {
-  id: string;
-  title: string;
-  description: string;
-  items: readonly ItemId[];
-}
-
-export const FACTOR_GROUPS: readonly FactorGroup[] = [
-  {
-    id: 'clima',
-    title: 'Clima e química da água',
-    description: 'Ondas de calor e acidificação agem devagar, mas de forma acumulativa.',
-    items: ['temperature', 'ph'],
-  },
-  {
-    id: 'poluicao',
-    title: 'Poluição',
-    description: 'Cada poluente tem uma rota própria até o recife.',
-    items: ['microplastics', 'oil', 'sewage', 'turbidity'],
-  },
-  {
-    id: 'uso',
-    title: 'Uso do ambiente',
-    description: 'A pesca remove peixes e altera o equilíbrio entre algas e corais.',
-    items: ['fishing'],
-  },
-  {
-    id: 'acao',
-    title: 'Ação de recuperação',
-    description: 'Proteção e restauração agem a favor do recife, mesmo com outros fatores ativos.',
-    items: ['recovery'],
-  },
+/**
+ * Ordem dos controles na bancada.
+ *
+ * Só entram os fatores que o aluno ajusta na mão: temperatura, pH e os três
+ * poluentes. Pesca, turbidez e recuperação saíram da bancada.
+ */
+export const FACTOR_ORDER: readonly ItemId[] = [
+  'temperature',
+  'ph',
+  'microplastics',
+  'oil',
+  'sewage',
 ];
 
 export const ITEM_DEFINITIONS = {

@@ -259,7 +259,6 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
     0,
     100,
   );
-  const light = clamp(100 - state.env.turbidity, 0, 100);
   const thriving = FISH_SPECIES.filter((item) => state.species[item.id] >= 60);
   const speciesScore = (thriving.length / FISH_SPECIES.length) * 100;
   const trophic = calculateTrophicBalance(state.species, algae);
@@ -309,15 +308,6 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
       unit: '%',
       tone: tone(trophic),
       note: 'Pesa quem come algas (cirurgião-patela e papagaio) contra o espaço que as algas ocupam.',
-    },
-    {
-      id: 'light',
-      label: 'Luz que chega ao fundo',
-      display: `${Math.round(light)}%`,
-      value: light,
-      unit: '%',
-      tone: tone(light),
-      note: 'Sedimentos em suspensão reduzem a luz disponível para o coral.',
     },
     {
       id: 'oxygen',
