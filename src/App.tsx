@@ -10,6 +10,7 @@ import {
   buildTargets,
   createInitialState,
   deriveIndicators,
+  effectivePh,
   isFactorActive,
   tickSimulation,
 } from './simulation/model';
@@ -256,7 +257,7 @@ export function App() {
             </span>
             <span>
               <small>Acidez</small>
-              <strong>{simulation.env.ph.toFixed(2)} pH</strong>
+              <strong>{effectivePh(simulation.env).toFixed(2)} pH</strong>
             </span>
             <span>
               <small>Tempo</small>

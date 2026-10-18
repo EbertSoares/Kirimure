@@ -10,6 +10,7 @@ import {
   countActiveFactors,
   createInitialState,
   deriveIndicators,
+  effectivePh,
   speciesStress,
   tickSimulation,
 } from './model';
@@ -92,6 +93,19 @@ describe('modelo de simulação', () => {
     const turbidity = calculateStress({ ...BASELINE, turbidity: 60 });
     const both = calculateStress({ ...BASELINE, sewage: 60, turbidity: 60 });
     expect(both.coral).toBeGreaterThan(Math.max(sewage.coral, turbidity.coral));
+  });
+
+  it('faz a poluição acidificar a água', () => {
+    const limpa = calculatePressures(BASELINE);
+    const comEsgoto = { ...BASELINE, sewage: 100 };
+
+    expect(effectivePh(comEsgoto)).toBeLessThan(BASELINE.ph);
+    expect(effectivePh(comEsgoto)).toBeGreaterThan(PARAMETERS.ph.coralMax);
+    expect(calculatePressures(comEsgoto).acidification).toBeGreaterThan(limpa.acidification);
+    // A poluição sozinha acidifica menos que a barra de pH no máximo.
+    expect(calculatePressures(comEsgoto).acidification).toBeLessThan(
+      calculatePressures({ ...BASELINE, ph: PARAMETERS.ph.coralMax }).acidification,
+    );
   });
 
   it('inicia estresse térmico dos corais antes do estresse dos peixes', () => {

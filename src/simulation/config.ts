@@ -52,6 +52,13 @@ export const PARAMETERS = {
     coralMax: 7.6,
     fishStart: 7.8,
     fishMax: 7.6,
+    /**
+     * Acidez que a poluição orgânica soma à água, em unidades de pH no máximo
+     * (0,3 de 8,1 chega a 7,8). Esgoto e óleo em decomposição liberam CO₂
+     * dentro da água; o plástico pesa pouco.
+     */
+    pollutionDrop: 0.3,
+    pollutionWeights: { sewage: 0.6, oil: 0.3, microplastics: 0.1 },
   },
   // Peso de cada poluente no estresse (0 a 1 na concentração máxima).
   pollutantWeights: {
@@ -158,7 +165,7 @@ export const ITEM_DEFINITIONS = {
     max: 8.2,
     step: 0.01,
     unit: '',
-    help: 'Acidificação é a queda do pH, mesmo com a água ainda alcalina. Ela reduz a disponibilidade de carbonato para os corais.',
+    help: 'Acidificação é a queda do pH, mesmo com a água ainda alcalina. A barra representa o gás carbônico do ar; esgoto e óleo em decomposição também liberam CO₂ na água e derrubam o pH um pouco mais.',
     icon: 'flask',
   },
   microplastics: {

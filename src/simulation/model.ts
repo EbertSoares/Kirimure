@@ -33,11 +33,35 @@ export function countActiveFactors(environment: Environment) {
   return ITEM_IDS.filter((id) => isFactorActive(id, environment[id])).length;
 }
 
+/**
+ * Acidez extra que a poluição orgânica soma à água (0 = água sem poluição).
+ *
+ * A barra de pH representa o gás carbônico do ar; esgoto e óleo em decomposição
+ * liberam CO₂ dentro da água, então o pH que o recife sente fica mais baixo.
+ */
+export function pollutionAcidity(env: Environment) {
+  const weights = PARAMETERS.ph.pollutionWeights;
+  const load = (
+    env.sewage * weights.sewage
+    + env.oil * weights.oil
+    + env.microplastics * weights.microplastics
+  ) / 100;
+
+  return clamp(load) * PARAMETERS.ph.pollutionDrop;
+}
+
+/** pH que o recife sente: o da barra menos a acidez vinda da poluição. */
+export function effectivePh(env: Environment) {
+  return env.ph - pollutionAcidity(env);
+}
+
 /** Traduz o ambiente em pressões de 0 a 1 sobre o recife (limiares dos corais). */
 export function calculatePressures(env: Environment): Pressures {
+  const ph = effectivePh(env);
+
   return {
     thermal: stressAbove(env.temperature, PARAMETERS.temperature.coralStart, PARAMETERS.temperature.coralMax),
-    acidification: stressBelow(env.ph, PARAMETERS.ph.coralStart, PARAMETERS.ph.coralMax),
+    acidification: stressBelow(ph, PARAMETERS.ph.coralStart, PARAMETERS.ph.coralMax),
     oil: clamp(env.oil / 100),
     microplastics: clamp(env.microplastics / 100),
     sewage: clamp(env.sewage / 100),
@@ -51,7 +75,7 @@ export function calculateFishPressures(env: Environment): Pressures {
   return {
     ...calculatePressures(env),
     thermal: stressAbove(env.temperature, PARAMETERS.temperature.fishStart, PARAMETERS.temperature.fishMax),
-    acidification: stressBelow(env.ph, PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
+    acidification: stressBelow(effectivePh(env), PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
   };
 }
 
@@ -181,7 +205,7 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
     overall: next.overall,
     algae: calculateAlgae(next.env, next.health),
     temperature: next.env.temperature,
-    ph: next.env.ph,
+    ph: effectivePh(next.env),
   };
 
   return { ...next, history: [...state.history, point].slice(-maxPoints) };
