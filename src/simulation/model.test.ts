@@ -10,14 +10,14 @@ describe('modelo de simulação', () => {
     expect(state.health).toEqual({ coral: 100, fish: 100 });
   });
 
-  it('retorna fatores desmarcados ao baseline', () => {
-    const targets = buildTargets(new Set(['oil']), {
-      microplastics: 80,
+  it('aplica apenas os fatores que saíram da posição inicial', () => {
+    const targets = buildTargets({
+      microplastics: 0,
       oil: 70,
       temperature: 34,
       ph: 7.5,
     });
-    expect(targets).toEqual({ ...BASELINE, oil: 70 });
+    expect(targets).toEqual({ ...BASELINE, oil: 70, temperature: 34, ph: 7.5 });
   });
 
   it('aproxima o ambiente do alvo sem salto instantâneo', () => {

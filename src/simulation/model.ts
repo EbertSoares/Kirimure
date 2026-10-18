@@ -82,13 +82,12 @@ export function createInitialState(): SimulationState {
   };
 }
 
-export function buildTargets(
-  selected: Set<ItemId>,
-  controls: Environment,
-): Environment {
+// Sem interruptores: um fator entra na simulação quando a barra sai da
+// posição inicial. Barra na origem significa fator desligado.
+export function buildTargets(controls: Environment): Environment {
   return (Object.keys(BASELINE) as ItemId[]).reduce(
     (result, id) => {
-      result[id] = selected.has(id) ? controls[id] : BASELINE[id];
+      result[id] = Math.abs(controls[id] - BASELINE[id]) > 1e-9 ? controls[id] : BASELINE[id];
       return result;
     },
     { ...BASELINE },

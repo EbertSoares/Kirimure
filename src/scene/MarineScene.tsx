@@ -113,24 +113,22 @@ function layeredFishMesh(texture: Texture) {
 function createFish(index: number, textures: MarineTextures): FishVisual {
   const root = new Container();
   const variants = [
-    [textures.fishBlueTangHealthy, textures.fishBlueTangStressed, textures.fishBlueTangDead],
-    [textures.fishSergeantMajor, textures.fishSergeantMajor, textures.fishSergeantMajor],
-    [textures.fishParrotfish, textures.fishParrotfish, textures.fishParrotfish],
-    [textures.fishReefSardine, textures.fishReefSardine, textures.fishReefSardine],
+    [textures.fishBlueTangHealthy, textures.fishBlueTangStressed],
+    [textures.fishSergeantMajorHealthy, textures.fishSergeantMajorStressed],
+    [textures.fishParrotfishHealthy, textures.fishParrotfishStressed],
   ] as const;
   const variantIndex = index % variants.length;
-  const [healthyTexture, stressedTexture, deadTexture] = variants[variantIndex];
+  const [healthyTexture, stressedTexture] = variants[variantIndex];
   const healthy = layeredFishMesh(healthyTexture);
   const stressed = layeredFishMesh(stressedTexture);
-  const dead = layeredFishMesh(deadTexture);
-  if (variantIndex !== 0) {
-    stressed.tint = 0xc59b72;
-    dead.tint = 0x70848a;
-  }
+  // Os peixes têm arte própria para saudável e estressado. O estado morto
+  // reaproveita a arte de estresse com um tom acinzentado.
+  const dead = layeredFishMesh(stressedTexture);
+  dead.tint = 0x8b9aa0;
   stressed.alpha = 0;
   dead.alpha = 0;
   root.addChild(healthy, stressed, dead);
-  const size = (variantIndex === 3 ? 44 : 57) + (index % 4) * 9;
+  const size = 57 + (index % 4) * 9;
   const textureWidth = healthyTexture.width;
 
   return {
@@ -348,6 +346,7 @@ export function MarineScene({ state }: MarineSceneProps) {
 
     let disposed = false;
     let app: Application | null = null;
+    let observer: ResizeObserver | null = null;
     let waterGradient: FillGradient | null = null;
 
     const start = async () => {
@@ -367,6 +366,19 @@ export function MarineScene({ state }: MarineSceneProps) {
 
       app = instance;
       host.appendChild(instance.canvas);
+
+      // O Pixi não acompanha o tamanho do contêiner sozinho: quando a bancada
+      // é recolhida, a cena cresce e o renderer precisa ser redimensionado
+      // para o fundo, as rochas e os corais se reposicionarem.
+      const resizeObserver = new ResizeObserver(() => {
+        if (!app) return;
+        const { clientWidth, clientHeight } = host;
+        if (clientWidth > 0 && clientHeight > 0) {
+          app.renderer.resize(clientWidth, clientHeight);
+        }
+      });
+      resizeObserver.observe(host);
+      observer = resizeObserver;
 
       const gradient = new FillGradient({
         type: 'linear',
@@ -676,6 +688,7 @@ export function MarineScene({ state }: MarineSceneProps) {
 
     return () => {
       disposed = true;
+      observer?.disconnect();
       if (app) {
         app.destroy(true, { children: true });
         app = null;
