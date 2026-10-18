@@ -1,4 +1,5 @@
 export type ItemId = 'microplastics' | 'oil' | 'temperature' | 'ph';
+export type SimulationSpeed = 1 | 2 | 3 | 5 | 10;
 
 export interface Environment {
   microplastics: number;
@@ -12,11 +13,22 @@ export interface Health {
   fish: number;
 }
 
+export interface Exposure {
+  thermal: number;
+  acidification: number;
+  oil: number;
+  microplastics: number;
+}
+
 export interface SimulationState {
   env: Environment;
   targets: Environment;
   health: Health;
+  exposure: Exposure;
   overall: number;
+  elapsedDays: number;
+  speed: SimulationSpeed;
+  paused: boolean;
   firedMessages: Set<string>;
   latestMessageId: string | null;
 }

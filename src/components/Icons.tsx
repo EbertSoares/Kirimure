@@ -12,6 +12,8 @@ type IconName =
   | 'info'
   | 'reset'
   | 'play'
+  | 'pause'
+  | 'clock'
   | 'location'
   | 'check';
 
@@ -39,6 +41,8 @@ export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconN
     info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></>,
     reset: <><path d="M20 7v5h-5"/><path d="M19 12a8 8 0 1 0-2.3 5.7"/></>,
     play: <path d="m9 6 8 6-8 6V6Z" fill="currentColor"/>,
+    pause: <><path d="M8 6v12"/><path d="M16 6v12"/></>,
+    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
     location: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2"/></>,
     check: <path d="m6 12 4 4 8-9"/>,
   };

@@ -9,11 +9,12 @@ export const BASELINE: Environment = {
 
 export const PARAMETERS = {
   tickRate: 10,
-  tau: {
-    microplastics: 6,
-    oil: 6,
-    temperature: 6,
-    ph: 6,
+  daysPerRealSecond: 1,
+  tauDays: {
+    microplastics: 5,
+    oil: 3,
+    temperature: 7,
+    ph: 12,
   } satisfies Record<ItemId, number>,
   temperature: {
     coralStart: 28,
@@ -32,7 +33,7 @@ export const PARAMETERS = {
     fish: { microplastics: 0.35, oil: 0.55 },
   },
   synergy: 0.5,
-  collapseSeconds: { coral: 60, fish: 60 },
+  collapseDays: { coral: 75, fish: 60 },
   recoveryFactor: 5,
   recoveryThreshold: 0.1,
 } as const;

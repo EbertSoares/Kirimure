@@ -8,6 +8,11 @@ import seaweedGreen from '../assets/svg/environment/seaweed-green.png';
 import fishBlueTangDead from '../assets/svg/fish/fish-blue-tang-dead.png';
 import fishBlueTangHealthy from '../assets/svg/fish/fish-blue-tang-healthy.png';
 import fishBlueTangStressed from '../assets/svg/fish/fish-blue-tang-stressed.png';
+import fishParrotfish from '../assets/svg/fish/fish-parrotfish.svg';
+import fishReefSardine from '../assets/svg/fish/fish-reef-sardine.svg';
+import fishSergeantMajor from '../assets/svg/fish/fish-sergeant-major.svg';
+import jellyfishMoon from '../assets/svg/fauna/jellyfish-moon.svg';
+import squidCaribbeanReef from '../assets/svg/fauna/squid-caribbean-reef.svg';
 import microplasticsMixed from '../assets/svg/pollution/microplastics-particles-dark.svg';
 
 export const MARINE_ASSET_URLS = {
@@ -21,6 +26,11 @@ export const MARINE_ASSET_URLS = {
   fishBlueTangDead,
   fishBlueTangHealthy,
   fishBlueTangStressed,
+  fishParrotfish,
+  fishReefSardine,
+  fishSergeantMajor,
+  jellyfishMoon,
+  squidCaribbeanReef,
   microplasticsMixed,
 } as const;
 

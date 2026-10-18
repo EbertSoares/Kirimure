@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BASELINE } from './config';
 import { buildTargets, calculateStress, createInitialState, tickSimulation } from './model';
+import { formatSimulatedTime } from './time';
 
 describe('modelo de simulação', () => {
   it('inicia no estado saudável', () => {
@@ -21,10 +22,35 @@ describe('modelo de simulação', () => {
 
   it('aproxima o ambiente do alvo sem salto instantâneo', () => {
     const state = createInitialState();
+    state.paused = false;
     state.targets.temperature = 34;
     const next = tickSimulation(state, 0.1);
     expect(next.env.temperature).toBeGreaterThan(26);
     expect(next.env.temperature).toBeLessThan(34);
+  });
+
+  it('faz a velocidade alterar o relógio, não as regras', () => {
+    const normal = createInitialState();
+    normal.paused = false;
+    normal.targets.temperature = 31;
+    const fast = { ...createInitialState(), speed: 10 as const, paused: false };
+    fast.targets.temperature = 31;
+    const afterNormal = tickSimulation(normal, 1);
+    const afterFast = tickSimulation(fast, 0.1);
+    expect(afterNormal.elapsedDays).toBe(1);
+    expect(afterFast.elapsedDays).toBe(1);
+    expect(afterFast.env.temperature).toBeCloseTo(afterNormal.env.temperature);
+  });
+
+  it('não avança enquanto a simulação está pausada', () => {
+    const state = { ...createInitialState(), paused: true };
+    expect(tickSimulation(state, 5)).toBe(state);
+  });
+
+  it('exibe somente uma unidade temporal adequada', () => {
+    expect(formatSimulatedTime(12)).toBe('12 dias');
+    expect(formatSimulatedTime(90)).toBe('3 meses');
+    expect(formatSimulatedTime(730.5)).toBe('2 anos');
   });
 
   it('aplica sinergia de calor e poluição aos corais', () => {
@@ -42,9 +68,19 @@ describe('modelo de simulação', () => {
 
   it('mantém saúde entre zero e cem', () => {
     let state = createInitialState();
+    state.paused = false;
     state.targets = { microplastics: 100, oil: 100, temperature: 35, ph: 7.4 };
     for (let index = 0; index < 2000; index += 1) state = tickSimulation(state, 0.1);
     expect(state.health.coral).toBeGreaterThanOrEqual(0);
     expect(state.health.fish).toBeGreaterThanOrEqual(0);
+  });
+
+  it('acumula exposição conforme intensidade e duração', () => {
+    let state = createInitialState();
+    state.paused = false;
+    state.targets.oil = 100;
+    for (let index = 0; index < 100; index += 1) state = tickSimulation(state, 0.1);
+    expect(state.exposure.oil).toBeGreaterThan(0);
+    expect(state.elapsedDays).toBeCloseTo(10);
   });
 });

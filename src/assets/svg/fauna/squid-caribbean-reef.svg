@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 300">
+  <defs><radialGradient id="mantle"><stop stop-color="#e9c5d2"/><stop offset=".55" stop-color="#af6f9a"/><stop offset="1" stop-color="#5e3f73"/></radialGradient><linearGradient id="tentacle" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#b7789f"/><stop offset="1" stop-color="#704a7d"/></linearGradient><filter id="qs"><feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#102c48" flood-opacity=".45"/></filter></defs>
+  <g filter="url(#qs)">
+    <path d="M110 18c-46 35-65 86-50 137 9 30 27 50 50 64 24-14 42-34 51-64 14-51-5-102-51-137Z" fill="url(#mantle)" stroke="#513b6c" stroke-width="5"/>
+    <path d="M61 126 20 157l42 14Zm98 0 41 31-42 14Z" fill="#a76f9b" stroke="#5b4674" stroke-width="4"/>
+    <ellipse cx="80" cy="157" rx="22" ry="19" fill="#ddeff2" stroke="#4e3b68" stroke-width="4"/><ellipse cx="140" cy="157" rx="22" ry="19" fill="#ddeff2" stroke="#4e3b68" stroke-width="4"/><circle cx="84" cy="157" r="9" fill="#172939"/><circle cx="136" cy="157" r="9" fill="#172939"/><circle cx="81" cy="153" r="2.5" fill="white"/><circle cx="133" cy="153" r="2.5" fill="white"/>
+    <g fill="none" stroke="url(#tentacle)" stroke-width="8" stroke-linecap="round"><path d="M76 195c-18 36 1 57-13 86"/><path d="M94 202c-13 38 9 55 1 82"/><path d="M112 207c-2 34 10 48 7 76"/><path d="M130 202c14 35-6 55 4 81"/><path d="M146 194c20 35 2 58 16 86"/></g>
+    <g fill="#f1c6d4" opacity=".7"><circle cx="86" cy="67" r="5"/><circle cx="121" cy="48" r="4"/><circle cx="143" cy="91" r="6"/><circle cx="101" cy="119" r="4"/><circle cx="131" cy="134" r="3"/></g>
+  </g>
+</svg>

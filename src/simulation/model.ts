@@ -1,5 +1,5 @@
 import { BASELINE, PARAMETERS } from './config';
-import type { Environment, Health, ItemId, SimulationState } from './types';
+import type { Environment, Exposure, Health, ItemId, SimulationState } from './types';
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
@@ -43,15 +43,28 @@ export function calculateStress(env: Environment) {
   return { coral, fish };
 }
 
-function updateHealth(current: number, stress: number, collapseSeconds: number, dt: number) {
-  const maxDamagePerSecond = 100 / collapseSeconds;
-  const damage = maxDamagePerSecond * stress;
+export function calculateExposureRates(env: Environment): Exposure {
+  return {
+    thermal: stressAbove(
+      env.temperature,
+      PARAMETERS.temperature.coralStart,
+      PARAMETERS.temperature.coralMax,
+    ),
+    acidification: stressBelow(env.ph, PARAMETERS.ph.coralStart, PARAMETERS.ph.coralMax),
+    oil: clamp(env.oil / 100),
+    microplastics: clamp(env.microplastics / 100),
+  };
+}
+
+function updateHealth(current: number, stress: number, collapseDays: number, dtDays: number) {
+  const maxDamagePerDay = 100 / collapseDays;
+  const damage = maxDamagePerDay * stress;
   const recovery =
     stress < PARAMETERS.recoveryThreshold
-      ? (maxDamagePerSecond / PARAMETERS.recoveryFactor) * (1 - stress)
+      ? (maxDamagePerDay / PARAMETERS.recoveryFactor) * (1 - stress)
       : 0;
 
-  return clamp(current - damage * dt + recovery * dt, 0, 100);
+  return clamp(current - damage * dtDays + recovery * dtDays, 0, 100);
 }
 
 export function createInitialState(): SimulationState {
@@ -59,7 +72,11 @@ export function createInitialState(): SimulationState {
     env: { ...BASELINE },
     targets: { ...BASELINE },
     health: { coral: 100, fish: 100 },
+    exposure: { thermal: 0, acidification: 0, oil: 0, microplastics: 0 },
     overall: 100,
+    elapsedDays: 0,
+    speed: 1,
+    paused: true,
     firedMessages: new Set(),
     latestMessageId: null,
   };
@@ -78,24 +95,37 @@ export function buildTargets(
   );
 }
 
-export function tickSimulation(state: SimulationState, dt: number): SimulationState {
+export function tickSimulation(state: SimulationState, realDtSeconds: number): SimulationState {
+  if (state.paused || realDtSeconds <= 0) return state;
+
+  const dtDays = realDtSeconds * PARAMETERS.daysPerRealSecond * state.speed;
   const env = { ...state.env };
 
   (Object.keys(env) as ItemId[]).forEach((id) => {
-    const factor = 1 - Math.exp(-dt / PARAMETERS.tau[id]);
+    const factor = 1 - Math.exp(-dtDays / PARAMETERS.tauDays[id]);
     env[id] += (state.targets[id] - env[id]) * factor;
   });
 
   const stress = calculateStress(env);
+  const exposureRates = calculateExposureRates(env);
+  const exposure = (Object.keys(exposureRates) as (keyof Exposure)[]).reduce(
+    (result, id) => {
+      result[id] += exposureRates[id] * dtDays;
+      return result;
+    },
+    { ...state.exposure },
+  );
   const health: Health = {
-    coral: updateHealth(state.health.coral, stress.coral, PARAMETERS.collapseSeconds.coral, dt),
-    fish: updateHealth(state.health.fish, stress.fish, PARAMETERS.collapseSeconds.fish, dt),
+    coral: updateHealth(state.health.coral, stress.coral, PARAMETERS.collapseDays.coral, dtDays),
+    fish: updateHealth(state.health.fish, stress.fish, PARAMETERS.collapseDays.fish, dtDays),
   };
 
   return {
     ...state,
     env,
     health,
+    exposure,
     overall: (health.coral + health.fish) / 2,
+    elapsedDays: state.elapsedDays + dtDays,
   };
 }

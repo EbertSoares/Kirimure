@@ -1,11 +1,12 @@
 # Laboratório Digital Marinho
 
-MVP de uma simulação interativa e educativa sobre os efeitos de alterações ambientais em um recife costeiro da Bahia.
+Aplicativo educacional offline com uma simulação interativa sobre os efeitos de alterações ambientais em um recife costeiro da Bahia.
 
 A aplicação permite modificar fatores como temperatura da água, pH, microplásticos e óleo. A cena marinha reage progressivamente, mostrando alterações na saúde dos corais, na população de peixes e no ecossistema como um todo.
 
 ## Acesso
 
+- Aplicativo desktop: gerado localmente com Tauri; não exige internet depois de instalado.
 - Aplicação publicada: [laboratorio-digital-marinho.neatowl9.chatgpt.site](https://laboratorio-digital-marinho.neatowl9.chatgpt.site)
 - Repositório: [github.com/EbertSoares/MVP---LabOceano](https://github.com/EbertSoares/MVP---LabOceano)
 
@@ -31,6 +32,12 @@ O MVP foi desenvolvido para:
 - Aplicação simultânea de múltiplos fatores ambientais.
 - Indicadores de saúde geral, dos corais e dos peixes.
 - Mensagens educativas exibidas conforme a simulação evolui.
+- Relógio simulado em dias, meses ou anos.
+- Controles de pausa e velocidades 1×, 2×, 3×, 5× e 10×.
+- Exposição acumulada: intensidade e duração determinam quando as consequências aparecem.
+- Deformação 2.5D dos peixes com movimento crescente em direção à cauda.
+- Virada gradual dos peixes, sem deslocamento contrário à orientação da arte.
+- Corais com palidez, branqueamento parcial, branqueamento severo e mortalidade.
 - Reinicialização completa do cenário.
 - Interface responsiva para computadores, tablets e celulares.
 - Referências científicas acessíveis dentro da própria interface.
@@ -47,7 +54,9 @@ O estado visual acompanha a saúde calculada:
 - o óleo se concentra visualmente na superfície e reduz a passagem de luz;
 - os peixes apresentam estresse, redução da população e mortalidade em condições severas.
 
-Para que a experiência seja observável durante uma atividade, exposições que na natureza ocorreriam ao longo de dias ou semanas são comprimidas em segundos.
+O motor usa dias simulados como unidade interna. Em 1×, um segundo real equivale inicialmente a um dia simulado; as velocidades maiores apenas avançam o relógio mais rapidamente, sem modificar as regras ecológicas.
+
+Os efeitos dependem da exposição acumulada. Uma condição intensa cruza os limiares mais cedo, enquanto condições moderadas precisam permanecer por mais tempo. A interface escolhe uma única unidade para o período transcorrido: dias, meses ou anos.
 
 ## Base científica
 
@@ -69,6 +78,7 @@ Esta é uma representação educativa simplificada, não um modelo oceanográfic
 ### Linguagens
 
 - TypeScript
+- Rust
 - HTML
 - CSS
 - SVG/XML
@@ -78,6 +88,7 @@ Esta é uma representação educativa simplificada, não um modelo oceanográfic
 
 - React 19 para os componentes da interface.
 - PixiJS 8 para a cena marinha animada.
+- Tauri 2 para empacotamento desktop e execução offline.
 - Vite 8 para desenvolvimento e geração do bundle.
 - Vitest para testes automatizados do modelo.
 - Playwright para testes de interface e navegação.
@@ -88,6 +99,7 @@ Esta é uma representação educativa simplificada, não um modelo oceanográfic
 
 - Node.js 20 ou superior.
 - npm.
+- Rust estável e pré-requisitos do Tauri para desenvolvimento desktop.
 
 ### Instalação
 
@@ -112,6 +124,22 @@ npm run build
 ```
 
 Os arquivos de produção serão gerados em `dist/`.
+
+O build executa antes uma auditoria que bloqueia URLs remotas, chamadas de rede e CDNs no código de runtime.
+
+### Aplicativo desktop em desenvolvimento
+
+```bash
+npm run desktop:dev
+```
+
+### Pacote desktop
+
+```bash
+npm run desktop:build
+```
+
+O empacotamento está limitado ao instalador Windows `.exe` (NSIS). Ele inclui o instalador offline do WebView2, aumentando o pacote, mas permitindo a instalação em escolas desconectadas. O instalador final é gerado em Windows ou pelo workflow manual do GitHub Actions.
 
 ### Pré-visualização do build
 
@@ -149,6 +177,9 @@ src/
 ├── App.tsx               Interface e estado principal
 ├── main.tsx              Inicialização da aplicação
 └── styles.css            Design responsivo
+scripts/
+└── check-offline-runtime.mjs  Auditoria de dependências de rede
+src-tauri/                 Camada desktop nativa e empacotamento
 ```
 
 Apesar do nome histórico da pasta `assets/svg`, parte das artes fornecidas está em PNG com transparência. O visual de microplásticos criado para a simulação utiliza SVG nativo.
@@ -156,7 +187,6 @@ Apesar do nome histórico da pasta `assets/svg`, parte das artes fornecidas est�
 ## Próximas evoluções sugeridas
 
 - incluir salinidade, oxigênio dissolvido e turbidez;
-- representar exposição térmica acumulada em dias ou semanas;
 - adicionar espécies características de diferentes regiões da Bahia;
 - criar cenários guiados e desafios para uso em sala de aula;
 - disponibilizar comparações antes/depois e relatórios da simulação;
