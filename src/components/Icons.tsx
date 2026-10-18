@@ -15,7 +15,14 @@ type IconName =
   | 'pause'
   | 'clock'
   | 'location'
-  | 'check';
+  | 'check'
+  | 'sewage'
+  | 'sediment'
+  | 'hook'
+  | 'shield'
+  | 'chart'
+  | 'target'
+  | 'web';
 
 export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconName }) {
   const common = {
@@ -45,6 +52,13 @@ export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconN
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
     location: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2"/></>,
     check: <path d="m6 12 4 4 8-9"/>,
+    sewage: <><path d="M3 13h7a4 4 0 0 0 4-4V6"/><path d="M3 9h4"/><path d="M19 10s2 2.4 2 4a2 2 0 1 1-4 0c0-1.6 2-4 2-4Z"/><path d="M12 20h8"/><path d="M16 16l4 4"/><path d="M20 16l-4 4"/></>,
+    sediment: <><path d="M3 7c3-1.6 6 1.6 9 0s6 1.6 9 0"/><path d="M3 12c3-1.6 6 1.6 9 0s6 1.6 9 0"/><path d="M3 17c3-1.6 6 1.6 9 0s6 1.6 9 0"/><circle cx="7" cy="9.6" r=".8" fill="currentColor" stroke="none"/><circle cx="15" cy="14.6" r=".8" fill="currentColor" stroke="none"/></>,
+    hook: <><path d="M12 3v9"/><path d="M12 12a4 4 0 0 0 8 0"/><path d="M18 9v3"/><path d="M6 3h12"/></>,
+    shield: <><path d="M12 21s7-3.2 7-9V5.5L12 3 5 5.5V12c0 5.8 7 9 7 9Z"/><path d="m9 12 2 2 4-4.5"/></>,
+    chart: <><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/></>,
+    target: <><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/></>,
+    web: <><circle cx="12" cy="5" r="2.4"/><circle cx="5" cy="18" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M10.6 7.2 6.4 15.8"/><path d="M13.4 7.2 17.6 15.8"/><path d="M7.4 18h9.2"/></>,
   };
 
   return <svg {...common}>{paths[name]}</svg>;

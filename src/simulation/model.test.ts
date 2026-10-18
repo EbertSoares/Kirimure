@@ -1,37 +1,61 @@
 import { describe, expect, it } from 'vitest';
+import { CHALLENGES, evaluateChallenge } from './challenges';
 import { BASELINE } from './config';
-import { buildTargets, calculateStress, createInitialState, tickSimulation } from './model';
+import {
+  buildTargets,
+  calculateAlgae,
+  calculateFishPressures,
+  calculatePressures,
+  calculateStress,
+  countActiveFactors,
+  createInitialState,
+  deriveIndicators,
+  speciesStress,
+  tickSimulation,
+} from './model';
 import { formatSimulatedTime } from './time';
+import type { SimulationState } from './types';
+
+function run(state: SimulationState, days: number, step = 0.1) {
+  let current = state;
+  const steps = Math.round(days / (step * current.speed));
+  for (let index = 0; index < steps; index += 1) current = tickSimulation(current, step);
+  return current;
+}
 
 describe('modelo de simulação', () => {
   it('inicia no estado saudável', () => {
     const state = createInitialState();
     expect(state.env).toEqual(BASELINE);
     expect(state.health).toEqual({ coral: 100, fish: 100 });
+    expect(state.species).toEqual({ 'blue-tang': 100, 'sergeant-major': 100, parrotfish: 100 });
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].day).toBe(0);
   });
 
   it('aplica apenas os fatores que saíram da posição inicial', () => {
     const targets = buildTargets({
-      microplastics: 0,
+      ...BASELINE,
       oil: 70,
       temperature: 34,
       ph: 7.5,
+      sewage: 30,
     });
-    expect(targets).toEqual({ ...BASELINE, oil: 70, temperature: 34, ph: 7.5 });
+    expect(targets).toEqual({ ...BASELINE, oil: 70, temperature: 34, ph: 7.5, sewage: 30 });
+    expect(countActiveFactors({ ...BASELINE, oil: 70, sewage: 30 })).toBe(2);
   });
 
   it('aproxima o ambiente do alvo sem salto instantâneo', () => {
     const state = createInitialState();
     state.paused = false;
-    state.targets.temperature = 34;
+    state.targets.temperature = 32;
     const next = tickSimulation(state, 0.1);
     expect(next.env.temperature).toBeGreaterThan(26);
-    expect(next.env.temperature).toBeLessThan(34);
+    expect(next.env.temperature).toBeLessThan(32);
   });
 
   it('faz a velocidade alterar o relógio, não as regras', () => {
-    const normal = createInitialState();
-    normal.paused = false;
+    const normal = { ...createInitialState(), paused: false };
     normal.targets.temperature = 31;
     const fast = { ...createInitialState(), speed: 10 as const, paused: false };
     fast.targets.temperature = 31;
@@ -60,27 +84,105 @@ describe('modelo de simulação', () => {
     expect(combined.coral).toBeGreaterThan(Math.max(heat.coral, oil.coral));
   });
 
+  it('soma esgoto e turbidez no estresse dos corais', () => {
+    const sewage = calculateStress({ ...BASELINE, sewage: 60 });
+    const turbidity = calculateStress({ ...BASELINE, turbidity: 60 });
+    const both = calculateStress({ ...BASELINE, sewage: 60, turbidity: 60 });
+    expect(both.coral).toBeGreaterThan(Math.max(sewage.coral, turbidity.coral));
+  });
+
   it('inicia estresse térmico dos corais antes do estresse dos peixes', () => {
     const stress = calculateStress({ ...BASELINE, temperature: 29 });
     expect(stress.coral).toBeGreaterThan(0);
     expect(stress.fish).toBe(0);
   });
 
+  it('faz a pesca pesar mais no peixe-papagaio', () => {
+    const pressures = calculateFishPressures({ ...BASELINE, fishing: 80 });
+    expect(speciesStress(pressures, 'parrotfish')).toBeGreaterThan(speciesStress(pressures, 'sergeant-major'));
+    expect(speciesStress(pressures, 'parrotfish')).toBeGreaterThan(speciesStress(pressures, 'blue-tang'));
+  });
+
+  it('faz o peixe tolerar mais calor que o coral', () => {
+    const env = { ...BASELINE, temperature: 29 };
+    expect(calculatePressures(env).thermal).toBeGreaterThan(0);
+    expect(calculateFishPressures(env).thermal).toBe(0);
+  });
+
   it('mantém saúde entre zero e cem', () => {
-    let state = createInitialState();
-    state.paused = false;
-    state.targets = { microplastics: 100, oil: 100, temperature: 35, ph: 7.4 };
-    for (let index = 0; index < 2000; index += 1) state = tickSimulation(state, 0.1);
-    expect(state.health.coral).toBeGreaterThanOrEqual(0);
-    expect(state.health.fish).toBeGreaterThanOrEqual(0);
+    const state = {
+      ...createInitialState(),
+      paused: false,
+      targets: {
+        temperature: 34,
+        ph: 7.5,
+        microplastics: 100,
+        oil: 100,
+        sewage: 100,
+        turbidity: 100,
+        fishing: 100,
+        recovery: 0,
+      },
+    };
+    const after = run(state, 200);
+    expect(after.health.coral).toBeGreaterThanOrEqual(0);
+    expect(after.health.fish).toBeGreaterThanOrEqual(0);
+    expect(after.health.coral).toBeLessThan(20);
   });
 
   it('acumula exposição conforme intensidade e duração', () => {
-    let state = createInitialState();
-    state.paused = false;
+    const state = { ...createInitialState(), paused: false };
     state.targets.oil = 100;
-    for (let index = 0; index < 100; index += 1) state = tickSimulation(state, 0.1);
-    expect(state.exposure.oil).toBeGreaterThan(0);
-    expect(state.elapsedDays).toBeCloseTo(10);
+    const after = run(state, 10);
+    expect(after.exposure.oil).toBeGreaterThan(0);
+    expect(after.elapsedDays).toBeCloseTo(10);
+  });
+
+  it('faz a recuperação ambiental reduzir o dano', () => {
+    const polluted = { ...createInitialState(), paused: false };
+    polluted.targets.oil = 80;
+    const protectedReef = {
+      ...polluted,
+      targets: { ...polluted.targets, recovery: 100 },
+    };
+    const bare = run(polluted, 45);
+    const guarded = run(protectedReef, 45);
+    expect(guarded.health.coral).toBeGreaterThan(bare.health.coral);
+  });
+
+  it('registra o histórico ao longo do tempo', () => {
+    const state = { ...createInitialState(), paused: false };
+    const after = run(state, 12);
+    expect(after.history.length).toBeGreaterThanOrEqual(11);
+    expect(after.history[0].day).toBeLessThanOrEqual(1);
+    expect(after.history.at(-1)?.day).toBeLessThanOrEqual(12);
+  });
+
+  it('faz os indicadores reagirem ao ambiente', () => {
+    const clean = createInitialState();
+    const dirty = { ...clean, env: { ...BASELINE, sewage: 100, turbidity: 90 } };
+    const cleanIndicators = deriveIndicators(clean);
+    const dirtyIndicators = deriveIndicators(dirty);
+    const pick = (list: ReturnType<typeof deriveIndicators>, id: string) =>
+      list.find((indicator) => indicator.id === id)?.value ?? 0;
+
+    expect(calculateAlgae(dirty.env, dirty.health)).toBeGreaterThan(calculateAlgae(clean.env, clean.health));
+    expect(pick(dirtyIndicators, 'algae')).toBeGreaterThan(pick(cleanIndicators, 'algae'));
+    expect(pick(dirtyIndicators, 'light')).toBeLessThan(pick(cleanIndicators, 'light'));
+    expect(pick(dirtyIndicators, 'oxygen')).toBeLessThan(pick(cleanIndicators, 'oxygen'));
+  });
+
+  it('avança o desafio enquanto as condições se mantêm', () => {
+    const challenge = CHALLENGES[0];
+    const clean = { ...createInitialState(), paused: false };
+    const after = run(clean, 10);
+    const progress = evaluateChallenge(challenge, after);
+    expect(progress.status).toBe('running');
+    expect(progress.daysHeld).toBeGreaterThanOrEqual(8);
+
+    const polluted = { ...createInitialState(), paused: false };
+    polluted.targets.sewage = 80;
+    const troubled = evaluateChallenge(challenge, run(polluted, 10));
+    expect(troubled.status).toBe('pending');
   });
 });

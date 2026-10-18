@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Application, Assets, Container, FillGradient, Graphics, MeshPlane, Sprite, Texture } from 'pixi.js';
-import type { SimulationState } from '../simulation/types';
+import { FISH_SPECIES } from '../simulation/config';
+import type { FishSpeciesId, SimulationState } from '../simulation/types';
 import { MARINE_ASSET_URLS, type MarineAssetKey } from './assets';
 
 interface MarineSceneProps {
@@ -23,6 +24,7 @@ interface FishVisual {
   displayScale: number;
   yRatio: number;
   deathDrift: 1 | -1;
+  speciesId: FishSpeciesId;
 }
 
 interface DrifterVisual {
@@ -119,6 +121,7 @@ function createFish(index: number, textures: MarineTextures): FishVisual {
   ] as const;
   const variantIndex = index % variants.length;
   const [healthyTexture, stressedTexture] = variants[variantIndex];
+  const speciesId = FISH_SPECIES[variantIndex].id;
   const healthy = layeredFishMesh(healthyTexture);
   const stressed = layeredFishMesh(stressedTexture);
   // Os peixes têm arte própria para saudável e estressado. O estado morto
@@ -145,8 +148,9 @@ function createFish(index: number, textures: MarineTextures): FishVisual {
     size,
     textureWidth,
     displayScale: size / textureWidth,
-    yRatio: 0.18 + ((index * 0.173) % 0.49),
+    yRatio: 0.14 + ((index * 0.173) % 0.56),
     deathDrift: index % 2 === 0 ? 1 : -1,
+    speciesId,
   };
 }
 
@@ -211,24 +215,36 @@ function createDecor(
 function drawBackground(graphics: Graphics, width: number, height: number, waterGradient: FillGradient) {
   graphics.clear();
   graphics.rect(0, 0, width, height).fill(waterGradient);
-  graphics.ellipse(width * 0.5, height * 1.03, width * 0.72, height * 0.23).fill(0xcab787);
+  // Banho de luz logo abaixo da superfície.
+  graphics.ellipse(width * 0.5, -height * 0.05, width * 0.66, height * 0.24).fill({ color: 0xbdf6ff, alpha: 0.16 });
+  // Escurecimento progressivo nas profundezas.
+  for (let index = 0; index < 10; index += 1) {
+    const slice = height * 0.5 / 10;
+    graphics
+      .rect(0, height * 0.5 + slice * index, width, slice + 1)
+      .fill({ color: 0x01232f, alpha: 0.055 });
+  }
+  // Areia do fundo, com banco mais claro em primeiro plano.
+  graphics.ellipse(width * 0.5, height * 1.05, width * 0.82, height * 0.27).fill(0xcab787);
+  graphics.ellipse(width * 0.24, height * 1.1, width * 0.44, height * 0.17).fill({ color: 0xd9c79b, alpha: 0.7 });
 }
 
 function drawLight(graphics: Graphics, width: number, height: number) {
   graphics.clear();
-  [0.12, 0.33, 0.56, 0.76].forEach((origin, index) => {
+  [0.08, 0.24, 0.42, 0.6, 0.76, 0.9].forEach((origin, index) => {
+    const spread = 0.045 + (index % 3) * 0.014;
     graphics
       .poly([
         width * origin,
         0,
-        width * (origin + 0.055),
+        width * (origin + spread),
         0,
-        width * (origin + 0.16),
-        height * 0.7,
-        width * (origin - 0.06),
-        height * 0.7,
+        width * (origin + spread * 3.6),
+        height * 0.84,
+        width * (origin - spread * 1.7),
+        height * 0.84,
       ])
-      .fill({ color: 0xe8ffff, alpha: 0.055 + index * 0.01 });
+      .fill({ color: 0xe8ffff, alpha: 0.04 + (index % 2) * 0.013 });
   });
 }
 
@@ -236,24 +252,38 @@ function drawDistantReef(graphics: Graphics, width: number, height: number) {
   graphics.clear();
   graphics
     .poly([
-      0, height * 0.76,
-      width * 0.09, height * 0.7,
-      width * 0.19, height * 0.73,
-      width * 0.31, height * 0.66,
-      width * 0.45, height * 0.72,
-      width * 0.58, height * 0.68,
-      width * 0.72, height * 0.74,
-      width * 0.84, height * 0.67,
-      width, height * 0.72,
+      0, height * 0.78,
+      width * 0.09, height * 0.72,
+      width * 0.19, height * 0.75,
+      width * 0.31, height * 0.68,
+      width * 0.45, height * 0.74,
+      width * 0.58, height * 0.7,
+      width * 0.72, height * 0.76,
+      width * 0.84, height * 0.69,
+      width, height * 0.74,
       width, height,
       0, height,
     ])
-    .fill({ color: 0x073f50, alpha: 0.24 });
+    .fill({ color: 0x073f50, alpha: 0.2 });
 
-  for (let index = 0; index < 13; index += 1) {
-    const x = width * (0.035 + index * 0.078);
-    const baseY = height * (0.76 + (index % 3) * 0.025);
-    const plantHeight = height * (0.055 + (index % 4) * 0.012);
+  // Recife distante mais profundo, quase dissolvido na água.
+  graphics
+    .poly([
+      0, height * 0.9,
+      width * 0.2, height * 0.86,
+      width * 0.4, height * 0.9,
+      width * 0.62, height * 0.85,
+      width * 0.82, height * 0.89,
+      width, height * 0.86,
+      width, height,
+      0, height,
+    ])
+    .fill({ color: 0x02222c, alpha: 0.34 });
+
+  for (let index = 0; index < 15; index += 1) {
+    const x = width * (0.03 + index * 0.068);
+    const baseY = height * (0.79 + (index % 3) * 0.025);
+    const plantHeight = height * (0.055 + (index % 4) * 0.014);
     graphics
       .moveTo(x, baseY)
       .quadraticCurveTo(x - width * 0.008, baseY - plantHeight * 0.55, x + width * 0.004, baseY - plantHeight)
@@ -261,21 +291,56 @@ function drawDistantReef(graphics: Graphics, width: number, height: number) {
       .lineTo(x - width * 0.012, baseY - plantHeight * 0.63)
       .moveTo(x, baseY - plantHeight * 0.48)
       .lineTo(x + width * 0.013, baseY - plantHeight * 0.76)
-      .stroke({ color: 0x0a5261, alpha: 0.33, width: Math.max(1.5, width * 0.002) });
+      .stroke({ color: 0x0a5261, alpha: 0.3, width: Math.max(1.5, width * 0.002) });
   }
 }
 
-function drawSurface(graphics: Graphics, width: number) {
+/** Faixa luminosa da superfície. */
+function drawSurfaceBand(graphics: Graphics, width: number, height: number) {
   graphics.clear();
-  graphics.rect(0, 0, width, 23).fill({ color: 0xbaf8ff, alpha: 0.24 });
-  for (let index = 0; index < 9; index += 1) {
-    const x = (width / 8) * index;
+  const band = Math.max(30, height * 0.06);
+  const slices = 9;
+  for (let index = 0; index < slices; index += 1) {
     graphics
-      .moveTo(x - 20, 14 + (index % 2) * 4)
-      .quadraticCurveTo(x + 15, 3, x + 58, 12)
-      .stroke({ color: 0xe8ffff, alpha: 0.5, width: 2.5 });
+      .rect(0, (band / slices) * index, width, band / slices + 1)
+      .fill({ color: 0xcaf7ff, alpha: 0.2 * (1 - index / slices) });
   }
 }
+
+/** Ondas da superfície: desenhadas em dobro para deslizar sem emenda. */
+function drawSurfaceWaves(graphics: Graphics, width: number) {
+  graphics.clear();
+  const span = width * 2;
+  for (let index = 0; index < 30; index += 1) {
+    const x = (span / 29) * index;
+    const y = 13 + (index % 4) * 5;
+    graphics
+      .moveTo(x - 62, y)
+      .quadraticCurveTo(x, y - 10 - (index % 3) * 3, x + 64, y)
+      .stroke({ color: 0xeafcff, alpha: 0.3, width: 2.2 });
+  }
+}
+
+/** Cáusticas: reflexos da luz do sol que dan movimento ao topo da cena. */
+function drawCaustics(graphics: Graphics, width: number, height: number) {
+  graphics.clear();
+  const span = width * 2;
+  for (let index = 0; index < 16; index += 1) {
+    const x = (span / 15) * index;
+    const y = height * (0.035 + (index % 5) * 0.038);
+    graphics
+      .moveTo(x - 95, y)
+      .quadraticCurveTo(x, y + 18 - (index % 3) * 11, x + 95, y)
+      .stroke({ color: 0xe4ffff, alpha: 0.11, width: 3 });
+  }
+}
+
+/** Nevoeiro único usado para turbidez e esgoto. */
+function fillHaze(graphics: Graphics, width: number, height: number, color: number) {
+  graphics.clear();
+  graphics.rect(0, 0, width, height).fill(color);
+}
+
 
 function updateCoralState(coral: CoralVisual, health: number) {
   const individualHealth = clamp((health + coral.sensitivity) / 100) * 100;
@@ -386,11 +451,12 @@ export function MarineScene({ state }: MarineSceneProps) {
         end: { x: 0, y: 1 },
         textureSpace: 'local',
         colorStops: [
-          { offset: 0, color: 0x43c5d7 },
-          { offset: 0.22, color: 0x169bb5 },
-          { offset: 0.55, color: 0x0a718a },
-          { offset: 0.8, color: 0x07556a },
-          { offset: 1, color: 0x063e50 },
+          { offset: 0, color: 0x74e0ee },
+          { offset: 0.08, color: 0x36bcd0 },
+          { offset: 0.26, color: 0x1599b3 },
+          { offset: 0.52, color: 0x0a728c },
+          { offset: 0.76, color: 0x055066 },
+          { offset: 1, color: 0x02303d },
         ],
       });
       waterGradient = gradient;
@@ -398,6 +464,8 @@ export function MarineScene({ state }: MarineSceneProps) {
       const background = new Graphics();
       const distantReef = new Graphics();
       const light = new Graphics();
+      const caustics = new Graphics();
+      const snowLayer = new Container();
       const rocksLayer = new Container();
       const fishLayer = new Container();
       const driftingFaunaLayer = new Container();
@@ -405,14 +473,20 @@ export function MarineScene({ state }: MarineSceneProps) {
       const coralLayer = new Container();
       const particlesLayer = new Container();
       const debrisLayer = new Container();
+      const organicLayer = new Container();
+      const sedimentHaze = new Graphics();
+      const sewageHaze = new Graphics();
       const waterTint = new Graphics();
       const oilSurface = new Graphics();
       const oilSheen = new Graphics();
-      const surface = new Graphics();
+      const surfaceBand = new Graphics();
+      const surfaceWaves = new Graphics();
       instance.stage.addChild(
         background,
         distantReef,
         light,
+        caustics,
+        snowLayer,
         rocksLayer,
         fishLayer,
         driftingFaunaLayer,
@@ -420,10 +494,14 @@ export function MarineScene({ state }: MarineSceneProps) {
         coralLayer,
         particlesLayer,
         debrisLayer,
+        organicLayer,
+        sedimentHaze,
+        sewageHaze,
         waterTint,
         oilSurface,
         oilSheen,
-        surface,
+        surfaceBand,
+        surfaceWaves,
       );
 
       const textures = await loadMarineTextures();
@@ -508,6 +586,34 @@ export function MarineScene({ state }: MarineSceneProps) {
         };
       });
 
+      // Neve marinha: partículas claras que dão profundidade e movimento à água.
+      const snow = Array.from({ length: 110 }, () => {
+        const dot = new Graphics();
+        dot.circle(0, 0, 0.7 + random() * 1.6).fill({ color: 0xe6fbff, alpha: 0.35 + random() * 0.4 });
+        snowLayer.addChild(dot);
+        return {
+          dot,
+          speedX: -2.5 + random() * 5,
+          speedY: 3 + random() * 8,
+          phase: random() * Math.PI * 2,
+        };
+      });
+
+      // Matéria orgânica do esgoto: manchas esverdeadas em suspensão.
+      const organic = Array.from({ length: 80 }, (_, index) => {
+        const blob = new Graphics();
+        blob
+          .circle(0, 0, 1.6 + random() * 2.8)
+          .fill({ color: index % 3 === 0 ? 0x86a34e : 0x5f7f3a, alpha: 0.75 });
+        organicLayer.addChild(blob);
+        return {
+          blob,
+          speedX: -3 + random() * 6,
+          speedY: 4 + random() * 9,
+          phase: random() * Math.PI * 2,
+        };
+      });
+
       let previousWidth = 0;
       let previousHeight = 0;
       let elapsed = 0;
@@ -526,7 +632,11 @@ export function MarineScene({ state }: MarineSceneProps) {
           drawBackground(background, width, height, gradient);
           drawDistantReef(distantReef, width, height);
           drawLight(light, width, height);
-          drawSurface(surface, width);
+          drawCaustics(caustics, width, height);
+          drawSurfaceBand(surfaceBand, width, height);
+          drawSurfaceWaves(surfaceWaves, width);
+          fillHaze(sedimentHaze, width, height, 0xb8a678);
+          fillHaze(sewageHaze, width, height, 0x6f8a41);
           waterTint.clear().rect(0, 0, width, height).fill(0x152f38);
           oilSurface.clear().rect(0, 0, width, Math.max(20, height * 0.075)).fill(0x241d16);
           oilSheen.clear();
@@ -582,6 +692,14 @@ export function MarineScene({ state }: MarineSceneProps) {
             item.sprite.y = height * (0.16 + random() * 0.52);
             item.sprite.scale.set(item.scale);
           });
+          snow.forEach((flake) => {
+            flake.dot.x = random() * width;
+            flake.dot.y = random() * height;
+          });
+          organic.forEach((blob) => {
+            blob.blob.x = random() * width;
+            blob.blob.y = random() * height;
+          });
         }
 
         corals.forEach((coral) => updateCoralState(coral, current.health.coral));
@@ -593,12 +711,15 @@ export function MarineScene({ state }: MarineSceneProps) {
 
         const fishHealth = current.health.fish;
         fish.forEach((visual, index) => {
-          const alive = fishHealth >= visual.threshold;
-          updateFishState(visual, fishHealth);
-          const stress = clamp((75 - fishHealth) / 75);
+          // Cada espécie tem a própria curva de saúde e tolera os fatores de
+          // forma diferente; o peixe usa a saúde da sua espécie.
+          const speciesHealth = current.species[visual.speciesId] ?? fishHealth;
+          const alive = speciesHealth >= visual.threshold;
+          updateFishState(visual, speciesHealth);
+          const stress = clamp((75 - speciesHealth) / 75);
 
           if (alive) {
-            deformFish(visual, elapsed, fishHealth);
+            deformFish(visual, elapsed, speciesHealth);
             const travelSpeed = visual.speed * (1 - stress * 0.46);
             visual.root.x += travelSpeed * visual.direction * delta;
             const laneY = height * visual.yRatio;
@@ -674,10 +795,41 @@ export function MarineScene({ state }: MarineSceneProps) {
           if (item.sprite.x > width) item.sprite.x = 0;
         });
 
-        light.alpha = 1 - 0.72 * (current.env.oil / 100);
-        waterTint.alpha = 0.34 * (current.env.oil / 100) + 0.07 * (current.env.microplastics / 100);
-        oilSurface.alpha = 0.74 * (current.env.oil / 100);
-        oilSheen.alpha = 0.68 * (current.env.oil / 100);
+        const oilLevel = current.env.oil / 100;
+        const turbidity = current.env.turbidity / 100;
+        const sewage = current.env.sewage / 100;
+
+        // O topo da cena respira: ondas e cáusticas deslizam sem emenda.
+        surfaceWaves.x = -((elapsed * 18) % width);
+        caustics.x = -((elapsed * 8) % width);
+        caustics.alpha = 0.5 + Math.sin(elapsed * 0.5) * 0.26;
+        light.alpha =
+          (1 - 0.7 * oilLevel) * (0.78 + Math.sin(elapsed * 0.32) * 0.22) * (1 - turbidity * 0.6);
+
+        sedimentHaze.alpha = 0.32 * turbidity;
+        sewageHaze.alpha = 0.2 * sewage;
+        waterTint.alpha = 0.34 * oilLevel + 0.07 * (current.env.microplastics / 100);
+        oilSurface.alpha = 0.74 * oilLevel;
+        oilSheen.alpha = 0.68 * oilLevel;
+
+        snow.forEach((flake) => {
+          flake.dot.x += (flake.speedX + Math.sin(elapsed * 0.6 + flake.phase) * 2.4) * delta;
+          flake.dot.y += flake.speedY * delta;
+          if (flake.dot.y > height * 0.98) flake.dot.y = height * 0.02;
+          if (flake.dot.x < -4) flake.dot.x = width + 4;
+          if (flake.dot.x > width + 4) flake.dot.x = -4;
+        });
+
+        const visibleOrganic = Math.round(organic.length * sewage);
+        organic.forEach((blob, index) => {
+          blob.blob.visible = index < visibleOrganic;
+          if (!blob.blob.visible) return;
+          blob.blob.x += (blob.speedX + Math.sin(elapsed * 0.8 + blob.phase) * 3) * delta;
+          blob.blob.y += blob.speedY * delta;
+          if (blob.blob.y > height * 0.96) blob.blob.y = height * 0.04;
+          if (blob.blob.x < -5) blob.blob.x = width + 5;
+          if (blob.blob.x > width + 5) blob.blob.x = -5;
+        });
       });
     };
 
