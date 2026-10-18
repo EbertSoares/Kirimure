@@ -80,6 +80,8 @@ export interface SimulationState {
   /** Marcos disparados na simulação, em ordem cronológica. */
   events: Array<{ id: string; day: number }>;
   latestMessageId: string | null;
+  /** Segundos reais restantes até o painel poder trocar de marco. */
+  messageCooldown: number;
 }
 
 export interface EducationalMessage {

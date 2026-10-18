@@ -1,5 +1,4 @@
 import { Icon } from './Icons';
-import { TrendChart, type TrendSeries } from './TrendChart';
 import { FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
 import { calculateAlgae, calculateFishPressures, calculateTrophicBalance, countActiveFactors } from '../simulation/model';
 import { evaluateChallenge, type ChallengeProgress } from '../simulation/challenges';
@@ -15,19 +14,14 @@ import type {
 
 export type PanelTab = 'now' | 'indicators' | 'species' | 'timeline' | 'challenges';
 
-const TABS: ReadonlyArray<{ id: PanelTab; label: string; icon: 'info' | 'chart' | 'fish' | 'clock' | 'target' }> = [
-  { id: 'now', label: 'Agora', icon: 'info' },
-  { id: 'indicators', label: 'Indicadores', icon: 'chart' },
-  { id: 'species', label: 'Espécies', icon: 'fish' },
-  { id: 'timeline', label: 'Tempo', icon: 'clock' },
-  { id: 'challenges', label: 'Desafios', icon: 'target' },
+const TABS: ReadonlyArray<{ id: PanelTab; label: string }> = [
+  { id: 'now', label: 'Agora' },
+  { id: 'indicators', label: 'Indicadores' },
+  { id: 'species', label: 'Espécies' },
+  { id: 'timeline', label: 'Tempo' },
+  { id: 'challenges', label: 'Desafios' },
 ];
 
-const SERIES: TrendSeries[] = [
-  { id: 'coral', label: 'Corais', color: '#e2b757', pick: (point) => point.coral },
-  { id: 'fish', label: 'Peixes', color: '#55c9df', pick: (point) => point.fish },
-  { id: 'algae', label: 'Algas', color: '#3ed39f', pick: (point) => point.algae },
-];
 
 function pastPoint(state: SimulationState, daysBack: number) {
   const target = state.elapsedDays - daysBack;
@@ -107,7 +101,6 @@ export function SciencePanel({
             className={tab === item.id ? 'active' : ''}
             onClick={() => onTabChange(item.id)}
           >
-            <Icon name={item.icon} />
             <span>{item.label}</span>
           </button>
         ))}
@@ -241,8 +234,6 @@ export function SciencePanel({
 
         {tab === 'timeline' && (
           <section className="panel-section" aria-label="Linha do tempo">
-            <TrendChart history={state.history} series={SERIES} />
-
             <article className="compare-card">
               <h3>Comparação: agora e 30 dias atrás</h3>
               <ul>

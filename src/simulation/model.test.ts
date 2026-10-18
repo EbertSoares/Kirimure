@@ -14,6 +14,7 @@ import {
   tickSimulation,
 } from './model';
 import { formatSimulatedTime } from './time';
+import { evaluateMessages } from './messages';
 import type { SimulationState } from './types';
 
 function run(state: SimulationState, days: number, step = 0.1) {
@@ -184,5 +185,40 @@ describe('modelo de simulação', () => {
     polluted.targets.sewage = 80;
     const troubled = evaluateChallenge(challenge, run(polluted, 10));
     expect(troubled.status).toBe('pending');
+  });
+});
+
+describe('marcos do painel', () => {
+  it('mostra um marco por vez, com pausa entre eles', () => {
+    const base = createInitialState();
+    // Exposição já acumulada: o primeiro marco do roteiro é o estresse térmico.
+    const warmed: SimulationState = {
+      ...base,
+      paused: false,
+      exposure: { ...base.exposure, thermal: 5 },
+    };
+
+    const first = evaluateMessages(warmed);
+    expect(first.latestMessageId).toBe('thermal_stress');
+    expect(first.events).toHaveLength(1);
+    expect(first.messageCooldown).toBeGreaterThan(0);
+
+    // Vários limiares verdadeiros ao mesmo tempo: ainda assim, um marco só.
+    const several = evaluateMessages({
+      ...warmed,
+      health: { coral: 10, fish: 10 },
+      exposure: { ...warmed.exposure, acidification: 9, oil: 9, sewage: 9 },
+    });
+    expect(several.events).toHaveLength(1);
+
+    // Durante a pausa o painel não troca de texto.
+    let held = first;
+    for (let index = 0; index < 3; index += 1) held = evaluateMessages(tickSimulation(held, 0.1));
+    expect(held.latestMessageId).toBe('thermal_stress');
+
+    // Passada a pausa, o próximo marco pode entrar.
+    const released = evaluateMessages({ ...run(first, 3), health: { coral: 10, fish: 10 } });
+    expect(released.latestMessageId).not.toBe('thermal_stress');
+    expect(released.events).toHaveLength(2);
   });
 });

@@ -166,7 +166,19 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
   },
 ];
 
+/**
+ * Pausa mínima, em segundos reais, entre dois marcos no painel.
+ *
+ * Em 10× a simulação cruza vários limiares por segundo e o painel trocava de
+ * texto várias vezes seguidas (parecia que a página se recarregava). Com a
+ * pausa, cada marco fica legível — os que passarem ficam registrados no
+ * histórico da linha do tempo.
+ */
+const MESSAGE_COOLDOWN_SECONDS = 2.2;
+
 export function evaluateMessages(state: SimulationState): SimulationState {
+  if (state.messageCooldown > 0) return state;
+
   const nextMessage = EDUCATIONAL_MESSAGES.find(
     (message) => !state.firedMessages.has(message.id) && message.matches(state),
   );
@@ -180,6 +192,7 @@ export function evaluateMessages(state: SimulationState): SimulationState {
     firedMessages,
     events: [...state.events, { id: nextMessage.id, day: Math.round(state.elapsedDays) }],
     latestMessageId: nextMessage.id,
+    messageCooldown: MESSAGE_COOLDOWN_SECONDS,
   };
 }
 

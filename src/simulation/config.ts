@@ -161,8 +161,6 @@ export const ITEM_DEFINITIONS = {
     max: 32,
     step: 0.1,
     unit: '°C',
-    lowLabel: '26 °C',
-    highLabel: '32 °C',
     help: 'O risco depende da intensidade e da duração do calor. Aqui, semanas de exposição são comprimidas em segundos.',
     icon: 'temperature',
   },
@@ -173,8 +171,6 @@ export const ITEM_DEFINITIONS = {
     max: 8.2,
     step: 0.01,
     unit: '',
-    lowLabel: '7,6',
-    highLabel: '8,2',
     help: 'Acidificação é a queda do pH, mesmo com a água ainda alcalina. Ela reduz a disponibilidade de carbonato para os corais.',
     icon: 'flask',
   },
@@ -185,8 +181,6 @@ export const ITEM_DEFINITIONS = {
     max: 100,
     step: 1,
     unit: '',
-    lowLabel: 'Baixo',
-    highLabel: 'Alto',
     help: 'Partículas menores que 5 mm. A arte amplia os fragmentos para que fiquem visíveis; o índice não representa uma concentração medida.',
     icon: 'bottle',
   },
@@ -197,8 +191,6 @@ export const ITEM_DEFINITIONS = {
     max: 100,
     step: 1,
     unit: '',
-    lowLabel: 'Baixo',
-    highLabel: 'Alto',
     help: 'O óleo tende a se espalhar na superfície; ondas podem misturar gotículas na água e sedimentos podem levá-lo ao fundo.',
     icon: 'drop',
   },
@@ -209,8 +201,6 @@ export const ITEM_DEFINITIONS = {
     max: 100,
     step: 1,
     unit: '',
-    lowLabel: 'Baixo',
-    highLabel: 'Alto',
     help: 'Esgoto sem tratamento leva nutrientes e matéria orgânica. Os nutrientes alimentam algas e o consumo de oxigênio aumenta.',
     icon: 'sewage',
   },
@@ -221,8 +211,6 @@ export const ITEM_DEFINITIONS = {
     max: 100,
     step: 1,
     unit: '',
-    lowLabel: 'Água clara',
-    highLabel: 'Água turva',
     help: 'Sedimento em suspensão bloqueia a luz que alimenta as algas simbiontes do coral e pode sufocar os pólipos ao assentar.',
     icon: 'sediment',
   },
@@ -233,8 +221,6 @@ export const ITEM_DEFINITIONS = {
     max: 100,
     step: 1,
     unit: '',
-    lowLabel: 'Sem pesca',
-    highLabel: 'Muito intensa',
     help: 'Herbívoros como o peixe-papagaio são os primeiros a desaparecer. Sem eles, as algas competem com o coral por espaço.',
     icon: 'hook',
   },
@@ -245,8 +231,6 @@ export const ITEM_DEFINITIONS = {
     max: 100,
     step: 1,
     unit: '',
-    lowLabel: 'Sem proteção',
-    highLabel: 'Proteção total',
     help: 'Unidade de conservação, berçários e restauração de corais reduzem o dano e aceleram a recuperação do recife.',
     icon: 'shield',
   },
@@ -257,8 +241,6 @@ export const ITEM_DEFINITIONS = {
   max: number;
   step: number;
   unit: string;
-  lowLabel: string;
-  highLabel: string;
   help: string;
   icon: string;
 }>;

@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { BRAZIL_STATES, BRAZIL_VIEWBOX } from './brazilStates.data';
 
 interface BrazilMapScreenProps {
@@ -6,6 +6,7 @@ interface BrazilMapScreenProps {
 }
 
 const AVAILABLE_CODE = 'BA';
+const WARNING_DURATION = 3600;
 
 // Faixa costeira do Brasil: os 17 estados que formam a fronteira da Amazônia
 // Azul, a área marítima sob jurisdição brasileira.
@@ -30,10 +31,26 @@ const LABEL_ADJUSTMENTS: Record<string, { dx?: number; dy?: number; size?: numbe
 };
 
 export function BrazilMapScreen({ onSelectBahia }: BrazilMapScreenProps) {
-  const handleKeyDown = (event: KeyboardEvent<SVGGElement>) => {
+  const [unavailable, setUnavailable] = useState<{ name: string; at: number } | null>(null);
+
+  useEffect(() => {
+    if (!unavailable) return;
+    const timer = window.setTimeout(() => setUnavailable(null), WARNING_DURATION);
+    return () => window.clearTimeout(timer);
+  }, [unavailable]);
+
+  const activate = (code: string, name: string) => {
+    if (code === AVAILABLE_CODE) {
+      onSelectBahia();
+      return;
+    }
+    setUnavailable({ name, at: Date.now() });
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<SVGGElement>, code: string, name: string) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onSelectBahia();
+      activate(code, name);
     }
   };
 
@@ -47,10 +64,20 @@ export function BrazilMapScreen({ onSelectBahia }: BrazilMapScreenProps) {
       <section className="map-selection" aria-label="Mapa do Brasil com o cenário da Bahia disponível">
         <h1>Escolha um estado para explorar</h1>
 
-        <p className="map-legend-line">
-          <span className="legend-swatch coastal" aria-hidden="true" />
-          <span><strong>Amazônia Azul</strong> — faixa costeira, do Amapá ao Rio Grande do Sul</span>
-        </p>
+        <ul className="map-legend" aria-label="Legenda do mapa">
+          <li>
+            <span className="legend-swatch coastal" aria-hidden="true" />
+            Amazônia Azul
+          </li>
+          <li>
+            <span className="legend-swatch available" aria-hidden="true" />
+            Disponíveis
+          </li>
+          <li>
+            <span className="legend-swatch other" aria-hidden="true" />
+            Demais regiões
+          </li>
+        </ul>
 
         <div className="brazil-map">
           <svg
@@ -68,15 +95,19 @@ export function BrazilMapScreen({ onSelectBahia }: BrazilMapScreenProps) {
                   <g
                     key={state.code}
                     className={`state ${tone}`}
-                    role={available ? 'button' : undefined}
-                    tabIndex={available ? 0 : undefined}
-                    aria-label={available ? `${state.name}, cenário disponível. Abrir a simulação` : undefined}
-                    onClick={available ? onSelectBahia : undefined}
-                    onKeyDown={available ? handleKeyDown : undefined}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={
+                      available
+                        ? `${state.name}, cenário disponível. Abrir a simulação`
+                        : `${state.name}, cenário ainda não disponível`
+                    }
+                    onClick={() => activate(state.code, state.name)}
+                    onKeyDown={(event) => handleKeyDown(event, state.code, state.name)}
                   >
                     <path className="state-shape" d={state.path} fillRule="evenodd" clipRule="evenodd">
                       <title>
-                        {`${state.name}${available ? ' — cenário disponível' : coastal ? ' — na faixa costeira da Amazônia Azul' : ''}`}
+                        {`${state.name}${available ? ' — cenário disponível' : ' — ainda não disponível'}`}
                       </title>
                     </path>
                   </g>
@@ -104,6 +135,14 @@ export function BrazilMapScreen({ onSelectBahia }: BrazilMapScreenProps) {
           </svg>
         </div>
       </section>
+
+      {unavailable && (
+        <div className="map-warning" role="alert" key={unavailable.at}>
+          <strong>{unavailable.name} ainda não está disponível</strong>
+          <p>Por enquanto, explore a Bahia — o cenário completo do recife.</p>
+          <button type="button" onClick={() => setUnavailable(null)}>Entendi</button>
+        </div>
+      )}
     </main>
   );
 }

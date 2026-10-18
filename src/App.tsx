@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BrazilMapScreen } from './components/BrazilMapScreen';
 import { Icon } from './components/Icons';
 import { SciencePanel, type PanelTab } from './components/SciencePanel';
@@ -23,9 +23,6 @@ type AppScreen = 'map' | 'simulation';
 const DEPTH_SCALE = 30;
 
 const FACTOR_ORDER = FACTOR_GROUPS.flatMap((group) => group.items);
-const GROUP_BY_ITEM = Object.fromEntries(
-  FACTOR_GROUPS.flatMap((group) => group.items.map((id) => [id, group.id])),
-) as Record<ItemId, string>;
 
 function formatValue(id: ItemId, value: number) {
   if (id === 'temperature') return `${value.toFixed(1).replace('.0', '')}°C`;
@@ -52,7 +49,7 @@ function FactorControl({ id, active, value, onChange }: FactorControlProps) {
 
   return (
     <article
-      className={`direct-factor group-${GROUP_BY_ITEM[id]} slider-${id} ${active ? 'active' : ''}`}
+      className={`direct-factor slider-${id} ${active ? 'active' : ''}`}
       title={`${item.label} — ${item.help}`}
     >
       <span className="factor-icon"><Icon name={item.icon as 'bottle'} /></span>
@@ -73,6 +70,73 @@ function FactorControl({ id, active, value, onChange }: FactorControlProps) {
   );
 }
 
+interface TeachingConsoleProps {
+  open: boolean;
+  resetToken: number;
+  initialControls: Environment;
+  onControlsChange: (controls: Environment) => void;
+  onApply: (controls: Environment) => void;
+}
+
+/**
+ * A bancada guarda as barras no próprio estado.
+ *
+ * Assim, arrastar um controle redesenha apenas estas oito linhas — antes cada
+ * evento de arraste re-renderizava a árvore inteira (painel, gráficos e cena),
+ * o que travava a página quando os fatores eram ajustados rápido. O valor atual
+ * fica também em um ref no App, para as barras voltarem iguais ao reabrir.
+ */
+function TeachingConsole({
+  open,
+  resetToken,
+  initialControls,
+  onControlsChange,
+  onApply,
+}: TeachingConsoleProps) {
+  const [controls, setControls] = useState<Environment>(() => ({ ...initialControls }));
+
+  // "Reiniciar" devolve as barras para a posição inicial.
+  useEffect(() => {
+    setControls({ ...BASELINE });
+  }, [resetToken]);
+
+  useEffect(() => {
+    onControlsChange(controls);
+  }, [controls, onControlsChange]);
+
+  const activeFactors = countActiveFactors(controls);
+
+  return (
+    <section className={`teaching-console ${open ? 'expanded' : 'collapsed'}`} aria-label="Controles do experimento">
+      <header className="console-header">
+        <h2 className="console-title">Fatores ambientais</h2>
+        <button
+          type="button"
+          className="apply-button"
+          disabled={activeFactors === 0}
+          onClick={() => onApply(controls)}
+        >
+          <Icon name="play" /> Aplicar e observar
+        </button>
+      </header>
+
+      {open && (
+        <div className="console-body">
+          {FACTOR_ORDER.map((id) => (
+            <FactorControl
+              key={id}
+              id={id}
+              active={isFactorActive(id, controls[id])}
+              value={controls[id]}
+              onChange={(value) => setControls((current) => ({ ...current, [id]: value }))}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function DepthRuler({ side }: { side: 'left' | 'right' }) {
   const marks = Array.from({ length: DEPTH_SCALE / 5 + 1 }, (_, index) => index * 5);
 
@@ -87,7 +151,8 @@ function DepthRuler({ side }: { side: 'left' | 'right' }) {
 
 export function App() {
   const [screen, setScreen] = useState<AppScreen>('map');
-  const [controls, setControls] = useState<Environment>({ ...BASELINE });
+  const controlsRef = useRef<Environment>({ ...BASELINE });
+  const [resetToken, setResetToken] = useState(0);
   const [simulation, setSimulation] = useState(createInitialState);
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<PanelTab>('now');
@@ -108,8 +173,10 @@ export function App() {
         accumulator -= steps * fixedStep;
         setSimulation((current) => {
           let next = current;
-          for (let index = 0; index < steps; index += 1) next = evaluateMessages(tickSimulation(next, fixedStep));
-          return next;
+          for (let index = 0; index < steps; index += 1) next = tickSimulation(next, fixedStep);
+          // Só um marco por quadro: em 10× vários limiares passam no mesmo
+          // quadro e o painel trocava de texto várias vezes de uma vez só.
+          return evaluateMessages(next);
         });
       }
       frame = requestAnimationFrame(animate);
@@ -124,12 +191,17 @@ export function App() {
 
   const currentMessage = useMemo(() => getMessage(simulation.latestMessageId), [simulation.latestMessageId]);
   const indicators = useMemo(() => deriveIndicators(simulation), [simulation]);
-  const activeFactors = countActiveFactors(controls);
   const challenge = CHALLENGES.find((item) => item.id === challengeId) ?? null;
   const challengeProgress = challenge ? evaluateChallenge(challenge, simulation) : null;
 
-  const applyChanges = () => {
-    setSimulation((current) => ({ ...current, targets: buildTargets(controls), paused: false }));
+  const applyChanges = (controls: Environment) => {
+    setSimulation((current) => ({
+      ...current,
+      targets: buildTargets(controls),
+      paused: false,
+      // Primeiro marco aparece logo depois de aplicar.
+      messageCooldown: 0,
+    }));
     setPanelTab('now');
   };
 
@@ -137,7 +209,8 @@ export function App() {
   const togglePause = () => setSimulation((current) => ({ ...current, paused: !current.paused }));
 
   const reset = () => {
-    setControls({ ...BASELINE });
+    controlsRef.current = { ...BASELINE };
+    setResetToken((token) => token + 1);
     setSimulation(createInitialState());
     setChallengeId(null);
     setPanelTab('now');
@@ -220,36 +293,13 @@ export function App() {
           onToggleConsole={() => setConsoleOpen((open) => !open)}
         />
 
-        <section className={`teaching-console ${consoleOpen ? 'expanded' : 'collapsed'}`} aria-label="Controles do experimento">
-          <header className="console-header">
-            <div className="console-heading">
-              <h2>Fatores ambientais</h2>
-              <p>Arraste uma barra para ligar o fator — na posição inicial ele fica desligado.</p>
-            </div>
-            <p className={`feedback-status ${activeFactors > 0 ? 'ready' : ''}`}>
-              {activeFactors === 0
-                ? 'Nenhum fator ativo'
-                : `${activeFactors} ${activeFactors === 1 ? 'fator ativo' : 'fatores ativos'} — pronto para aplicar`}
-            </p>
-            <button type="button" className="apply-button" disabled={activeFactors === 0} onClick={applyChanges}>
-              <Icon name="play" /> Aplicar e observar
-            </button>
-          </header>
-
-          {consoleOpen && (
-            <div className="console-body">
-              {FACTOR_ORDER.map((id) => (
-                <FactorControl
-                  key={id}
-                  id={id}
-                  active={isFactorActive(id, controls[id])}
-                  value={controls[id]}
-                  onChange={(value) => setControls((current) => ({ ...current, [id]: value }))}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+        <TeachingConsole
+          open={consoleOpen}
+          resetToken={resetToken}
+          initialControls={controlsRef.current}
+          onControlsChange={(next) => { controlsRef.current = next; }}
+          onApply={applyChanges}
+        />
       </main>
     </div>
   );

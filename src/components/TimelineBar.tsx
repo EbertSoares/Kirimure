@@ -1,12 +1,7 @@
 import { Icon } from './Icons';
-import { TrendChart, type TrendSeries } from './TrendChart';
 import { getMessageById } from '../simulation/messages';
 import { formatSimulatedTime, SIMULATION_SPEEDS } from '../simulation/time';
 import type { SimulationSpeed, SimulationState } from '../simulation/types';
-
-const OVERALL_SERIES: TrendSeries[] = [
-  { id: 'overall', label: 'Saúde geral', color: '#2ec2a4', pick: (point) => point.overall },
-];
 
 interface TimelineBarProps {
   state: SimulationState;
@@ -49,10 +44,6 @@ export function TimelineBar({
       <div className="timeline-clock">
         <small>Tempo simulado</small>
         <strong>{formatSimulatedTime(state.elapsedDays)}</strong>
-      </div>
-
-      <div className="timeline-spark" aria-hidden="true">
-        <TrendChart history={state.history} series={OVERALL_SERIES} compact />
       </div>
 
       <div className="timeline-event">

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Application, Assets, Container, FillGradient, Graphics, MeshPlane, Sprite, Texture } from 'pixi.js';
+import { useEffect, useRef, useState } from 'react';
+import { Application, Assets, Container, FillGradient, Graphics, MeshPlane, Sprite, Texture, type Ticker } from 'pixi.js';
 import { FISH_SPECIES } from '../simulation/config';
 import type { FishSpeciesId, SimulationState } from '../simulation/types';
 import { MARINE_ASSET_URLS, type MarineAssetKey } from './assets';
@@ -50,6 +50,7 @@ interface CoralVisual {
   sizeRatio: number;
   direction: 1 | -1;
   sensitivity: number;
+  sourceSize: number;
 }
 
 interface DecorVisual {
@@ -58,6 +59,7 @@ interface DecorVisual {
   yRatio: number;
   sizeRatio: number;
   direction: 1 | -1;
+  sourceSize: number;
 }
 
 interface ParticleVisual {
@@ -77,7 +79,6 @@ interface DebrisVisual {
 
 type MarineTextures = Record<MarineAssetKey, Texture>;
 
-const SOURCE_SIZE = 1254;
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 function mulberry32(seed: number) {
@@ -197,7 +198,22 @@ function createCoral(
   dead.alpha = 0;
   dead.tint = 0x70806b;
   root.addChild(healthy, pale, partial, bleached, dead);
-  return { root, healthy, pale, partial, bleached, dead, xRatio, yRatio, sizeRatio, direction, sensitivity };
+  return {
+    root,
+    healthy,
+    pale,
+    partial,
+    bleached,
+    dead,
+    xRatio,
+    yRatio,
+    sizeRatio,
+    direction,
+    sensitivity,
+    // Cada arte tem a própria resolução; o tamanho em cena é sempre relativo
+    // ao tamanho real da textura.
+    sourceSize: textures.coralBranchingHealthy.width,
+  };
 }
 
 function createDecor(
@@ -209,7 +225,7 @@ function createDecor(
 ): DecorVisual {
   const sprite = new Sprite(texture);
   sprite.anchor.set(0.5, 0.92);
-  return { sprite, xRatio, yRatio, sizeRatio, direction };
+  return { sprite, xRatio, yRatio, sizeRatio, direction, sourceSize: texture.width };
 }
 
 function drawBackground(graphics: Graphics, width: number, height: number, waterGradient: FillGradient) {
@@ -366,7 +382,11 @@ function deformFish(fish: FishVisual, elapsed: number, health: number) {
   const amplitude = 48 + fish.speed * 0.85 + stress * 25;
 
   fish.meshes.forEach((mesh) => {
+    // As variantes invisíveis não precisam de deformação: economiza trabalho
+    // em telas menores, onde a cena roda no aparelho do visitante.
+    if (mesh.alpha <= 0.002) return;
     const positions = mesh.geometry.positions;
+    if (positions.length !== fish.basePositions.length) return;
     for (let index = 0; index < positions.length; index += 2) {
       const baseX = fish.basePositions[index];
       const baseY = fish.basePositions[index + 1];
@@ -383,6 +403,8 @@ function deformFish(fish: FishVisual, elapsed: number, health: number) {
 
 function restoreFishBody(fish: FishVisual) {
   fish.meshes.forEach((mesh) => {
+    if (mesh.alpha <= 0.002) return;
+    if (mesh.geometry.positions.length !== fish.basePositions.length) return;
     mesh.geometry.positions.set(fish.basePositions);
     mesh.geometry.attributes.aPosition.buffer.update();
   });
@@ -402,6 +424,7 @@ function updateFishState(fish: FishVisual, health: number) {
 
 export function MarineScene({ state }: MarineSceneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -415,6 +438,10 @@ export function MarineScene({ state }: MarineSceneProps) {
     let waterGradient: FillGradient | null = null;
 
     const start = async () => {
+      // As artes começam a baixar em paralelo com a criação do contexto WebGL:
+      // o recife aparece antes e os sprites entram assim que estiverem prontos.
+      const texturesPromise = loadMarineTextures();
+
       const instance = new Application();
       await instance.init({
         resizeTo: host,
@@ -504,58 +531,20 @@ export function MarineScene({ state }: MarineSceneProps) {
         surfaceWaves,
       );
 
-      const textures = await loadMarineTextures();
-      if (disposed) return;
-
-      const rocks = [
-        createDecor(textures.reefRocksSand, 0.15, 0.98, 0.42, 1),
-        createDecor(textures.reefRocksSand, 0.86, 1.01, 0.48, -1),
-      ];
-      rocks.forEach(({ sprite }) => rocksLayer.addChild(sprite));
-
-      const vegetation = [
-        createDecor(textures.seaweedGreen, 0.09, 0.98, 0.17, 1),
-        createDecor(textures.seaweedGreen, 0.29, 1.01, 0.13, -1),
-        createDecor(textures.seaweedGreen, 0.7, 1.01, 0.14, 1),
-        createDecor(textures.seaweedGreen, 0.92, 0.98, 0.18, -1),
-      ];
-      vegetation.forEach(({ sprite }, index) => {
-        sprite.tint = index % 2 ? 0x8ecb73 : 0xffffff;
-        vegetationLayer.addChild(sprite);
-      });
-
-      const corals = [
-        createCoral(textures, 0.12, 1.01, 0.22, 1, 7),
-        createCoral(textures, 0.28, 1.03, 0.16, -1, -5),
-        createCoral(textures, 0.74, 1.03, 0.17, 1, 3),
-        createCoral(textures, 0.9, 1.01, 0.23, -1, -9),
-      ];
-      corals.forEach(({ root }) => coralLayer.addChild(root));
-
-      const brainCorals = [
-        createDecor(textures.coralBrainHealthy, 0.23, 0.98, 0.2, 1),
-        createDecor(textures.coralBrainHealthy, 0.8, 1.01, 0.16, -1),
-      ];
-      brainCorals.forEach(({ sprite }) => coralLayer.addChild(sprite));
-
-      const fish = Array.from({ length: 18 }, (_, index) => {
-        const visual = createFish(index, textures);
-        fishLayer.addChild(visual.root);
-        return visual;
-      });
-
-      const drifters = [
-        createDrifter(textures.squidCaribbeanReef, 'squid', 0, 0.18, 0.3),
-        createDrifter(textures.squidCaribbeanReef, 'squid', 1, 0.72, 0.24),
-        createDrifter(textures.squidCaribbeanReef, 'squid', 2, 0.47, 0.48),
-        createDrifter(textures.jellyfishMoon, 'jellyfish', 0, 0.32, 0.19),
-        createDrifter(textures.jellyfishMoon, 'jellyfish', 1, 0.61, 0.36),
-        createDrifter(textures.jellyfishMoon, 'jellyfish', 2, 0.84, 0.16),
-      ];
-      drifters.forEach(({ sprite }) => driftingFaunaLayer.addChild(sprite));
+      // As artes chegam em paralelo: água, areia, luz e partículas aparecem já
+      // no primeiro quadro e os sprites entram quando o carregamento termina.
+      // Antes disso a cena ficava vazia esperando mais de 12 MB de PNGs.
+      const compactScene = window.innerWidth < 760;
+      const rocks: DecorVisual[] = [];
+      const vegetation: DecorVisual[] = [];
+      const corals: CoralVisual[] = [];
+      const brainCorals: DecorVisual[] = [];
+      const fish: FishVisual[] = [];
+      const drifters: DrifterVisual[] = [];
+      const debris: DebrisVisual[] = [];
 
       const random = mulberry32(7021);
-      const particles: ParticleVisual[] = Array.from({ length: 240 }, (_, index) => {
+      const particles: ParticleVisual[] = Array.from({ length: compactScene ? 110 : 240 }, (_, index) => {
         const shape = new Graphics();
         const colors = [
           0x101820, 0x101820, 0x101820, 0x263642, 0x263642,
@@ -573,21 +562,8 @@ export function MarineScene({ state }: MarineSceneProps) {
         };
       });
 
-      const debris: DebrisVisual[] = Array.from({ length: 6 }, (_, index) => {
-        const sprite = new Sprite(textures.microplasticsMixed);
-        sprite.anchor.set(0.5);
-        debrisLayer.addChild(sprite);
-        return {
-          sprite,
-          speedX: -2 + random() * 4,
-          speedY: 1.5 + random() * 4,
-          phase: random() * Math.PI * 2,
-          scale: 0.09 + (index % 3) * 0.015,
-        };
-      });
-
       // Neve marinha: partículas claras que dão profundidade e movimento à água.
-      const snow = Array.from({ length: 110 }, () => {
+      const snow = Array.from({ length: compactScene ? 48 : 110 }, () => {
         const dot = new Graphics();
         dot.circle(0, 0, 0.7 + random() * 1.6).fill({ color: 0xe6fbff, alpha: 0.35 + random() * 0.4 });
         snowLayer.addChild(dot);
@@ -600,7 +576,7 @@ export function MarineScene({ state }: MarineSceneProps) {
       });
 
       // Matéria orgânica do esgoto: manchas esverdeadas em suspensão.
-      const organic = Array.from({ length: 80 }, (_, index) => {
+      const organic = Array.from({ length: compactScene ? 34 : 80 }, (_, index) => {
         const blob = new Graphics();
         blob
           .circle(0, 0, 1.6 + random() * 2.8)
@@ -618,7 +594,7 @@ export function MarineScene({ state }: MarineSceneProps) {
       let previousHeight = 0;
       let elapsed = 0;
 
-      instance.ticker.add((ticker) => {
+      const updateScene = (ticker: Ticker) => {
         elapsed += ticker.deltaMS / 1000;
         const delta = ticker.deltaMS / 1000;
         const width = instance.screen.width;
@@ -649,25 +625,25 @@ export function MarineScene({ state }: MarineSceneProps) {
           rocks.forEach((rock) => {
             rock.sprite.x = width * rock.xRatio;
             rock.sprite.y = height * rock.yRatio;
-            const scale = (width * rock.sizeRatio) / SOURCE_SIZE;
+            const scale = (width * rock.sizeRatio) / rock.sourceSize;
             rock.sprite.scale.set(scale * rock.direction, scale);
           });
           vegetation.forEach((plant) => {
             plant.sprite.x = width * plant.xRatio;
             plant.sprite.y = height * plant.yRatio;
-            const scale = (width * plant.sizeRatio) / SOURCE_SIZE;
+            const scale = (width * plant.sizeRatio) / plant.sourceSize;
             plant.sprite.scale.set(scale * plant.direction, scale);
           });
           corals.forEach((coral) => {
             coral.root.x = width * coral.xRatio;
             coral.root.y = height * coral.yRatio;
-            const scale = (width * coral.sizeRatio) / SOURCE_SIZE;
+            const scale = (width * coral.sizeRatio) / coral.sourceSize;
             coral.root.scale.set(scale * coral.direction, scale);
           });
           brainCorals.forEach((coral) => {
             coral.sprite.x = width * coral.xRatio;
             coral.sprite.y = height * coral.yRatio;
-            const scale = (width * coral.sizeRatio) / SOURCE_SIZE;
+            const scale = (width * coral.sizeRatio) / coral.sourceSize;
             coral.sprite.scale.set(scale * coral.direction, scale);
           });
           fish.forEach((visual, index) => {
@@ -771,7 +747,7 @@ export function MarineScene({ state }: MarineSceneProps) {
           if (visual.sprite.y > height * 0.86) visual.sprite.y = height * visual.yRatio;
         });
 
-        const visibleParticles = Math.round(240 * current.env.microplastics / 100);
+        const visibleParticles = Math.round(particles.length * current.env.microplastics / 100);
         particles.forEach((particle, index) => {
           particle.shape.visible = index < visibleParticles;
           if (!particle.shape.visible) return;
@@ -783,7 +759,7 @@ export function MarineScene({ state }: MarineSceneProps) {
           if (particle.shape.x > width) particle.shape.x = 0;
         });
 
-        const visibleDebris = Math.ceil(6 * current.env.microplastics / 100);
+        const visibleDebris = Math.ceil(debris.length * current.env.microplastics / 100);
         debris.forEach((item, index) => {
           item.sprite.visible = index < visibleDebris;
           if (!item.sprite.visible) return;
@@ -830,12 +806,108 @@ export function MarineScene({ state }: MarineSceneProps) {
           if (blob.blob.x < -5) blob.blob.x = width + 5;
           if (blob.blob.x > width + 5) blob.blob.x = -5;
         });
+      };
+
+      // Um quadro com problema não pode derrubar a cena inteira: o erro fica no
+      // console e o recife continua animando.
+      instance.ticker.add((ticker) => {
+        try {
+          updateScene(ticker);
+        } catch (error) {
+          console.error('Falha ao atualizar a cena marinha.', error);
+        }
       });
+
+      // Se o navegador perder o contexto WebGL (acontece em aparelhos com pouca
+      // memória), o Pixi restaura os recursos; aqui só registramos o evento.
+      instance.canvas.addEventListener('webglcontextlost', (event) => {
+        event.preventDefault();
+        console.warn('Contexto WebGL perdido; restaurando a cena marinha.');
+      });
+ 
+      // Os sprites entram assim que as artes chegam. Enquanto isso a cena já
+      // está viva: fundo, recife distante, feixes de luz, partículas e neve.
+      void texturesPromise
+        .then((textures) => {
+          if (disposed) return;
+
+          rocks.push(
+            createDecor(textures.reefRocksSand, 0.15, 0.98, 0.42, 1),
+            createDecor(textures.reefRocksSand, 0.86, 1.01, 0.48, -1),
+          );
+          rocks.forEach(({ sprite }) => rocksLayer.addChild(sprite));
+
+          vegetation.push(
+            createDecor(textures.seaweedGreen, 0.09, 0.98, 0.17, 1),
+            createDecor(textures.seaweedGreen, 0.29, 1.01, 0.13, -1),
+            createDecor(textures.seaweedGreen, 0.7, 1.01, 0.14, 1),
+            createDecor(textures.seaweedGreen, 0.92, 0.98, 0.18, -1),
+          );
+          vegetation.forEach(({ sprite }, index) => {
+            sprite.tint = index % 2 ? 0x8ecb73 : 0xffffff;
+            vegetationLayer.addChild(sprite);
+          });
+
+          corals.push(
+            createCoral(textures, 0.12, 1.01, 0.22, 1, 7),
+            createCoral(textures, 0.28, 1.03, 0.16, -1, -5),
+            createCoral(textures, 0.74, 1.03, 0.17, 1, 3),
+            createCoral(textures, 0.9, 1.01, 0.23, -1, -9),
+          );
+          corals.forEach(({ root }) => coralLayer.addChild(root));
+
+          brainCorals.push(
+            createDecor(textures.coralBrainHealthy, 0.23, 0.98, 0.2, 1),
+            createDecor(textures.coralBrainHealthy, 0.8, 1.01, 0.16, -1),
+          );
+          brainCorals.forEach(({ sprite }) => coralLayer.addChild(sprite));
+
+          const schoolSize = compactScene ? 12 : 18;
+          for (let index = 0; index < schoolSize; index += 1) {
+            const visual = createFish(index, textures);
+            fishLayer.addChild(visual.root);
+            fish.push(visual);
+          }
+
+          drifters.push(
+            createDrifter(textures.squidCaribbeanReef, 'squid', 0, 0.18, 0.3),
+            createDrifter(textures.squidCaribbeanReef, 'squid', 1, 0.72, 0.24),
+            createDrifter(textures.squidCaribbeanReef, 'squid', 2, 0.47, 0.48),
+            createDrifter(textures.jellyfishMoon, 'jellyfish', 0, 0.32, 0.19),
+            createDrifter(textures.jellyfishMoon, 'jellyfish', 1, 0.61, 0.36),
+            createDrifter(textures.jellyfishMoon, 'jellyfish', 2, 0.84, 0.16),
+          );
+          drifters.forEach(({ sprite }) => driftingFaunaLayer.addChild(sprite));
+
+          for (let index = 0; index < 6; index += 1) {
+            const sprite = new Sprite(textures.microplasticsMixed);
+            sprite.anchor.set(0.5);
+            debrisLayer.addChild(sprite);
+            debris.push({
+              sprite,
+              speedX: -2 + random() * 4,
+              speedY: 1.5 + random() * 4,
+              phase: random() * Math.PI * 2,
+              scale: 0.09 + (index % 3) * 0.015,
+            });
+          }
+
+          // Força o reposicionamento dos sprites já no próximo quadro.
+          previousHeight = -1;
+          setStatus('ready');
+        })
+        .catch((error: unknown) => {
+          console.error('Não foi possível carregar as artes da cena marinha.', error);
+          if (disposed) return;
+          host.dataset.loadError = 'true';
+          setStatus('error');
+        });
     };
 
     void start().catch((error: unknown) => {
       console.error('Não foi possível carregar a cena marinha.', error);
       host.dataset.loadError = 'true';
+      setStatus('error');
     });
 
     return () => {
@@ -852,11 +924,19 @@ export function MarineScene({ state }: MarineSceneProps) {
   }, []);
 
   return (
-    <div
-      ref={hostRef}
-      className="marine-canvas"
-      role="img"
-      aria-label={`Recife costeiro. Saúde geral ${Math.round(state.overall)}%, corais ${Math.round(state.health.coral)}% e peixes ${Math.round(state.health.fish)}%.`}
-    />
+    <>
+      <div
+        ref={hostRef}
+        className="marine-canvas"
+        role="img"
+        aria-label={`Recife costeiro. Saúde geral ${Math.round(state.overall)}%, corais ${Math.round(state.health.coral)}% e peixes ${Math.round(state.health.fish)}%.`}
+      />
+      {status !== 'ready' && (
+        <div className={`scene-loading ${status}`} role="status">
+          <span className="scene-loading-dot" aria-hidden="true" />
+          {status === 'error' ? 'Não foi possível carregar a cena.' : 'Preparando o recife…'}
+        </div>
+      )}
+    </>
   );
 }

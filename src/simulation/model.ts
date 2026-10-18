@@ -154,6 +154,7 @@ export function createInitialState(): SimulationState {
     firedMessages: new Set(),
     events: [],
     latestMessageId: null,
+    messageCooldown: 0,
   };
 }
 
@@ -238,6 +239,8 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
     exposure,
     overall,
     elapsedDays: state.elapsedDays + dtDays,
+    // A pausa entre marcos conta em segundos reais (ver messages.ts).
+    messageCooldown: Math.max(0, state.messageCooldown - realDtSeconds),
   });
 }
 
