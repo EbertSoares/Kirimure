@@ -255,9 +255,22 @@ export function App() {
               </div>
             ))}
           </section>
+
+          <details className="science-sources">
+            <summary>Base científica do modelo</summary>
+            <p>Os efeitos foram simplificados para uso educativo. Tempo e intensidade não equivalem a medições de campo.</p>
+            <ul>
+              <li><a href="https://www.biotaneotropica.org.br/BN/article/view/418" target="_blank" rel="noreferrer">Branqueamento de corais na Bahia</a></li>
+              <li><a href="https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2020.00179/full" target="_blank" rel="noreferrer">Ondas de calor em recifes brasileiros</a></li>
+              <li><a href="https://coralreefwatch.noaa.gov/product/5km_v3.1_op/index_5km_dhw.php" target="_blank" rel="noreferrer">Calor acumulado e risco de branqueamento</a></li>
+              <li><a href="https://www.noaa.gov/ocean-acidification" target="_blank" rel="noreferrer">Acidificação do oceano</a></li>
+              <li><a href="https://marinedebris.noaa.gov/what-marine-debris/microplastics" target="_blank" rel="noreferrer">Microplásticos no ambiente marinho</a></li>
+              <li><a href="https://www.noaa.gov/explainers/oil-spills-major-marine-ecosystem-threat" target="_blank" rel="noreferrer">Efeitos de derramamentos de óleo</a></li>
+            </ul>
+          </details>
         </aside>
       </main>
-      <footer className="science-note">Modelo educativo simplificado · Parâmetros sujeitos à revisão científica</footer>
+      <footer className="science-note">Modelo educativo simplificado · Exposição de semanas comprimida em segundos</footer>
     </div>
   );
 }

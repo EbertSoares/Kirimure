@@ -28,10 +28,16 @@ describe('modelo de simulação', () => {
   });
 
   it('aplica sinergia de calor e poluição aos corais', () => {
-    const heat = calculateStress({ ...BASELINE, temperature: 31 });
+    const heat = calculateStress({ ...BASELINE, temperature: 29 });
     const oil = calculateStress({ ...BASELINE, oil: 60 });
-    const combined = calculateStress({ ...BASELINE, temperature: 31, oil: 60 });
+    const combined = calculateStress({ ...BASELINE, temperature: 29, oil: 60 });
     expect(combined.coral).toBeGreaterThan(Math.max(heat.coral, oil.coral));
+  });
+
+  it('inicia estresse térmico dos corais antes do estresse dos peixes', () => {
+    const stress = calculateStress({ ...BASELINE, temperature: 29 });
+    expect(stress.coral).toBeGreaterThan(0);
+    expect(stress.fish).toBe(0);
   });
 
   it('mantém saúde entre zero e cem', () => {

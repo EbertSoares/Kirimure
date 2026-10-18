@@ -21,6 +21,7 @@ svg/
     fish-blue-tang-dead.png
   pollution/
     microplastics-mixed.png
+    microplastics-particles-dark.svg
 ```
 
 ## Uso previsto
@@ -36,6 +37,7 @@ svg/
 | `coral-branching-bleached.png` | Coral completamente branco | Branqueamento avançado |
 | `coral-brain-healthy.png` | Coral-cérebro amarelo/laranja | Composição do recife saudável |
 | `microplastics-mixed.png` | Conjunto de fragmentos plásticos coloridos | Poluição por microplásticos |
+| `microplastics-particles-dark.svg` | Partículas, fibras e fragmentos escuros | Visual principal de microplásticos na simulação |
 | `seaweed-green.png` | Alga marinha verde | Vegetação do recife |
 | `reef-rocks-sand.png` | Rochas com base de areia | Estrutura do fundo do recife |
 

@@ -4,8 +4,8 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
   {
     id: 'coral_heat_stress',
     title: 'Estresse térmico nos corais',
-    text: 'A água mais quente afeta a relação dos corais com as algas que vivem em seus tecidos.',
-    matches: (state) => state.env.temperature >= 29,
+    text: 'Calor acumulado por dias ou semanas desestabiliza a relação dos corais com as algas que vivem em seus tecidos.',
+    matches: (state) => state.env.temperature >= 28,
   },
   {
     id: 'coral_bleaching',
@@ -17,18 +17,18 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     id: 'acidification',
     title: 'Acidificação da água',
     text: 'A redução do pH dificulta a formação de estruturas de carbonato de cálcio, como o esqueleto dos corais.',
-    matches: (state) => state.env.ph <= 7.95,
+    matches: (state) => state.env.ph <= 8,
   },
   {
     id: 'microplastics_chain',
     title: 'Microplásticos na cadeia alimentar',
-    text: 'Pequenos fragmentos podem ser ingeridos por animais e circular por diferentes níveis da cadeia alimentar.',
+    text: 'Fragmentos menores que 5 mm podem ser ingeridos por animais. Os efeitos sobre populações silvestres ainda são estudados.',
     matches: (state) => state.env.microplastics >= 40,
   },
   {
     id: 'oil_film',
     title: 'Película de óleo na superfície',
-    text: 'O óleo reduz a passagem de luz e a troca de gases entre a água e a atmosfera.',
+    text: 'A mancha se espalha sobretudo na superfície; ondas podem misturar gotículas e ampliar a exposição de peixes e corais.',
     matches: (state) => state.env.oil >= 30,
   },
   {
@@ -41,7 +41,7 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
 
 export const INTRO_MESSAGE = {
   title: 'Explore o recife',
-  text: 'Selecione um ou mais fatores, ajuste a intensidade e aplique as alterações para observar as consequências.',
+  text: 'Selecione fatores e observe uma representação acelerada: semanas de exposição são comprimidas em segundos.',
 };
 
 export function evaluateMessages(state: SimulationState): SimulationState {

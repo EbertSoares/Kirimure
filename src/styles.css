@@ -310,6 +310,22 @@ strong.green { color: #159c65; }
 strong.yellow { color: #df9410; }
 strong.red { color: #e53939; }
 
+.science-sources {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid #dce8ee;
+  border-radius: 14px;
+  background: rgba(244, 250, 253, .86);
+  color: #587086;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.science-sources summary { color: #17466f; font-weight: 800; cursor: pointer; }
+.science-sources p { margin: 9px 0 7px; }
+.science-sources ul { margin: 0; padding-left: 18px; }
+.science-sources li + li { margin-top: 3px; }
+.science-sources a { color: #087bb9; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
 .science-note { max-width: 1600px; margin: 6px auto 0; text-align: right; color: #7790a3; font-size: 11px; }
 
 button:focus-visible, input:focus-visible { outline: 3px solid rgba(14, 132, 201, .35); outline-offset: 2px; }
