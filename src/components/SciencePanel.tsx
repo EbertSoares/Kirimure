@@ -1,5 +1,5 @@
 import { Icon } from './Icons';
-import { FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
+import { FISH_SPECIES, PRESSURE_LABELS, SCENARIO } from '../simulation/config';
 import { calculateAlgae, calculateFishPressures, calculateTrophicBalance, countActiveFactors } from '../simulation/model';
 import { evaluateChallenge, type ChallengeProgress } from '../simulation/challenges';
 import { getMessageById } from '../simulation/messages';
@@ -69,6 +69,8 @@ interface SciencePanelProps {
   onSelectChallenge: (id: string) => void;
   tab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
+  presentationMode: boolean;
+  onContinueCheckpoint: () => void;
 }
 
 export function SciencePanel({
@@ -81,19 +83,27 @@ export function SciencePanel({
   onSelectChallenge,
   tab,
   onTabChange,
+  presentationMode,
+  onContinueCheckpoint,
 }: SciencePanelProps) {
-  const algae = calculateAlgae(state.env, state.health);
-  const trophic = calculateTrophicBalance(state.species, algae);
-  const herbivores = (state.species['blue-tang'] + state.species.parrotfish) / 2;
+  const algae = calculateAlgae(state.env, state.living);
+  const trophic = calculateTrophicBalance(state.speciesLiving, algae);
+  const herbivores = (state.speciesLiving['blue-tang'] + state.speciesLiving.parrotfish) / 2;
   const before = pastPoint(state, 30);
   const coralChip = topPressures(state, 'coral');
   const eventLog = [...state.events].reverse().slice(0, 8);
   const activeFactors = countActiveFactors(state.targets);
 
   return (
-    <aside className="science-panel" aria-label="Painel científico">
-      <nav className="panel-tabs" role="tablist">
-        {TABS.map((item) => (
+    <aside className={`science-panel ${presentationMode ? 'presentation' : 'analysis'}`} aria-label="Painel científico">
+      {presentationMode ? (
+        <header className="lesson-panel-header">
+          <small>Guia da aula</small>
+          <strong>Observe causa, efeito e tempo</strong>
+        </header>
+      ) : (
+        <nav className="panel-tabs" role="tablist">
+          {TABS.map((item) => (
           <button
             type="button"
             key={item.id}
@@ -104,12 +114,27 @@ export function SciencePanel({
           >
             <span>{item.label}</span>
           </button>
-        ))}
-      </nav>
+          ))}
+        </nav>
+      )}
 
       <div className="panel-body">
-        {tab === 'now' && (
+        {(presentationMode || tab === 'now') && (
           <section className="panel-section" aria-label="O que está acontecendo">
+            {state.checkpoint && (
+              <article className={`checkpoint-card checkpoint-${state.checkpoint.kind}`}>
+                <small>Marco no dia {state.checkpoint.day}</small>
+                <h3>{state.checkpoint.title}</h3>
+                <p>{state.checkpoint.explanation}</p>
+                <strong>{state.checkpoint.recoveryLabel}</strong>
+                {!state.checkpoint.locked && (
+                  <button type="button" onClick={onContinueCheckpoint}>
+                    Continuar até o próximo limite
+                  </button>
+                )}
+              </article>
+            )}
+
             <article className={`message-card tone-${message.tone}`}>
               <header>
                 <span className="message-icon"><Icon name={message.tone === 'positive' ? 'check' : 'info'} /></span>
@@ -135,24 +160,47 @@ export function SciencePanel({
               </p>
             </article>
 
-            <article className="context-card">
+            {presentationMode && (
+              <article className="presentation-snapshot" aria-label="Leitura rápida do recife">
+                <div>
+                  <small>Coral vivo</small>
+                  <strong className={levelTone(state.living.coral)}>{Math.round(state.living.coral)}%</strong>
+                </div>
+                <div>
+                  <small>Peixes vivos</small>
+                  <strong className={levelTone(state.living.fish)}>{Math.round(state.living.fish)}%</strong>
+                </div>
+                <div>
+                  <small>Tempo</small>
+                  <strong>{formatSimulatedTime(state.elapsedDays)}</strong>
+                </div>
+              </article>
+            )}
+
+            {!presentationMode && <article className="context-card">
               <h3>Situação atual</h3>
               <ul>
                 <li><span>Fatores aplicados</span><strong>{activeFactors}</strong></li>
                 <li><span>Tempo simulado</span><strong>{formatSimulatedTime(state.elapsedDays)}</strong></li>
                 <li><span>Simulação</span><strong>{state.paused ? 'pausada' : `em ${state.speed}×`}</strong></li>
               </ul>
-            </article>
+            </article>}
 
-            <div className="message-steps">
+            {!presentationMode && <div className="message-steps">
               <span><Icon name="play" /> Aplique uma mudança na bancada</span>
               <span><Icon name="clock" /> Avance o tempo na linha do tempo</span>
               <span><Icon name="chart" /> Compare o resultado nos indicadores</span>
-            </div>
+            </div>}
+
+            <article className="scenario-card">
+              <small>Recorte científico</small>
+              <strong>{SCENARIO.name}</strong>
+              <p>{SCENARIO.referenceAreaKm2} km² · camada misturada de {SCENARIO.mixedDepthM} m · modelo educacional, não previsão ambiental.</p>
+            </article>
           </section>
         )}
 
-        {tab === 'indicators' && (
+        {!presentationMode && tab === 'indicators' && (
           <section className="panel-section" aria-label="Indicadores do recife">
             <ul className="indicator-list">
               {indicators.map((item) => (
@@ -169,14 +217,15 @@ export function SciencePanel({
           </section>
         )}
 
-        {tab === 'species' && (
+        {!presentationMode && tab === 'species' && (
           <section className="panel-section" aria-label="Espécies e teia alimentar">
             <article className="species-card">
               <header>
                 <span className="species-name"><Icon name="coral" /> Corais construtores</span>
-                <strong className={levelTone(state.health.coral)}>{Math.round(state.health.coral)}%</strong>
+                <strong className={levelTone(state.living.coral)}>{Math.round(state.living.coral)}% vivos</strong>
               </header>
-              <div className="indicator-bar"><i style={{ width: `${Math.max(2, state.health.coral)}%` }} /></div>
+              <div className="indicator-bar"><i style={{ width: `${Math.max(2, state.living.coral)}%` }} /></div>
+              <p className="species-role">Condição dos sobreviventes: {Math.round(state.health.coral)}%</p>
               <ul className="stress-tags">
                 {coralChip.length === 0
                   ? <li className="calm">sem pressões relevantes</li>
@@ -186,15 +235,16 @@ export function SciencePanel({
 
             {FISH_SPECIES.map((species) => {
               const health = state.species[species.id];
+              const living = state.speciesLiving[species.id];
               const tags = topPressures(state, species.id);
               return (
                 <article className="species-card" key={species.id}>
                   <header>
                     <span className="species-name"><Icon name="fish" /> {species.label}</span>
-                    <strong className={levelTone(health)}>{Math.round(health)}%</strong>
+                    <strong className={levelTone(living)}>{Math.round(living)}% vivos</strong>
                   </header>
-                  <div className="indicator-bar"><i style={{ width: `${Math.max(2, health)}%` }} /></div>
-                  <p className="species-role">{species.role}</p>
+                  <div className="indicator-bar"><i style={{ width: `${Math.max(2, living)}%` }} /></div>
+                  <p className="species-role">{species.role} · condição {Math.round(health)}%</p>
                   <ul className="stress-tags">
                     {tags.length === 0
                       ? <li className="calm">sem pressões relevantes</li>
@@ -216,9 +266,9 @@ export function SciencePanel({
                   <small>Herbívoros</small>
                   <strong>{Math.round(herbivores)}%</strong>
                 </div>
-                <div className={`web-node tone-${levelTone(state.health.coral)}`}>
+                  <div className={`web-node tone-${levelTone(state.living.coral)}`}>
                   <small>Corais</small>
-                  <strong>{Math.round(state.health.coral)}%</strong>
+                  <strong>{Math.round(state.living.coral)}%</strong>
                 </div>
               </div>
               <p className="web-balance">
@@ -233,14 +283,14 @@ export function SciencePanel({
           </section>
         )}
 
-        {tab === 'timeline' && (
+        {!presentationMode && tab === 'timeline' && (
           <section className="panel-section" aria-label="Linha do tempo">
             <article className="compare-card">
               <h3>Comparação: agora e 30 dias atrás</h3>
               <ul>
                 {([
-                  ['Corais', before.coral, state.health.coral],
-                  ['Peixes', before.fish, state.health.fish],
+                  ['Corais vivos', before.livingCoral, state.living.coral],
+                  ['Peixes vivos', before.livingFish, state.living.fish],
                   ['Algas', before.algae, algae],
                   ['Saúde geral', before.overall, state.overall],
                 ] as const).map(([label, past, current]) => {
@@ -277,7 +327,7 @@ export function SciencePanel({
           </section>
         )}
 
-        {tab === 'challenges' && (
+        {!presentationMode && tab === 'challenges' && (
           <section className="panel-section" aria-label="Desafios">
             <p className="panel-intro">
               Escolha um objetivo para investigar. A barra mostra quantos dias seguidos a condição já se

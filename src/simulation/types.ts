@@ -26,6 +26,21 @@ export interface Health {
   fish: number;
 }
 
+/** Cobertura/abundância que continua viva. Não aumenta sem repovoamento. */
+export interface LivingCommunity extends Health {}
+
+export type CheckpointKind = 'critical' | 'collapse';
+
+export interface SimulationCheckpoint {
+  kind: CheckpointKind;
+  day: number;
+  title: string;
+  explanation: string;
+  recoveryLabel: string;
+  /** Colapso estrutural só pode ser encerrado reiniciando o experimento. */
+  locked: boolean;
+}
+
 /** Pressões que agem sobre o recife. Cada uma varia de 0 (nenhuma) a 1 (máxima). */
 export type PressureId =
   | 'thermal'
@@ -58,19 +73,32 @@ export interface HistoryPoint {
   day: number;
   coral: number;
   fish: number;
+  livingCoral: number;
+  livingFish: number;
   overall: number;
   algae: number;
   temperature: number;
   ph: number;
+  microplastics: number;
+  oil: number;
+  sewage: number;
+  dissolvedOxygen: number;
+  degreeHeatingWeeks: number;
 }
 
 export interface SimulationState {
   env: Environment;
   targets: Environment;
+  /** Condição dos organismos vivos; pode melhorar quando o estresse termina. */
   health: Health;
+  /** Cobertura/abundância viva; mortes não são revertidas ao zerar as barras. */
+  living: LivingCommunity;
   species: Record<FishSpeciesId, number>;
+  speciesLiving: Record<FishSpeciesId, number>;
   pressures: Pressures;
   exposure: Exposure;
+  /** Estresse térmico acumulado em °C-semana (janela didática de 12 semanas). */
+  degreeHeatingWeeks: number;
   overall: number;
   elapsedDays: number;
   speed: SimulationSpeed;
@@ -82,6 +110,10 @@ export interface SimulationState {
   latestMessageId: string | null;
   /** Segundos reais restantes até o painel poder trocar de marco. */
   messageCooldown: number;
+  /** Pausa pedagógica automática nos marcos de impacto. */
+  checkpoint: SimulationCheckpoint | null;
+  /** Evita pausar repetidamente no mesmo primeiro marco crítico. */
+  criticalCheckpointAcknowledged: boolean;
 }
 
 export interface EducationalMessage {

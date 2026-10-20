@@ -11,6 +11,29 @@ export const BASELINE: Environment = {
   recovery: 0,
 };
 
+/**
+ * Recorte espacial usado para converter massa em carga ambiental.
+ *
+ * A BTS inteira tem cerca de 1.223 km² e profundidade média próxima de 9,8 m.
+ * Aplicar uma massa à baía inteira esconderia impactos locais. Por isso o MVP
+ * trabalha com uma célula costeira explícita de 1 km² e 5 m de camada misturada.
+ * Ela é uma unidade didática, não uma previsão hidrodinâmica da baía inteira.
+ */
+export const SCENARIO = {
+  name: 'Baía de Todos-os-Santos',
+  shortName: 'BTS',
+  referenceAreaKm2: 1,
+  mixedDepthM: 5,
+  mixedVolumeM3: 5_000_000,
+} as const;
+
+/** Cargas que representam o extremo superior dos controles do experimento. */
+export const POLLUTANT_SCALES = {
+  microplastics: { severe: 1_000, unit: 'kg' },
+  oil: { severe: 50_000, unit: 'kg' },
+  sewage: { severe: 2_000, unit: 'kg N/dia' },
+} as const;
+
 export const PRESSURE_IDS: readonly PressureId[] = [
   'thermal',
   'acidification',
@@ -46,6 +69,10 @@ export const PARAMETERS = {
     coralMax: 30.5,
     fishStart: 30,
     fishMax: 32,
+    /** Limiares NOAA CRW: alerta em 4 e mortalidade provável em 8 °C-semana. */
+    dhwAlert: 4,
+    dhwMortality: 8,
+    dhwWindowDays: 84,
   },
   ph: {
     coralStart: 8,
@@ -53,12 +80,11 @@ export const PARAMETERS = {
     fishStart: 7.8,
     fishMax: 7.6,
     /**
-     * Acidez que a poluição orgânica soma à água, em unidades de pH no máximo
-     * (0,3 de 8,1 chega a 7,8). Esgoto e óleo em decomposição liberam CO₂
-     * dentro da água; o plástico pesa pouco.
+     * Queda local simplificada causada por respiração/decomposição da matéria
+     * orgânica. Óleo e plástico não alteram o pH automaticamente neste modelo.
      */
-    pollutionDrop: 0.3,
-    pollutionWeights: { sewage: 0.6, oil: 0.3, microplastics: 0.1 },
+    pollutionDrop: 0.2,
+    pollutionWeights: { sewage: 1, oil: 0, microplastics: 0 },
   },
   // Peso de cada poluente no estresse (0 a 1 na concentração máxima).
   pollutantWeights: {
@@ -69,6 +95,16 @@ export const PARAMETERS = {
   collapseDays: { coral: 75, fish: 60 },
   recoveryFactor: 5,
   recoveryThreshold: 0.1,
+  mortality: {
+    startsBelowCondition: 58,
+    /** A abundância cai mais devagar que a condição fisiológica. */
+    relativeRate: 0.72,
+  },
+  checkpoints: {
+    criticalOverall: 35,
+    collapseOverall: 15,
+    collapseLiving: 12,
+  },
   // Recuperação ambiental: reduz o dano, acelera a volta e permite recuperar
   // mesmo sob estresse moderado.
   recovery: {
@@ -172,30 +208,30 @@ export const ITEM_DEFINITIONS = {
     label: 'Microplásticos',
     shortLabel: 'Microplásticos',
     min: 0,
-    max: 100,
-    step: 1,
-    unit: '',
-    help: 'Partículas menores que 5 mm. A arte amplia os fragmentos para que fiquem visíveis; o índice não representa uma concentração medida.',
+    max: POLLUTANT_SCALES.microplastics.severe,
+    step: 10,
+    unit: 'kg',
+    help: 'Massa lançada na célula de 1 km². O efeito real também depende do tamanho, do tipo e da quantidade de partículas; por isso a leitura é uma estimativa didática.',
     icon: 'bottle',
   },
   oil: {
     label: 'Óleo',
     shortLabel: 'Óleo',
     min: 0,
-    max: 100,
-    step: 1,
-    unit: '',
-    help: 'O óleo tende a se espalhar na superfície; ondas podem misturar gotículas na água e sedimentos podem levá-lo ao fundo.',
+    max: POLLUTANT_SCALES.oil.severe,
+    step: 500,
+    unit: 'kg',
+    help: 'Massa derramada sobre a célula de 1 km². A carga superficial é mais informativa do que uma porcentagem porque o óleo se espalha primeiro na superfície.',
     icon: 'drop',
   },
   sewage: {
     label: 'Esgoto',
     shortLabel: 'Esgoto',
     min: 0,
-    max: 100,
-    step: 1,
-    unit: '',
-    help: 'Esgoto sem tratamento leva nutrientes e matéria orgânica. Os nutrientes alimentam algas e o consumo de oxigênio aumenta.',
+    max: POLLUTANT_SCALES.sewage.severe,
+    step: 25,
+    unit: 'kg N/dia',
+    help: 'Carga diária de nitrogênio, não massa bruta de esgoto. Nutrientes alimentam algas e a decomposição consome oxigênio.',
     icon: 'sewage',
   },
   turbidity: {

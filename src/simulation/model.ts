@@ -1,4 +1,12 @@
-import { BASELINE, FISH_SPECIES, ITEM_IDS, PARAMETERS, PRESSURE_IDS } from './config';
+import {
+  BASELINE,
+  FISH_SPECIES,
+  ITEM_IDS,
+  PARAMETERS,
+  POLLUTANT_SCALES,
+  PRESSURE_IDS,
+  SCENARIO,
+} from './config';
 import type {
   Environment,
   Exposure,
@@ -6,11 +14,30 @@ import type {
   Health,
   Indicator,
   ItemId,
+  LivingCommunity,
   Pressures,
+  SimulationCheckpoint,
   SimulationState,
 } from './types';
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+
+export function normalizedPollutantLoad(id: 'microplastics' | 'oil' | 'sewage', value: number) {
+  return clamp(value / POLLUTANT_SCALES[id].severe);
+}
+
+export function microplasticsMgPerM3(kilograms: number) {
+  return (kilograms * 1_000_000) / SCENARIO.mixedVolumeM3;
+}
+
+export function oilGramsPerM2(kilograms: number) {
+  return (kilograms * 1_000) / (SCENARIO.referenceAreaKm2 * 1_000_000);
+}
+
+export function sewageNitrogenMgPerLDay(kilogramsPerDay: number) {
+  return (kilogramsPerDay * 1_000_000)
+    / (SCENARIO.mixedVolumeM3 * 1_000);
+}
 
 export function stressAbove(value: number, start: number, maximum: number) {
   return clamp((value - start) / (maximum - start));
@@ -42,10 +69,10 @@ export function countActiveFactors(environment: Environment) {
 export function pollutionAcidity(env: Environment) {
   const weights = PARAMETERS.ph.pollutionWeights;
   const load = (
-    env.sewage * weights.sewage
-    + env.oil * weights.oil
-    + env.microplastics * weights.microplastics
-  ) / 100;
+    normalizedPollutantLoad('sewage', env.sewage) * weights.sewage
+    + normalizedPollutantLoad('oil', env.oil) * weights.oil
+    + normalizedPollutantLoad('microplastics', env.microplastics) * weights.microplastics
+  );
 
   return clamp(load) * PARAMETERS.ph.pollutionDrop;
 }
@@ -62,9 +89,9 @@ export function calculatePressures(env: Environment): Pressures {
   return {
     thermal: stressAbove(env.temperature, PARAMETERS.temperature.coralStart, PARAMETERS.temperature.coralMax),
     acidification: stressBelow(ph, PARAMETERS.ph.coralStart, PARAMETERS.ph.coralMax),
-    oil: clamp(env.oil / 100),
-    microplastics: clamp(env.microplastics / 100),
-    sewage: clamp(env.sewage / 100),
+    oil: normalizedPollutantLoad('oil', env.oil),
+    microplastics: normalizedPollutantLoad('microplastics', env.microplastics),
+    sewage: normalizedPollutantLoad('sewage', env.sewage),
     turbidity: clamp(env.turbidity / 100),
     fishing: clamp(env.fishing / 100),
   };
@@ -101,9 +128,25 @@ export function speciesStress(pressures: Pressures, id: FishSpeciesId) {
   );
 }
 
-export function calculateStress(env: Environment) {
-  const pressures = calculatePressures(env);
-  const fishPressures = calculateFishPressures(env);
+export function calculateStress(env: Environment, degreeHeatingWeeks = 0) {
+  const instantaneousPressures = calculatePressures(env);
+  const pressures = {
+    ...instantaneousPressures,
+    // O calor só domina depois de acumular. Uma pequena parcela instantânea
+    // mantém o organismo reagindo enquanto a janela térmica é formada.
+    thermal: Math.max(
+      instantaneousPressures.thermal * 0.2,
+      clamp(degreeHeatingWeeks / PARAMETERS.temperature.dhwMortality),
+    ),
+  };
+  const instantaneousFishPressures = calculateFishPressures(env);
+  const fishPressures = {
+    ...instantaneousFishPressures,
+    thermal: Math.max(
+      instantaneousFishPressures.thermal * 0.3,
+      clamp(degreeHeatingWeeks / (PARAMETERS.temperature.dhwMortality * 1.35)),
+    ),
+  };
   const species = Object.fromEntries(
     FISH_SPECIES.map((item) => [item.id, speciesStress(fishPressures, item.id)]),
   ) as Record<FishSpeciesId, number>;
@@ -114,12 +157,20 @@ export function calculateStress(env: Environment) {
 
 /** Cobertura de algas (0 a 100): nutrientes, perda de herbívoros e espaço livre. */
 export function calculateAlgae(env: Environment, health: Health) {
-  const nutrients = clamp(env.sewage / 100);
+  const nutrients = normalizedPollutantLoad('sewage', env.sewage);
   const grazers = clamp(1 - health.fish / 100);
   const sediment = clamp(env.turbidity / 100) * 0.2;
   const freeSpace = clamp(1 - health.coral / 100) * 0.5;
 
   return clamp(0.15 + nutrients * 0.75 + grazers * 0.55 + sediment + freeSpace) * 100;
+}
+
+/** Oxigênio dissolvido estimado em mg/L para a célula didática. */
+export function calculateDissolvedOxygen(env: Environment, algae: number) {
+  const warmingLoss = Math.max(0, env.temperature - BASELINE.temperature) * 0.18;
+  const organicDemand = normalizedPollutantLoad('sewage', env.sewage) * 3.15;
+  const bloomDemand = clamp((algae - 15) / 85) * 1.35;
+  return clamp(6.6 - warmingLoss - organicDemand - bloomDemand, 0.4, 8);
 }
 
 /**
@@ -150,16 +201,93 @@ function updateHealth(current: number, stress: number, collapseDays: number, dtD
   return clamp(current - damage * dtDays + recovery * dtDays, 0, 100);
 }
 
+function updateLivingCommunity(
+  current: number,
+  condition: number,
+  stress: number,
+  collapseDays: number,
+  dtDays: number,
+) {
+  const start = PARAMETERS.mortality.startsBelowCondition;
+  if (condition >= start || stress <= 0) return current;
+  const physiologicalSeverity = clamp((start - condition) / start);
+  const mortalityPerDay = (100 / collapseDays)
+    * PARAMETERS.mortality.relativeRate
+    * stress
+    * physiologicalSeverity;
+  // Nunca aumenta: retirar a pressão salva sobreviventes, mas não ressuscita
+  // organismos mortos nem recompõe cobertura de coral durante o experimento.
+  return clamp(current - mortalityPerDay * dtDays, 0, 100);
+}
+
+function updateDegreeHeatingWeeks(current: number, temperature: number, dtDays: number) {
+  const hotspot = Math.max(0, temperature - PARAMETERS.temperature.coralStart);
+  const gain = hotspot * dtDays / 7;
+  // Aproxima a saída da janela móvel de 12 semanas do NOAA Coral Reef Watch.
+  const retention = Math.exp(-dtDays / PARAMETERS.temperature.dhwWindowDays);
+  return Math.max(0, current * retention + gain);
+}
+
+function recoveryOutlook(living: LivingCommunity) {
+  const remaining = (living.coral * 0.65) + (living.fish * 0.35);
+  if (living.coral <= 5) return 'reconstrução física: séculos a milênios';
+  if (remaining < 20) return 'recuperação ecológica: décadas a séculos';
+  if (remaining < 50) return 'recuperação ecológica: 20–50 anos';
+  if (remaining < 75) return 'recuperação provável: 10–30 anos';
+  return 'recuperação provável: 7–15 anos';
+}
+
+function evaluateCheckpoint(
+  state: SimulationState,
+  nextOverall: number,
+  living: LivingCommunity,
+  elapsedDays: number,
+): SimulationCheckpoint | null {
+  const collapsed = nextOverall <= PARAMETERS.checkpoints.collapseOverall
+    || living.coral <= PARAMETERS.checkpoints.collapseLiving;
+
+  if (collapsed) {
+    return {
+      kind: 'collapse',
+      day: Math.round(elapsedDays),
+      title: 'Colapso ecológico do recorte simulado',
+      explanation: 'A cobertura viva caiu abaixo do limite funcional. Zerar as cargas interrompe o dano, mas não recompõe os organismos mortos.',
+      recoveryLabel: recoveryOutlook(living),
+      locked: true,
+    };
+  }
+
+  if (
+    nextOverall <= PARAMETERS.checkpoints.criticalOverall
+    && !state.criticalCheckpointAcknowledged
+  ) {
+    return {
+      kind: 'critical',
+      day: Math.round(elapsedDays),
+      title: 'Estado crítico, ainda recuperável',
+      explanation: 'O relógio parou para a turma observar o primeiro limite crítico antes de decidir se continua o experimento.',
+      recoveryLabel: recoveryOutlook(living),
+      locked: false,
+    };
+  }
+
+  return null;
+}
+
 export function createInitialState(): SimulationState {
   const stress = calculateStress(BASELINE);
+  const initialAlgae = calculateAlgae(BASELINE, { coral: 100, fish: 100 });
 
   return {
     env: { ...BASELINE },
     targets: { ...BASELINE },
     health: { coral: 100, fish: 100 },
+    living: { coral: 100, fish: 100 },
     species: { 'blue-tang': 100, 'sergeant-major': 100, parrotfish: 100 },
+    speciesLiving: { 'blue-tang': 100, 'sergeant-major': 100, parrotfish: 100 },
     pressures: stress.pressures,
     exposure: Object.fromEntries(PRESSURE_IDS.map((id) => [id, 0])) as Exposure,
+    degreeHeatingWeeks: 0,
     overall: 100,
     elapsedDays: 0,
     speed: 1,
@@ -169,16 +297,25 @@ export function createInitialState(): SimulationState {
         day: 0,
         coral: 100,
         fish: 100,
+        livingCoral: 100,
+        livingFish: 100,
         overall: 100,
-        algae: calculateAlgae(BASELINE, { coral: 100, fish: 100 }),
+        algae: initialAlgae,
         temperature: BASELINE.temperature,
         ph: BASELINE.ph,
+        microplastics: BASELINE.microplastics,
+        oil: BASELINE.oil,
+        sewage: BASELINE.sewage,
+        dissolvedOxygen: calculateDissolvedOxygen(BASELINE, initialAlgae),
+        degreeHeatingWeeks: 0,
       },
     ],
     firedMessages: new Set(),
     events: [],
     latestMessageId: null,
     messageCooldown: 0,
+    checkpoint: null,
+    criticalCheckpointAcknowledged: false,
   };
 }
 
@@ -202,10 +339,20 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
     day: Math.round(next.elapsedDays),
     coral: next.health.coral,
     fish: next.health.fish,
+    livingCoral: next.living.coral,
+    livingFish: next.living.fish,
     overall: next.overall,
-    algae: calculateAlgae(next.env, next.health),
+    algae: calculateAlgae(next.env, next.living),
     temperature: next.env.temperature,
     ph: effectivePh(next.env),
+    microplastics: next.env.microplastics,
+    oil: next.env.oil,
+    sewage: next.env.sewage,
+    dissolvedOxygen: calculateDissolvedOxygen(
+      next.env,
+      calculateAlgae(next.env, next.living),
+    ),
+    degreeHeatingWeeks: next.degreeHeatingWeeks,
   };
 
   return { ...next, history: [...state.history, point].slice(-maxPoints) };
@@ -222,11 +369,18 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
     env[id] += (state.targets[id] - env[id]) * factor;
   });
 
-  const stress = calculateStress(env);
+  const degreeHeatingWeeks = updateDegreeHeatingWeeks(
+    state.degreeHeatingWeeks,
+    env.temperature,
+    dtDays,
+  );
+  const stress = calculateStress(env, degreeHeatingWeeks);
   const protection = clamp(env.recovery / 100);
   const exposure = PRESSURE_IDS.reduce(
     (result, id) => {
-      result[id] += stress.pressures[id] * dtDays;
+      result[id] = id === 'thermal'
+        ? degreeHeatingWeeks
+        : result[id] + stress.pressures[id] * dtDays;
       return result;
     },
     { ...state.exposure },
@@ -251,18 +405,59 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
     { ...state.species },
   );
 
+  const living: LivingCommunity = {
+    coral: updateLivingCommunity(
+      state.living.coral,
+      health.coral,
+      stress.coral,
+      PARAMETERS.collapseDays.coral,
+      dtDays,
+    ),
+    fish: 0,
+  };
+
+  const speciesLiving = FISH_SPECIES.reduce(
+    (result, item) => {
+      result[item.id] = updateLivingCommunity(
+        state.speciesLiving[item.id],
+        species[item.id],
+        stress.species[item.id],
+        item.collapseDays,
+        dtDays,
+      );
+      return result;
+    },
+    { ...state.speciesLiving },
+  );
+
   health.fish = FISH_SPECIES.reduce((total, item) => total + species[item.id], 0) / FISH_SPECIES.length;
-  const overall = (health.coral + health.fish) / 2;
+  living.fish = FISH_SPECIES.reduce(
+    (total, item) => total + speciesLiving[item.id],
+    0,
+  ) / FISH_SPECIES.length;
+  const overall = (
+    health.coral * 0.3
+    + health.fish * 0.25
+    + living.coral * 0.3
+    + living.fish * 0.15
+  );
+  const elapsedDays = state.elapsedDays + dtDays;
+  const checkpoint = evaluateCheckpoint(state, overall, living, elapsedDays);
 
   return sampleHistory(state, {
     ...state,
     env,
     pressures: stress.pressures,
     health,
+    living,
     species,
+    speciesLiving,
     exposure,
+    degreeHeatingWeeks,
     overall,
-    elapsedDays: state.elapsedDays + dtDays,
+    elapsedDays,
+    paused: checkpoint ? true : state.paused,
+    checkpoint: checkpoint ?? state.checkpoint,
     // A pausa entre marcos conta em segundos reais (ver messages.ts).
     messageCooldown: Math.max(0, state.messageCooldown - realDtSeconds),
   });
@@ -277,25 +472,24 @@ function tone(value: number, higherIsBetter = true) {
 
 /** Indicadores derivados que o aluno acompanha no painel. */
 export function deriveIndicators(state: SimulationState): Indicator[] {
-  const algae = calculateAlgae(state.env, state.health);
-  const oxygen = clamp(
-    100 - state.pressures.thermal * 40 - state.pressures.sewage * 45 - (algae / 100) * 25,
-    0,
-    100,
+  const algae = calculateAlgae(state.env, state.living);
+  const oxygen = calculateDissolvedOxygen(state.env, algae);
+  const oxygenScore = clamp(oxygen / 6.6) * 100;
+  const thriving = FISH_SPECIES.filter((item) =>
+    Math.min(state.species[item.id], state.speciesLiving[item.id]) >= 60
   );
-  const thriving = FISH_SPECIES.filter((item) => state.species[item.id] >= 60);
   const speciesScore = (thriving.length / FISH_SPECIES.length) * 100;
-  const trophic = calculateTrophicBalance(state.species, algae);
+  const trophic = calculateTrophicBalance(state.speciesLiving, algae);
 
   return [
     {
       id: 'coral',
       label: 'Cobertura de coral vivo',
-      display: `${Math.round(state.health.coral)}%`,
-      value: state.health.coral,
+      display: `${Math.round(state.living.coral)}%`,
+      value: state.living.coral,
       unit: '%',
-      tone: tone(state.health.coral),
-      note: 'Corais branqueados perdem as algas simbiontes que lhes dão energia e cor.',
+      tone: tone(state.living.coral),
+      note: `Condição dos sobreviventes: ${Math.round(state.health.coral)}%. Cobertura perdida não volta sem recrutamento ou restauração.`,
     },
     {
       id: 'algae',
@@ -308,12 +502,12 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
     },
     {
       id: 'fish',
-      label: 'Comunidade de peixes',
-      display: `${Math.round(state.health.fish)}%`,
-      value: state.health.fish,
+      label: 'Abundância relativa de peixes',
+      display: `${Math.round(state.living.fish)}%`,
+      value: state.living.fish,
       unit: '%',
-      tone: tone(state.health.fish),
-      note: 'Média das três espécies acompanhadas nesta simulação.',
+      tone: tone(state.living.fish),
+      note: `Condição média dos sobreviventes: ${Math.round(state.health.fish)}%. Mortes só são revertidas ao reiniciar.`,
     },
     {
       id: 'species',
@@ -336,11 +530,11 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
     {
       id: 'oxygen',
       label: 'Oxigênio dissolvido',
-      display: `${Math.round(oxygen)}%`,
-      value: oxygen,
-      unit: '%',
-      tone: tone(oxygen),
-      note: 'Água quente dissolve menos oxigênio e o esgoto consome o que resta.',
+      display: `${oxygen.toFixed(1).replace('.', ',')} mg/L`,
+      value: oxygenScore,
+      unit: 'mg/L',
+      tone: oxygen >= 5 ? 'healthy' : oxygen >= 3 ? 'watch' : 'critical',
+      note: 'Abaixo de 5 mg/L há estresse; abaixo de 3 mg/L muitos peixes não se sustentam.',
     },
   ];
 }

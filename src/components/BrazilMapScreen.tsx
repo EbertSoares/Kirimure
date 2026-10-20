@@ -57,34 +57,20 @@ export function BrazilMapScreen({ onSelectBahia }: BrazilMapScreenProps) {
   return (
     <main className="map-screen">
       <header className="kirimure-wordmark">
-        <strong>Kirimurê</strong>
+        <strong>Kinimurê</strong>
+        <span>Laboratório Digital Marinho</span>
       </header>
 
       <section className="map-selection" aria-label="Mapa do Brasil com o cenário da Bahia disponível">
-        <h1>Escolha um estado para explorar</h1>
-
-        <ul className="map-legend" aria-label="Legenda do mapa">
-          <li>
-            <span className="legend-swatch coastal" aria-hidden="true" />
-            Amazônia Azul
-          </li>
-          <li>
-            <span className="legend-swatch available" aria-hidden="true" />
-            Disponíveis
-          </li>
-          <li>
-            <span className="legend-swatch other" aria-hidden="true" />
-            Demais regiões
-          </li>
-        </ul>
+        <h1>Escolha um estado do Brasil</h1>
 
         <div className="brazil-map">
           <svg
             viewBox={`0 0 ${BRAZIL_VIEWBOX.width} ${BRAZIL_VIEWBOX.height}`}
             className="brazil-map-svg"
-            role="img"
             aria-label="Mapa do Brasil com a sigla de cada estado e a faixa costeira da Amazônia Azul destacada"
           >
+            <title>Mapa interativo do Brasil. A Bahia possui um cenário disponível.</title>
             <g className="state-layer">
               {BRAZIL_STATES.map((state) => {
                 const available = state.code === AVAILABLE_CODE;
@@ -95,7 +81,7 @@ export function BrazilMapScreen({ onSelectBahia }: BrazilMapScreenProps) {
                     key={state.code}
                     className={`state ${tone}`}
                     role="button"
-                    tabIndex={0}
+                    tabIndex={available ? 0 : -1}
                     aria-label={
                       available
                         ? `${state.name}, cenário disponível. Abrir a simulação`

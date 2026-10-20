@@ -1,5 +1,5 @@
-/* Kirimurê — Laboratório Digital Marinho
-   Paleta: verde misturado ao azul do oceano (verde-azulado / teal) */
+/* Kinimurê — Laboratório Digital Marinho
+   Base neutra naval; teal é acento de ação/saúde, não cor de toda a interface. */
 
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -7,30 +7,30 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 
-  --abyss: #02161b;
-  --deep: #05232a;
-  --surface: #073039;
-  --surface-raised: #0a3d45;
-  --glass: rgba(5, 36, 42, .72);
+  --abyss: #070b12;
+  --deep: #0b1320;
+  --surface: #101a28;
+  --surface-raised: #172334;
+  --glass: rgba(10, 18, 29, .78);
 
-  --teal: #2ec2a4;
-  --teal-deep: #12887b;
-  --teal-soft: rgba(46, 194, 164, .14);
-  --aqua: #55c9df;
-  --aqua-soft: rgba(85, 201, 223, .12);
+  --teal: #35b7a3;
+  --teal-deep: #238b80;
+  --teal-soft: rgba(53, 183, 163, .14);
+  --aqua: #5ca9d6;
+  --aqua-soft: rgba(92, 169, 214, .12);
 
-  --foam: #e9f7f4;
-  --muted: #9dc0bc;
-  --faint: #7ba5a1;
-  --line: rgba(126, 209, 199, .16);
-  --line-strong: rgba(126, 209, 199, .32);
+  --foam: #f1f5f8;
+  --muted: #b0bdca;
+  --faint: #7f90a3;
+  --line: rgba(174, 194, 214, .14);
+  --line-strong: rgba(174, 194, 214, .3);
 
-  --healthy: #3ed39f;
-  --watch: #e2b757;
-  --critical: #e2735e;
-  --amber: #d9a440;
-  --heat: #e0705c;
-  --acid: #8f6fd0;
+  --healthy: #57c59a;
+  --watch: #e1ad5a;
+  --critical: #e26d72;
+  --amber: #d79d45;
+  --heat: #e06b61;
+  --acid: #9a78d2;
 }
 
 * { box-sizing: border-box; }
@@ -45,8 +45,8 @@ body {
   overflow-x: clip;
   color: var(--foam);
   background:
-    radial-gradient(circle at 50% 0%, rgba(31, 138, 122, .22), transparent 45%),
-    linear-gradient(155deg, #07262b, var(--abyss) 72%);
+    radial-gradient(circle at 50% -10%, rgba(57, 112, 154, .23), transparent 48%),
+    linear-gradient(155deg, #101a28, var(--abyss) 72%);
 }
 
 button, input { font: inherit; }
@@ -86,7 +86,16 @@ button:focus-visible, input:focus-visible {
   display: flex;
   align-items: baseline;
   justify-content: center;
+  gap: 10px;
   padding: 24px 34px 0;
+}
+
+.kirimure-wordmark span {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
 
 .kirimure-wordmark strong {
@@ -287,7 +296,7 @@ button:focus-visible, input:focus-visible {
   padding: 0 16px;
   border: 1px solid var(--line);
   border-radius: 13px;
-  background: linear-gradient(180deg, rgba(9, 46, 52, .95), rgba(4, 29, 35, .95));
+  background: linear-gradient(180deg, rgba(24, 35, 51, .97), rgba(12, 20, 32, .97));
   box-shadow: 0 12px 34px rgba(0, 0, 0, .22);
 }
 
@@ -301,7 +310,7 @@ button:focus-visible, input:focus-visible {
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--muted);
-  background: rgba(6, 40, 46, .7);
+  background: rgba(10, 18, 29, .7);
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
@@ -311,6 +320,26 @@ button:focus-visible, input:focus-visible {
 .map-back-button:hover,
 .reset-button:hover { color: var(--foam); border-color: var(--line-strong); }
 .reset-button svg { width: 16px; }
+
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+.view-mode-button {
+  height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(10, 18, 29, .66);
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.view-mode-button.active {
+  color: #dff8f1;
+  border-color: rgba(53, 183, 163, .38);
+  background: rgba(53, 183, 163, .12);
+}
 
 .brand { min-width: 0; display: flex; align-items: center; gap: 12px; }
 
@@ -357,6 +386,9 @@ button:focus-visible, input:focus-visible {
   gap: 10px;
   animation: simulationIn .45s ease-out both;
 }
+
+.simulation-workspace.presentation-mode { grid-template-columns: minmax(0, 1fr) 350px; }
+.simulation-workspace.analysis-mode { grid-template-columns: minmax(0, 1fr) 400px; }
 
 /* ── Cena marinha ──────────────────────────────────────────────────────── */
 

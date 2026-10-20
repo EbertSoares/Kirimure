@@ -4,7 +4,7 @@ import type { EducationalMessage, SimulationState } from './types';
 export const INTRO_MESSAGE: EducationalMessage = {
   id: 'intro',
   title: 'Explore o recife',
-  what: 'O recife começa saudável, com corais coloridos e três espécies de peixe em bom estado.',
+  what: 'O recorte da Baía de Todos-os-Santos começa saudável, com corais vivos e três grupos de peixes em bom estado.',
   cause: 'Nenhum fator está ativo: todas as barras estão na posição inicial.',
   effect: 'A simulação fica pausada até você aplicar uma mudança e dar o play.',
   ask: 'Qual fator você acha que causa mais dano em pouco tempo? Teste um de cada vez.',
@@ -16,12 +16,12 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
   {
     id: 'thermal_stress',
     title: 'Estresse térmico nos corais',
-    what: 'Dias seguidos de água quente começam a desestabilizar os corais.',
-    cause: 'Calor acumulado por dias ou semanas quebra a relação dos corais com as algas que vivem em seus tecidos.',
+    what: 'O calor acumulado atingiu o primeiro limiar de alerta em °C-semana.',
+    cause: 'A intensidade acima do limiar térmico é somada ao tempo de exposição, em vez de causar dano instantâneo.',
     effect: 'O coral gasta mais energia, cresce menos e fica mais vulnerável a doenças.',
     ask: 'A mesma temperatura em poucos dias causaria o mesmo efeito?',
     tone: 'alert',
-    matches: (state) => state.exposure.thermal >= 2,
+    matches: (state) => state.degreeHeatingWeeks >= 4,
   },
   {
     id: 'acidification',
@@ -58,7 +58,7 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     title: 'Microplásticos na cadeia alimentar',
     what: 'Fragmentos pequenos estão por toda a água, no tamanho do alimento dos peixes.',
     cause: 'Plástico descartado se quebra em partículas menores que 5 mm, que não somem sozinhas.',
-    effect: 'Animais ingerem as partículas por engano e a exposição se acumula ao longo da cadeia alimentar.',
+    effect: 'Animais podem ingerir as partículas por engano; os efeitos variam com tamanho, polímero, dose e espécie.',
     ask: 'Que ações reduzem a chegada de plástico ao mar?',
     tone: 'alert',
     matches: (state) => state.exposure.microplastics >= 5,
@@ -112,7 +112,7 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     effect: 'Menos peixes significam menos controle de algas e menos dispersão de nutrientes.',
     ask: 'Qual das três espécies resistiu mais tempo? Por quê?',
     tone: 'alert',
-    matches: (state) => state.health.fish < 50,
+    matches: (state) => state.living.fish < 50,
   },
   {
     id: 'coral_collapse',
@@ -122,7 +122,7 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     effect: 'Sem corais vivos o recife perde estrutura, abrigo e capacidade de crescer.',
     ask: 'Ainda é possível recuperar? O que precisa mudar primeiro?',
     tone: 'alert',
-    matches: (state) => state.health.coral < 25,
+    matches: (state) => state.living.coral < 25,
   },
   {
     id: 'recovery_signs',
@@ -135,7 +135,9 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     matches: (state) => {
       // Só é recuperação se a saúde estiver subindo de verdade (últimos 7 dias).
       const weekAgo = state.history[Math.max(0, state.history.length - 8)];
-      return state.overall > 55 && state.overall > weekAgo.overall + 1;
+      return state.overall > 55
+        && state.overall > weekAgo.overall + 1
+        && state.history.some((point) => point.overall < 55);
     },
   },
   {
@@ -146,7 +148,9 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     effect: 'O sistema volta a sustentar as três espécies e a cobertura de coral vivo.',
     ask: 'O que você faria para manter esse resultado ao longo dos anos?',
     tone: 'positive',
-    matches: (state) => state.overall >= 85 && state.elapsedDays > 30,
+    matches: (state) => state.overall >= 85
+      && state.living.coral >= 85
+      && state.history.some((point) => point.overall < 70),
   },
 ];
 

@@ -27,9 +27,19 @@ export function TimelineBar({
 
   return (
     <section className="timeline-bar" aria-label="Linha do tempo da simulação">
-      <button type="button" className="pause-button" aria-pressed={state.paused} onClick={onTogglePause}>
+      <button
+        type="button"
+        className="pause-button"
+        aria-pressed={state.paused}
+        disabled={state.checkpoint?.locked ?? false}
+        onClick={onTogglePause}
+      >
         <Icon name={state.paused ? 'play' : 'pause'} />
-        {state.paused ? 'Continuar' : 'Pausar'}
+        {state.checkpoint?.locked
+          ? 'Encerrado'
+          : state.checkpoint?.kind === 'critical'
+            ? 'Continuar experimento'
+            : state.paused ? 'Continuar' : 'Pausar'}
       </button>
 
       <div className="speed-control" aria-label="Velocidade da simulação">
@@ -39,6 +49,7 @@ export function TimelineBar({
             key={speed}
             className={state.speed === speed ? 'active' : ''}
             aria-pressed={state.speed === speed}
+            disabled={state.checkpoint?.locked ?? false}
             onClick={() => onSpeed(speed)}
           >
             {speed}×

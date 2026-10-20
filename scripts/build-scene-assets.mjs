@@ -13,7 +13,7 @@
  * muda de tamanho ou de data.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -98,7 +98,7 @@ function main() {
     // Sem sips (Linux, CI), mantém os derivados já versionados e só cria o que
     // estiver faltando, copiando o original para o build não quebrar.
     missing.forEach(({ source, output }) => {
-      execFileSync('cp', [source, output]);
+      copyFileSync(source, output);
     });
     console.log(`[artes] ${missing.length} arte(s) copiada(s) sem redimensionar (sips indisponível).`);
     return;

@@ -1,0 +1,20 @@
+[package]
+name = "laboratorio-digital-marinho"
+version = "0.1.0"
+description = "Simulação educativa offline de ecossistemas costeiros da Bahia"
+authors = ["Laboratório Digital Marinho"]
+edition = "2021"
+
+[lib]
+name = "laboratorio_digital_marinho_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

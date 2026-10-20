@@ -2,9 +2,16 @@
 **/.DS_Store
 node_modules/
 dist/
+test-results/
 *.local
-src-tauri/
-.github/workflows/windows-desktop.yml
+
+# O projeto Tauri e o workflow do instalador Windows fazem parte do produto.
+# Só os artefatos locais/gerados pelo Rust ficam fora do Git.
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/icon.icns
 
 # Fonte do mapa do IBGE (17 MB). Usada apenas por scripts/build-brazil-map.mjs,
 # que gera o arquivo já simplificado em src/components/brazilStates.data.ts.

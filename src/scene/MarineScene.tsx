@@ -233,13 +233,6 @@ function drawBackground(graphics: Graphics, width: number, height: number, water
   graphics.rect(0, 0, width, height).fill(waterGradient);
   // Banho de luz logo abaixo da superfície.
   graphics.ellipse(width * 0.5, -height * 0.05, width * 0.66, height * 0.24).fill({ color: 0xbdf6ff, alpha: 0.16 });
-  // Escurecimento progressivo nas profundezas.
-  for (let index = 0; index < 10; index += 1) {
-    const slice = height * 0.5 / 10;
-    graphics
-      .rect(0, height * 0.5 + slice * index, width, slice + 1)
-      .fill({ color: 0x01232f, alpha: 0.055 });
-  }
   // Areia do fundo, com banco mais claro em primeiro plano.
   graphics.ellipse(width * 0.5, height * 1.05, width * 0.82, height * 0.27).fill(0xcab787);
   graphics.ellipse(width * 0.24, height * 1.1, width * 0.44, height * 0.17).fill({ color: 0xd9c79b, alpha: 0.7 });
@@ -678,24 +671,27 @@ export function MarineScene({ state }: MarineSceneProps) {
           });
         }
 
-        corals.forEach((coral) => updateCoralState(coral, current.health.coral));
+        const coralVisualHealth = Math.min(current.health.coral, current.living.coral);
+        corals.forEach((coral) => updateCoralState(coral, coralVisualHealth));
         brainCorals.forEach(({ sprite }) => {
-          const stress = 1 - current.health.coral / 100;
+          const stress = 1 - coralVisualHealth / 100;
           sprite.tint = stress > 0.62 ? 0xd2d0bc : stress > 0.3 ? 0xf0d19a : 0xffffff;
           sprite.alpha = 0.95 - stress * 0.28;
         });
 
-        const fishHealth = current.health.fish;
+        const fishHealth = current.living.fish;
         fish.forEach((visual, index) => {
           // Cada espécie tem a própria curva de saúde e tolera os fatores de
           // forma diferente; o peixe usa a saúde da sua espécie.
-          const speciesHealth = current.species[visual.speciesId] ?? fishHealth;
-          const alive = speciesHealth >= visual.threshold;
-          updateFishState(visual, speciesHealth);
-          const stress = clamp((75 - speciesHealth) / 75);
+          const speciesCondition = current.species[visual.speciesId] ?? current.health.fish;
+          const speciesLiving = current.speciesLiving[visual.speciesId] ?? fishHealth;
+          const visualHealth = Math.min(speciesCondition, speciesLiving);
+          const alive = speciesLiving >= visual.threshold;
+          updateFishState(visual, visualHealth);
+          const stress = clamp((75 - visualHealth) / 75);
 
           if (alive) {
-            deformFish(visual, elapsed, speciesHealth);
+            deformFish(visual, elapsed, visualHealth);
             const travelSpeed = visual.speed * (1 - stress * 0.46);
             visual.root.x += travelSpeed * visual.direction * delta;
             const laneY = height * visual.yRatio;
@@ -708,8 +704,9 @@ export function MarineScene({ state }: MarineSceneProps) {
           } else {
             restoreFishBody(visual);
             const targetRotation = visual.deathDrift * Math.PI * 0.48;
-            visual.root.rotation += (targetRotation - visual.root.rotation) * Math.min(1, delta * 0.75);
-            visual.root.y += visual.deathDrift * 3.2 * delta;
+            // Morte é um estado persistente: o indivíduo para de nadar e não
+            // volta a se mover quando a carga ambiental é retirada.
+            visual.root.rotation = targetRotation;
             visual.root.scale.y = visual.displayScale;
           }
 
@@ -747,7 +744,7 @@ export function MarineScene({ state }: MarineSceneProps) {
           if (visual.sprite.y > height * 0.86) visual.sprite.y = height * visual.yRatio;
         });
 
-        const visibleParticles = Math.round(particles.length * current.env.microplastics / 100);
+        const visibleParticles = Math.round(particles.length * current.pressures.microplastics);
         particles.forEach((particle, index) => {
           particle.shape.visible = index < visibleParticles;
           if (!particle.shape.visible) return;
@@ -759,7 +756,7 @@ export function MarineScene({ state }: MarineSceneProps) {
           if (particle.shape.x > width) particle.shape.x = 0;
         });
 
-        const visibleDebris = Math.ceil(debris.length * current.env.microplastics / 100);
+        const visibleDebris = Math.ceil(debris.length * current.pressures.microplastics);
         debris.forEach((item, index) => {
           item.sprite.visible = index < visibleDebris;
           if (!item.sprite.visible) return;
@@ -771,9 +768,9 @@ export function MarineScene({ state }: MarineSceneProps) {
           if (item.sprite.x > width) item.sprite.x = 0;
         });
 
-        const oilLevel = current.env.oil / 100;
+        const oilLevel = current.pressures.oil;
         const turbidity = current.env.turbidity / 100;
-        const sewage = current.env.sewage / 100;
+        const sewage = current.pressures.sewage;
 
         // O topo da cena respira: ondas e cáusticas deslizam sem emenda.
         surfaceWaves.x = -((elapsed * 18) % width);
@@ -784,7 +781,7 @@ export function MarineScene({ state }: MarineSceneProps) {
 
         sedimentHaze.alpha = 0.32 * turbidity;
         sewageHaze.alpha = 0.2 * sewage;
-        waterTint.alpha = 0.34 * oilLevel + 0.07 * (current.env.microplastics / 100);
+        waterTint.alpha = 0.34 * oilLevel + 0.07 * current.pressures.microplastics;
         oilSurface.alpha = 0.74 * oilLevel;
         oilSheen.alpha = 0.68 * oilLevel;
 
@@ -929,7 +926,7 @@ export function MarineScene({ state }: MarineSceneProps) {
         ref={hostRef}
         className="marine-canvas"
         role="img"
-        aria-label={`Recife costeiro. Saúde geral ${Math.round(state.overall)}%, corais ${Math.round(state.health.coral)}% e peixes ${Math.round(state.health.fish)}%.`}
+        aria-label={`Recife costeiro. Saúde geral ${Math.round(state.overall)}%, cobertura de coral vivo ${Math.round(state.living.coral)}% e abundância de peixes ${Math.round(state.living.fish)}%.`}
       />
       {status !== 'ready' && (
         <div className={`scene-loading ${status}`} role="status">

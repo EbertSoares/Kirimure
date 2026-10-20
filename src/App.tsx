@@ -4,7 +4,7 @@ import { Icon } from './components/Icons';
 import { SciencePanel, type PanelTab } from './components/SciencePanel';
 import { TimelineBar } from './components/TimelineBar';
 import { MarineScene } from './scene/MarineScene';
-import { BASELINE, FACTOR_ORDER, ITEM_DEFINITIONS } from './simulation/config';
+import { BASELINE, FACTOR_ORDER, ITEM_DEFINITIONS, SCENARIO } from './simulation/config';
 import { CHALLENGES, evaluateChallenge } from './simulation/challenges';
 import {
   buildTargets,
@@ -12,6 +12,9 @@ import {
   deriveIndicators,
   effectivePh,
   isFactorActive,
+  microplasticsMgPerM3,
+  oilGramsPerM2,
+  sewageNitrogenMgPerLDay,
   tickSimulation,
 } from './simulation/model';
 import { evaluateMessages, getMessage } from './simulation/messages';
@@ -25,7 +28,32 @@ const DEPTH_SCALE = 30;
 function formatValue(id: ItemId, value: number) {
   if (id === 'temperature') return `${value.toFixed(1).replace('.0', '')}°C`;
   if (id === 'ph') return value.toFixed(2).replace(/0$/, '').replace('.', ',');
-  return Math.round(value).toString();
+  if (id === 'sewage') {
+    return value >= 1_000
+      ? `${(value / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} t N/dia`
+      : `${Math.round(value).toLocaleString('pt-BR')} kg N/dia`;
+  }
+  if (id === 'microplastics' || id === 'oil') {
+    return value >= 1_000
+      ? `${(value / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} t`
+      : `${Math.round(value).toLocaleString('pt-BR')} kg`;
+  }
+  return Math.round(value).toLocaleString('pt-BR');
+}
+
+function formatLoadContext(id: ItemId, value: number) {
+  if (id === 'microplastics') {
+    return `≈ ${microplasticsMgPerM3(value).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mg/m³ na célula`;
+  }
+  if (id === 'oil') {
+    return `≈ ${oilGramsPerM2(value).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} g/m² na superfície`;
+  }
+  if (id === 'sewage') {
+    return `≈ ${sewageNitrogenMgPerLDay(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mg N/L/dia`;
+  }
+  if (id === 'temperature') return 'calor acumulado em °C-semana';
+  if (id === 'ph') return 'queda de pH = mais acidez';
+  return '';
 }
 
 function healthLevel(value: number) {
@@ -64,6 +92,7 @@ function FactorControl({ id, active, value, onChange }: FactorControlProps) {
         onChange={(event) => onChange(Number(event.target.value))}
       />
       <strong className="factor-value">{formatValue(id, value)}</strong>
+      <small className="factor-context">{formatLoadContext(id, value)}</small>
     </article>
   );
 }
@@ -74,6 +103,7 @@ interface TeachingConsoleProps {
   initialControls: Environment;
   onControlsChange: (controls: Environment) => void;
   onApply: (controls: Environment) => void;
+  locked: boolean;
 }
 
 /**
@@ -90,6 +120,7 @@ function TeachingConsole({
   initialControls,
   onControlsChange,
   onApply,
+  locked,
 }: TeachingConsoleProps) {
   const [controls, setControls] = useState<Environment>(() => ({ ...initialControls }));
   // O que já está valendo na simulação: serve para saber se há mudança pendente.
@@ -121,10 +152,10 @@ function TeachingConsole({
         <button
           type="button"
           className="apply-button"
-          disabled={!pendingChange}
+          disabled={!pendingChange || locked}
           onClick={apply}
         >
-          <Icon name="play" /> Aplicar e observar
+          <Icon name="play" /> {locked ? 'Experimento encerrado' : 'Aplicar e observar'}
         </button>
       </header>
 
@@ -165,8 +196,10 @@ export function App() {
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<PanelTab>('now');
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [presentationMode, setPresentationMode] = useState(true);
 
   useEffect(() => {
+    if (screen !== 'simulation') return undefined;
     let frame = 0;
     let previous = performance.now();
     let accumulator = 0;
@@ -195,7 +228,7 @@ export function App() {
     frame = requestAnimationFrame(animate);
 
     return () => { cancelAnimationFrame(frame); document.removeEventListener('visibilitychange', handleVisibility); };
-  }, []);
+  }, [screen]);
 
   const currentMessage = useMemo(() => getMessage(simulation.latestMessageId), [simulation.latestMessageId]);
   const indicators = useMemo(() => deriveIndicators(simulation), [simulation]);
@@ -206,7 +239,7 @@ export function App() {
     setSimulation((current) => ({
       ...current,
       targets: buildTargets(controls),
-      paused: false,
+      paused: current.checkpoint?.locked ? true : false,
       // Primeiro marco aparece logo depois de aplicar.
       messageCooldown: 0,
     }));
@@ -214,7 +247,18 @@ export function App() {
   };
 
   const setSpeed = (speed: SimulationSpeed) => setSimulation((current) => ({ ...current, speed }));
-  const togglePause = () => setSimulation((current) => ({ ...current, paused: !current.paused }));
+  const togglePause = () => setSimulation((current) => {
+    if (current.checkpoint?.locked) return current;
+    if (current.checkpoint?.kind === 'critical') {
+      return {
+        ...current,
+        paused: false,
+        checkpoint: null,
+        criticalCheckpointAcknowledged: true,
+      };
+    }
+    return { ...current, paused: !current.paused };
+  });
 
   const reset = () => {
     controlsRef.current = { ...BASELINE };
@@ -236,15 +280,28 @@ export function App() {
         <div className="brand compact">
           <span className="brand-mark"><Icon name="waves" /></span>
           <div className="brand-text">
-            <strong className="brand-name">Kirimurê</strong>
-            <span className="brand-sub">Laboratório Digital Marinho</span>
+            <strong className="brand-name">Kinimurê</strong>
+            <span className="brand-sub">Laboratório Digital Marinho · {SCENARIO.shortName}</span>
           </div>
         </div>
 
-        <button type="button" className="reset-button" onClick={reset}><Icon name="reset" /> Reiniciar</button>
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className={`view-mode-button ${presentationMode ? 'active' : ''}`}
+            aria-pressed={presentationMode}
+            onClick={() => {
+              setPresentationMode((current) => !current);
+              setPanelTab('now');
+            }}
+          >
+            {presentationMode ? 'Modo apresentação' : 'Modo análise'}
+          </button>
+          <button type="button" className="reset-button" onClick={reset}><Icon name="reset" /> Reiniciar</button>
+        </div>
       </header>
 
-      <main className={`simulation-workspace ${consoleOpen ? 'console-expanded' : 'console-collapsed'}`}>
+      <main className={`simulation-workspace ${consoleOpen ? 'console-expanded' : 'console-collapsed'} ${presentationMode ? 'presentation-mode' : 'analysis-mode'}`}>
         <section className="scene-card" aria-label="Visualização do recife">
           <MarineScene state={simulation} />
           <DepthRuler side="left" />
@@ -256,8 +313,12 @@ export function App() {
               <strong>{simulation.env.temperature.toFixed(1).replace('.0', '')}°C</strong>
             </span>
             <span>
-              <small>Acidez</small>
+              <small>pH da água</small>
               <strong>{effectivePh(simulation.env).toFixed(2)} pH</strong>
+            </span>
+            <span>
+              <small>Calor acumulado</small>
+              <strong>{simulation.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem</strong>
             </span>
             <span>
               <small>Tempo</small>
@@ -272,13 +333,24 @@ export function App() {
             </span>
             <span>
               <small>Corais</small>
-              <strong className={healthLevel(simulation.health.coral)}>{Math.round(simulation.health.coral)}%</strong>
+              <strong className={healthLevel(simulation.living.coral)}>{Math.round(simulation.living.coral)}%</strong>
             </span>
             <span>
               <small>Fauna</small>
-              <strong className={healthLevel(simulation.health.fish)}>{Math.round(simulation.health.fish)}%</strong>
+              <strong className={healthLevel(simulation.living.fish)}>{Math.round(simulation.living.fish)}%</strong>
             </span>
           </div>
+
+          {simulation.checkpoint && (
+            <div className={`checkpoint-overlay checkpoint-${simulation.checkpoint.kind}`} role="status">
+              <small>Relógio pausado no dia {simulation.checkpoint.day}</small>
+              <strong>{simulation.checkpoint.title}</strong>
+              <span>{simulation.checkpoint.recoveryLabel}</span>
+              {!simulation.checkpoint.locked && (
+                <button type="button" onClick={togglePause}>Continuar até o próximo limite</button>
+              )}
+            </div>
+          )}
         </section>
 
         <SciencePanel
@@ -291,6 +363,8 @@ export function App() {
           onSelectChallenge={(id) => setChallengeId((current) => (current === id ? null : id))}
           tab={panelTab}
           onTabChange={setPanelTab}
+          presentationMode={presentationMode}
+          onContinueCheckpoint={togglePause}
         />
 
         <TimelineBar
@@ -307,6 +381,7 @@ export function App() {
           initialControls={controlsRef.current}
           onControlsChange={(next) => { controlsRef.current = next; }}
           onApply={applyChanges}
+          locked={simulation.checkpoint?.locked ?? false}
         />
       </main>
     </div>

@@ -11,6 +11,9 @@ import {
   createInitialState,
   deriveIndicators,
   effectivePh,
+  microplasticsMgPerM3,
+  oilGramsPerM2,
+  sewageNitrogenMgPerLDay,
   speciesStress,
   tickSimulation,
 } from './model';
@@ -97,7 +100,7 @@ describe('modelo de simulação', () => {
 
   it('faz a poluição acidificar a água', () => {
     const limpa = calculatePressures(BASELINE);
-    const comEsgoto = { ...BASELINE, sewage: 100 };
+    const comEsgoto = { ...BASELINE, sewage: 2_000 };
 
     expect(effectivePh(comEsgoto)).toBeLessThan(BASELINE.ph);
     expect(effectivePh(comEsgoto)).toBeGreaterThan(PARAMETERS.ph.coralMax);
@@ -157,7 +160,7 @@ describe('modelo de simulação', () => {
 
   it('faz a recuperação ambiental reduzir o dano', () => {
     const polluted = { ...createInitialState(), paused: false };
-    polluted.targets.oil = 80;
+    polluted.targets.oil = 40_000;
     const protectedReef = {
       ...polluted,
       targets: { ...polluted.targets, recovery: 100 },
@@ -197,9 +200,31 @@ describe('modelo de simulação', () => {
     expect(progress.daysHeld).toBeGreaterThanOrEqual(8);
 
     const polluted = { ...createInitialState(), paused: false };
-    polluted.targets.sewage = 80;
+    polluted.targets.sewage = 1_600;
     const troubled = evaluateChallenge(challenge, run(polluted, 10));
     expect(troubled.status).toBe('pending');
+  });
+
+  it('converte cargas da célula de referência sem usar porcentagens', () => {
+    expect(microplasticsMgPerM3(50)).toBeCloseTo(10);
+    expect(oilGramsPerM2(50_000)).toBeCloseTo(50);
+    expect(sewageNitrogenMgPerLDay(2_000)).toBeCloseTo(0.4);
+  });
+
+  it('não ressuscita cobertura nem peixes mortos ao retirar as pressões', () => {
+    const damaged: SimulationState = {
+      ...createInitialState(),
+      paused: false,
+      criticalCheckpointAcknowledged: true,
+      health: { coral: 20, fish: 20 },
+      living: { coral: 18, fish: 22 },
+      species: { 'blue-tang': 20, 'sergeant-major': 20, parrotfish: 20 },
+      speciesLiving: { 'blue-tang': 18, 'sergeant-major': 25, parrotfish: 23 },
+    };
+    const recovered = run(damaged, 30);
+    expect(recovered.health.coral).toBeGreaterThan(damaged.health.coral);
+    expect(recovered.living).toEqual(damaged.living);
+    expect(recovered.speciesLiving).toEqual(damaged.speciesLiving);
   });
 });
 
@@ -210,7 +235,7 @@ describe('marcos do painel', () => {
     const warmed: SimulationState = {
       ...base,
       paused: false,
-      exposure: { ...base.exposure, thermal: 5 },
+      degreeHeatingWeeks: 5,
     };
 
     const first = evaluateMessages(warmed);

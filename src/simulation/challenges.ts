@@ -11,11 +11,11 @@ export const CHALLENGES: readonly Challenge[] = [
   {
     id: 'clean-water',
     title: 'Água limpa por 30 dias',
-    brief: 'Mantenha esgoto abaixo de 15 e microplásticos até 10, por 30 dias seguidos.',
+    brief: 'Mantenha a carga de nitrogênio abaixo de 300 kg/dia e microplásticos até 100 kg, por 30 dias.',
     hint: 'Esgoto e plástico se somam. Reduza os dois ao mesmo tempo em vez de focar em um só.',
     windowDays: 30,
-    holds: (_point: HistoryPoint, state: SimulationState) =>
-      state.env.sewage <= 15 && state.env.microplastics <= 10,
+    holds: (point: HistoryPoint) =>
+      point.sewage <= 300 && point.microplastics <= 100,
   },
   {
     id: 'living-reef',
@@ -35,23 +35,34 @@ export const CHALLENGES: readonly Challenge[] = [
   },
   {
     id: 'restored-reef',
-    title: 'Restaurar o recife em 30 dias',
-    brief: 'Leve a saúde geral a 70% e mantenha por 30 dias seguidos.',
-    hint: 'Recuperar é mais lento do que degradar: devolva os fatores para perto do natural e espere.',
+    title: 'Estabilizar o recife por 30 dias',
+    brief: 'Depois de causar estresse, interrompa a queda e mantenha saúde geral de 70% por 30 dias.',
+    hint: 'Estabilizar sobreviventes não recompõe a cobertura perdida. Recolonização leva anos e não ocorre neste experimento curto.',
     windowDays: 30,
     holds: (point: HistoryPoint) => point.overall >= 70,
   },
 ];
 
 export function evaluateChallenge(challenge: Challenge, state: SimulationState): ChallengeProgress {
-  let daysHeld = 0;
+  const points: HistoryPoint[] = [];
   for (let index = state.history.length - 1; index >= 0; index -= 1) {
     if (!challenge.holds(state.history[index], state)) break;
-    daysHeld += 1;
+    points.push(state.history[index]);
   }
 
-  const progress = Math.min(1, daysHeld / challenge.windowDays);
-  const status = daysHeld >= challenge.windowDays ? 'done' : daysHeld > 0 ? 'running' : 'pending';
+  // Um ponto no dia zero não equivale a um dia completo. Usar a diferença de
+  // tempo também evita o erro de +1 quando o histórico começa em zero.
+  const daysHeld = points.length < 2
+    ? 0
+    : Math.max(0, points[0].day - points[points.length - 1].day);
+
+  const degradedBefore = state.history.some((point) => point.overall < 70);
+  const eligible = challenge.id !== 'restored-reef' || degradedBefore;
+
+  const progress = eligible ? Math.min(1, daysHeld / challenge.windowDays) : 0;
+  const status = !eligible
+    ? 'pending'
+    : daysHeld >= challenge.windowDays ? 'done' : daysHeld > 0 ? 'running' : 'pending';
 
   return { status, progress, daysHeld };
 }
