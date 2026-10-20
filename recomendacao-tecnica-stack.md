@@ -1,5 +1,7 @@
 # Laboratório Digital Marinho — Recomendação Técnica
 
+> **Documento histórico de decisão inicial.** Para o estado implementado, consulte o `README.md` e o `PLANO-TECNICO-APLICATIVO-OFFLINE.md`; valores ambientais deste arquivo não devem ser usados como parâmetros científicos.
+
 ## 1. Resumo da decisão
 
 O projeto está suficientemente detalhado para iniciar o desenvolvimento. Como os materiais visuais em SVG já estão prontos, a stack recomendada para o MVP é:

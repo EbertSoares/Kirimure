@@ -1,5 +1,7 @@
 # Laboratório Digital Marinho — Documento Técnico do MVP
 
+> **Documento histórico do primeiro MVP.** Os índices de 0 a 100 e parâmetros deste arquivo foram substituídos pelo recorte da Baía de Todos-os-Santos e pelas cargas físicas descritas no `README.md` e em `src/simulation/config.ts`.
+
 Hackathon Cultura Oceânica (Salvador/BA) · Frente 3: estudantes, professores e comunidades
 
 Status: rascunho para validação da equipe. Itens marcados com **[A CONFIRMAR]** dependem de decisão do time (seção 13).

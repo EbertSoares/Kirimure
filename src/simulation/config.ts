@@ -201,7 +201,7 @@ export const ITEM_DEFINITIONS = {
     max: 8.2,
     step: 0.01,
     unit: '',
-    help: 'Acidificação é a queda do pH, mesmo com a água ainda alcalina. A barra representa o gás carbônico do ar; esgoto e óleo em decomposição também liberam CO₂ na água e derrubam o pH um pouco mais.',
+    help: 'Acidificação é a queda do pH, mesmo com a água ainda alcalina. A barra representa a mudança na coluna d’água; respiração e decomposição da matéria orgânica do esgoto acrescentam uma queda local.',
     icon: 'flask',
   },
   microplastics: {

@@ -564,6 +564,28 @@ button:focus-visible, input:focus-visible {
   line-height: 1.05;
 }
 
+.checkpoint-overlay {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 50%;
+  width: min(440px, calc(100% - 110px));
+  display: grid;
+  gap: 8px;
+  transform: translate(-50%, -50%);
+  padding: 17px 19px;
+  border: 1px solid rgba(225, 173, 90, .48);
+  border-radius: 14px;
+  background: rgba(18, 18, 20, .9);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .48);
+  backdrop-filter: blur(10px);
+}
+
+.checkpoint-overlay.checkpoint-collapse { border-color: rgba(226, 109, 114, .58); }
+.checkpoint-overlay small { color: var(--watch); font-size: 10px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.checkpoint-overlay strong { color: var(--foam); font-size: 19px; line-height: 1.2; }
+.checkpoint-overlay > span { color: var(--muted); font-size: 13px; text-transform: capitalize; }
+
 /* ── Painel científico ─────────────────────────────────────────────────── */
 
 .science-panel {
@@ -574,16 +596,36 @@ button:focus-visible, input:focus-visible {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  background: linear-gradient(180deg, #172334, #101925);
   box-shadow: 0 14px 36px rgba(0, 0, 0, .24);
 }
+
+.lesson-panel-header {
+  display: grid;
+  gap: 3px;
+  padding: 15px 17px 13px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 14, 24, .46);
+}
+
+.lesson-panel-header small,
+.scenario-card small,
+.checkpoint-card > small {
+  color: var(--aqua);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.lesson-panel-header strong { color: var(--foam); font-size: 15px; }
 
 .panel-tabs {
   display: flex;
   gap: 2px;
   padding: 7px 7px 0;
   border-bottom: 1px solid var(--line);
-  background: rgba(3, 26, 31, .5);
+  background: rgba(8, 14, 24, .46);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -610,12 +652,12 @@ button:focus-visible, input:focus-visible {
 }
 
 .panel-tabs button svg { width: 15px; }
-.panel-tabs button:hover { color: var(--muted); background: rgba(46, 194, 164, .08); }
+.panel-tabs button:hover { color: var(--foam); background: rgba(92, 169, 214, .08); }
 
 .panel-tabs button.active {
   color: var(--foam);
-  border-bottom-color: var(--teal);
-  background: rgba(46, 194, 164, .1);
+  border-bottom-color: var(--aqua);
+  background: rgba(92, 169, 214, .1);
 }
 
 .panel-body { min-height: 0; overflow-y: auto; padding: 14px; }
@@ -635,7 +677,7 @@ button:focus-visible, input:focus-visible {
   border: 1px solid var(--line);
   border-left: 3px solid var(--teal);
   border-radius: 12px;
-  background: rgba(5, 38, 44, .72);
+  background: rgba(9, 16, 26, .62);
 }
 
 .message-card.tone-alert { border-left-color: var(--critical); }
@@ -683,11 +725,11 @@ button:focus-visible, input:focus-visible {
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(3, 26, 31, .5);
+  background: rgba(7, 13, 22, .56);
 }
 
 .cause-effect dt {
-  color: var(--teal);
+  color: var(--aqua);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: .12em;
@@ -719,7 +761,75 @@ button:focus-visible, input:focus-visible {
   padding: 13px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(4, 32, 38, .55);
+  background: rgba(8, 15, 25, .48);
+}
+
+.presentation-snapshot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--line);
+}
+
+.presentation-snapshot > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 12px 9px;
+  background: #111c2a;
+  text-align: center;
+}
+
+.presentation-snapshot small { color: var(--faint); font-size: 10px; font-weight: 800; }
+.presentation-snapshot strong { color: var(--foam); font-size: 16px; white-space: nowrap; }
+
+.scenario-card {
+  display: grid;
+  gap: 5px;
+  padding: 12px 13px;
+  border: 1px solid rgba(92, 169, 214, .2);
+  border-radius: 11px;
+  background: rgba(92, 169, 214, .06);
+}
+
+.scenario-card strong { color: var(--foam); font-size: 13.5px; }
+.scenario-card p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+
+.checkpoint-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(225, 173, 90, .4);
+  border-left: 3px solid var(--watch);
+  border-radius: 12px;
+  background: rgba(67, 45, 17, .3);
+}
+
+.checkpoint-card.checkpoint-collapse {
+  border-color: rgba(226, 109, 114, .42);
+  border-left-color: var(--critical);
+  background: rgba(72, 24, 28, .32);
+}
+
+.checkpoint-card h3 { margin: 0; color: var(--foam); font-size: 17px; line-height: 1.25; }
+.checkpoint-card p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.checkpoint-card > strong { color: var(--watch); font-size: 13px; text-transform: capitalize; }
+.checkpoint-card.checkpoint-collapse > strong { color: #f49a9d; }
+
+.checkpoint-card button,
+.checkpoint-overlay button {
+  justify-self: start;
+  padding: 8px 12px;
+  border: 1px solid rgba(225, 173, 90, .44);
+  border-radius: 8px;
+  color: #fff0ce;
+  background: rgba(225, 173, 90, .14);
+  font-size: 11.5px;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .context-card h3,
@@ -779,7 +889,7 @@ button:focus-visible, input:focus-visible {
   padding: 11px 12px;
   border: 1px solid var(--line);
   border-radius: 11px;
-  background: rgba(4, 32, 38, .55);
+  background: rgba(8, 15, 25, .48);
 }
 
 .indicator-head {
@@ -824,7 +934,7 @@ button:focus-visible, input:focus-visible {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 11px;
-  background: rgba(4, 32, 38, .55);
+  background: rgba(8, 15, 25, .48);
 }
 
 .species-card header {
@@ -891,7 +1001,7 @@ button:focus-visible, input:focus-visible {
   border: 1px solid var(--line);
   border-radius: 10px;
   text-align: center;
-  background: rgba(3, 26, 31, .5);
+  background: rgba(7, 13, 22, .56);
 }
 
 .web-node small {
@@ -954,13 +1064,13 @@ button:focus-visible, input:focus-visible {
   border: 1px solid var(--line);
   border-radius: 11px;
   text-align: left;
-  background: rgba(4, 32, 38, .55);
+  background: rgba(8, 15, 25, .48);
   cursor: pointer;
   transition: .16s ease;
 }
 
 .challenge-card:hover { border-color: var(--line-strong); }
-.challenge-card.selected { border-color: rgba(46, 194, 164, .55); background: rgba(8, 55, 60, .8); }
+.challenge-card.selected { border-color: rgba(92, 169, 214, .52); background: rgba(22, 42, 61, .86); }
 .challenge-card.status-done { border-color: rgba(62, 211, 159, .55); }
 
 .challenge-card header {
@@ -1007,7 +1117,7 @@ button:focus-visible, input:focus-visible {
   padding: 8px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(9, 46, 52, .9), rgba(4, 29, 35, .9));
+  background: linear-gradient(180deg, rgba(24, 35, 51, .94), rgba(12, 20, 32, .94));
   box-shadow: 0 12px 30px rgba(0, 0, 0, .2);
 }
 
@@ -1029,6 +1139,7 @@ button:focus-visible, input:focus-visible {
 }
 
 .pause-button:hover { background: rgba(46, 194, 164, .22); }
+.pause-button:disabled { opacity: .58; cursor: not-allowed; }
 .pause-button svg { width: 15px; }
 
 .speed-control {
@@ -1037,7 +1148,7 @@ button:focus-visible, input:focus-visible {
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(4, 30, 36, .7);
+  background: rgba(8, 14, 23, .7);
 }
 
 .speed-control button {
@@ -1055,6 +1166,7 @@ button:focus-visible, input:focus-visible {
 }
 
 .speed-control button:hover { color: var(--foam); }
+.speed-control button:disabled { opacity: .45; cursor: not-allowed; }
 
 .speed-control button.active {
   color: #04231e;
@@ -1113,7 +1225,7 @@ button:focus-visible, input:focus-visible {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  background: linear-gradient(180deg, #172334, #101925);
   box-shadow: 0 14px 36px rgba(0, 0, 0, .24);
 }
 
@@ -1123,10 +1235,11 @@ button:focus-visible, input:focus-visible {
   gap: 12px;
   padding: 6px 14px;
   border-bottom: 1px solid var(--line);
-  background: rgba(3, 26, 31, .5);
+  background: rgba(8, 14, 24, .46);
 }
 
 .teaching-console.collapsed .console-header { border-bottom: 0; }
+.teaching-console.collapsed { display: none; }
 
 .console-title {
   margin: 0 auto 0 0;
@@ -1171,18 +1284,19 @@ button:focus-visible, input:focus-visible {
   display: grid;
   /* Cinco fatores: cabem todos em uma linha no desktop. */
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 2px 16px;
-  padding: 6px 14px 8px;
+  gap: 8px 18px;
+  padding: 10px 14px 12px;
   animation: consoleOpen .2s ease-out;
 }
 
 .direct-factor {
   min-width: 0;
   display: grid;
-  grid-template-columns: 18px 96px minmax(48px, 1fr) 42px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
   align-items: center;
   gap: 7px;
-  padding: 2px 0;
+  padding: 3px 0;
   border-radius: 7px;
 }
 
@@ -1194,6 +1308,8 @@ button:focus-visible, input:focus-visible {
   color: var(--faint);
   transition: color .18s ease;
 }
+
+.factor-icon { grid-column: 1; grid-row: 1; }
 
 .factor-icon svg { width: 14px; }
 
@@ -1210,6 +1326,8 @@ button:focus-visible, input:focus-visible {
   cursor: pointer;
 }
 
+.factor-name { grid-column: 2; grid-row: 1; }
+
 .direct-factor.active .factor-name { color: var(--foam); }
 
 .factor-value {
@@ -1219,9 +1337,31 @@ button:focus-visible, input:focus-visible {
   font-weight: 850;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  white-space: nowrap;
 }
 
+.factor-value { grid-column: 3; grid-row: 1; }
+
 .direct-factor.active .factor-value { color: var(--teal); }
+.slider-temperature.active .factor-value { color: #f18b77; }
+.slider-ph.active .factor-value { color: #b49ae4; }
+.slider-oil.active .factor-value { color: #e2b35e; }
+.slider-sewage.active .factor-value { color: #9bc47d; }
+.slider-microplastics.active .factor-value { color: #83b8dc; }
+
+.direct-factor input[type="range"] { grid-column: 2 / -1; grid-row: 2; }
+
+.factor-context {
+  grid-column: 2 / -1;
+  grid-row: 3;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 9.5px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 input[type="range"] {
   --progress: 0%;
@@ -1351,6 +1491,9 @@ input[type="range"]::-moz-range-thumb {
       "panel";
   }
 
+  .simulation-workspace.presentation-mode,
+  .simulation-workspace.analysis-mode { grid-template-columns: minmax(0, 1fr); }
+
   .scene-card { height: min(58vh, 470px); min-height: 300px; }
   .science-panel { max-height: none; }
   .panel-body { overflow: visible; }
@@ -1384,6 +1527,9 @@ input[type="range"]::-moz-range-thumb {
   .brand-name { font-size: 18px; }
   .brand-sub { font-size: 9px; letter-spacing: .11em; }
   .brand-mark { width: 34px; height: 34px; }
+  .view-mode-button { width: 40px; padding: 0; font-size: 0; }
+  .view-mode-button::after { content: "A"; font-size: 12px; }
+  .topbar-actions { gap: 5px; }
 
   .scene-card { height: min(50vh, 380px); min-height: 260px; }
 
@@ -1398,6 +1544,7 @@ input[type="range"]::-moz-range-thumb {
   .environment-readout strong { font-size: 16px; }
   .environment-readout small { font-size: 9px; letter-spacing: .1em; }
   .depth-ruler.right { display: none; }
+  .checkpoint-overlay { width: calc(100% - 72px); padding: 14px; }
 
   .health-overlay { bottom: 12px; gap: 22px; }
   .health-overlay strong { font-size: 19px; }
@@ -1408,6 +1555,7 @@ input[type="range"]::-moz-range-thumb {
   .speed-control button { min-width: 32px; height: 26px; padding: 0 4px; }
 
   .kirimure-wordmark { align-items: center; }
+  .kirimure-wordmark span { display: none; }
   .map-selection { padding: 4px 14px 18px; }
 }
 

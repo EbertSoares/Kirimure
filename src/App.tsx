@@ -244,6 +244,9 @@ export function App() {
       messageCooldown: 0,
     }));
     setPanelTab('now');
+    // Depois de montar o experimento, libera espaço para a turma observar a
+    // cena. A bancada continua a um clique de distância na linha do tempo.
+    setConsoleOpen(false);
   };
 
   const setSpeed = (speed: SimulationSpeed) => setSimulation((current) => ({ ...current, speed }));
@@ -328,7 +331,7 @@ export function App() {
 
           <div className="health-overlay" aria-label="Saúde do ecossistema">
             <span>
-              <small>Geral</small>
+              <small>Estado</small>
               <strong className={healthLevel(simulation.overall)}>{Math.round(simulation.overall)}%</strong>
             </span>
             <span>

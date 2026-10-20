@@ -226,6 +226,50 @@ describe('modelo de simulação', () => {
     expect(recovered.living).toEqual(damaged.living);
     expect(recovered.speciesLiving).toEqual(damaged.speciesLiving);
   });
+
+  it('pausa automaticamente no primeiro marco crítico', () => {
+    const stressed = createInitialState();
+    stressed.paused = false;
+    stressed.targets = {
+      ...stressed.targets,
+      temperature: 32,
+      ph: 7.6,
+      microplastics: 1_000,
+      oil: 50_000,
+      sewage: 2_000,
+    };
+
+    const stopped = run(stressed, 250);
+    expect(stopped.paused).toBe(true);
+    expect(stopped.checkpoint?.kind).toBe('critical');
+    expect(stopped.elapsedDays).toBeLessThan(250);
+  });
+
+  it('encerra o relógio no colapso depois que o professor continua o marco crítico', () => {
+    const stressed = createInitialState();
+    stressed.paused = false;
+    stressed.targets = {
+      ...stressed.targets,
+      temperature: 32,
+      ph: 7.6,
+      microplastics: 1_000,
+      oil: 50_000,
+      sewage: 2_000,
+    };
+
+    const critical = run(stressed, 250);
+    const continued: SimulationState = {
+      ...critical,
+      paused: false,
+      checkpoint: null,
+      criticalCheckpointAcknowledged: true,
+    };
+    const collapsed = run(continued, 500);
+
+    expect(collapsed.paused).toBe(true);
+    expect(collapsed.checkpoint?.kind).toBe('collapse');
+    expect(collapsed.checkpoint?.locked).toBe(true);
+  });
 });
 
 describe('marcos do painel', () => {

@@ -1,9 +1,9 @@
 # Laboratório Digital Marinho — Plano Técnico do Aplicativo Offline
 
 **Documento para alinhamento e apresentação ao time**  
-**Status:** implementação iniciada — acompanhar o quadro abaixo  
-**Versão:** 1.1  
-**Data:** 18 de outubro de 2026
+**Status:** implementação ativa na branch `codex/scientific-ui-overhaul`
+**Versão:** 1.2
+**Data:** 19 de outubro de 2026
 
 ---
 
@@ -79,7 +79,7 @@ A reconstrução deve transformar o produto em um **laboratório científico ime
 | Cena | PixiJS 8 em 2D/2.5D |
 | Modelo científico | TypeScript puro, determinístico e independente da interface |
 | Direção visual | Científica, sóbria e inspirada em documentários/monitoramento ambiental |
-| Animais | Artes laterais em camadas e deformação 2.5D; sem modelos 3D no MVP |
+| Animais | 2.5D no runtime atual; piloto 3D ortográfico ou pré-renderizado será decidido por benchmark |
 | Tempo | Escala contínua em dias, formatada como dias, meses ou anos |
 | Velocidade | 1×, 2×, 3×, 5× e 10× |
 | Dados externos | Nenhuma consulta obrigatória em tempo de execução |
@@ -137,7 +137,7 @@ Remover totalmente o HTML exigiria abandonar React e PixiJS e reconstruir a inte
 
 ### 5.3 O que não entra inicialmente
 
-- Three.js ou React Three Fiber;
+- Three.js ou React Three Fiber no produto principal antes de um piloto com uma espécie;
 - motor de física 3D;
 - Tailwind, se o sistema visual puder ser atendido por CSS modular e tokens;
 - GSAP, enquanto o ticker do PixiJS e animações CSS forem suficientes;
@@ -219,7 +219,7 @@ Não será adotado um monorepo nesta etapa. Um único aplicativo com limites int
 
 ## 7. Estratégia visual 2.5D
 
-### 7.1 Por que não usar 3D agora
+### 7.1 Por que não migrar toda a cena para 3D agora
 
 Modelos 3D convincentes exigiriam:
 
@@ -235,6 +235,13 @@ Modelos 3D convincentes exigiriam:
 Além disso, encontrar modelos prontos de espécies e corais representativos da Bahia, com licença adequada, estilo coerente e rigs compatíveis, é improvável. Misturar modelos de fontes distintas também prejudicaria a identidade visual.
 
 O 2.5D oferece a melhor relação entre realismo, desempenho e prazo.
+
+Isso não impede usar modelos 3D na produção artística. Há duas rotas de baixo risco:
+
+1. animar e iluminar o peixe no Blender e exportar atlas 2D com transparência; o aplicativo continua usando PixiJS e ganha volume visual sem custo 3D em sala;
+2. criar um piloto com uma única espécie GLB no Three.js, câmera ortográfica e fundo transparente, medindo FPS, memória e tempo de carga nos computadores-alvo.
+
+A segunda rota só entra no produto se superar o atlas pré-renderizado em leitura visual e continuar estável no hardware mínimo. O motor científico e a interface permanecem iguais nas duas opções.
 
 ### 7.2 Camadas de profundidade da cena
 
@@ -390,7 +397,7 @@ simulatedDays += realDeltaSeconds × daysPerRealSecond × speedMultiplier
 Proposta inicial para testes pedagógicos:
 
 ```text
-1 segundo real = 1 dia simulado em 1×
+4 segundos reais = 1 dia simulado em 1×
 ```
 
 Assim, um ano leva aproximadamente 6 minutos em 1× e 36 segundos em 10×. Esse valor será calibrado em testes de aula e não ficará espalhado pelo código.

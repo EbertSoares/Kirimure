@@ -1,4 +1,4 @@
-# Laboratório Digital Marinho
+# Kinimurê — Laboratório Digital Marinho
 
 Aplicativo educacional offline com uma simulação interativa sobre os efeitos de alterações ambientais em um recife costeiro da Bahia.
 
@@ -8,7 +8,7 @@ A aplicação permite modificar fatores como temperatura da água, pH, microplá
 
 - Aplicativo desktop: gerado localmente com Tauri; não exige internet depois de instalado.
 - Aplicação publicada: [laboratorio-digital-marinho.neatowl9.chatgpt.site](https://laboratorio-digital-marinho.neatowl9.chatgpt.site)
-- Repositório: [github.com/EbertSoares/MVP---LabOceano](https://github.com/EbertSoares/MVP---LabOceano)
+- Repositório: [github.com/EbertSoares/Kirimure](https://github.com/EbertSoares/Kirimure)
 
 > A versão publicada está configurada como privada e pode solicitar autenticação.
 
@@ -28,7 +28,7 @@ O MVP foi desenvolvido para:
 - Cena marinha animada renderizada em tempo real.
 - Peixes com estados saudável, estressado e morto.
 - Corais com estados saudável, pálido, parcialmente branqueado e branqueado.
-- Controles para microplásticos, óleo, temperatura e pH.
+- Controles para temperatura, pH, microplásticos, óleo e carga de nitrogênio do esgoto.
 - Aplicação simultânea de múltiplos fatores ambientais.
 - Indicadores de saúde geral, dos corais e dos peixes.
 - Mensagens educativas exibidas conforme a simulação evolui.
@@ -40,7 +40,9 @@ O MVP foi desenvolvido para:
 - Corais com palidez, branqueamento parcial, branqueamento severo e mortalidade.
 - Reinicialização completa do cenário.
 - Interface responsiva para computadores, tablets e celulares.
-- Referências científicas acessíveis dentro da própria interface.
+- Modo apresentação simplificado e modo análise para aprofundamento.
+- Pausa automática em estado crítico e colapso, com faixas de recuperação.
+- Recorte espacial declarado de 1 km² na Baía de Todos-os-Santos.
 
 ## Como funciona a simulação
 
@@ -54,24 +56,44 @@ O estado visual acompanha a saúde calculada:
 - o óleo se concentra visualmente na superfície e reduz a passagem de luz;
 - os peixes apresentam estresse, redução da população e mortalidade em condições severas.
 
-O motor usa dias simulados como unidade interna. Em 1×, um segundo real equivale inicialmente a um dia simulado; as velocidades maiores apenas avançam o relógio mais rapidamente, sem modificar as regras ecológicas.
+O motor usa dias simulados como unidade interna. Em 1×, quatro segundos reais equivalem a um dia simulado; as velocidades maiores apenas avançam o relógio mais rapidamente, sem modificar as regras ecológicas.
 
-Os efeitos dependem da exposição acumulada. Uma condição intensa cruza os limiares mais cedo, enquanto condições moderadas precisam permanecer por mais tempo. A interface escolhe uma única unidade para o período transcorrido: dias, meses ou anos.
+Os efeitos dependem da exposição acumulada. O estresse térmico usa uma aproximação móvel de 12 semanas em graus Celsius-semana (DHW); uma condição intensa cruza os limiares mais cedo, enquanto condições moderadas precisam permanecer por mais tempo. A interface escolhe uma única unidade para o período transcorrido: dias, meses ou anos.
+
+O estado ecológico separa **condição dos sobreviventes** de **cobertura/abundância viva**. A condição pode melhorar depois que a pressão é retirada; a cobertura e os indivíduos mortos não reaparecem. Para recomeçar com a comunidade original é necessário reiniciar o experimento.
+
+### Cargas e área de referência
+
+Massa sem área ou volume produz falsa precisão. A Baía de Todos-os-Santos possui cerca de 1.223 km² e não é misturada de maneira uniforme. O MVP, portanto, não distribui 50 kg por toda a baía: usa uma célula didática costeira de **1 km²**, com **5 m de camada misturada** (5 milhões de m³).
+
+- microplásticos: massa lançada e concentração média estimada em mg/m³;
+- óleo: massa derramada e carga superficial estimada em g/m²;
+- esgoto: carga de nitrogênio em kg N/dia e incremento sem renovação em mg N/L/dia;
+- temperatura: intensidade e duração acumuladas em °C-semana;
+- resultados de recuperação: faixas, nunca uma data exata.
+
+As conversões usam o cenário geométrico declarado. Transporte, maré, vento, sedimentação, granulometria e renovação de água ainda não são resolvidos por um modelo hidrodinâmico; por isso os valores derivados aparecem com `≈`.
 
 ## Base científica
 
 O modelo utiliza relações qualitativas e limites educativos baseados em literatura sobre recifes brasileiros e materiais de instituições científicas. Entre as principais referências estão:
 
-- [Branqueamento de corais na Bahia — Biota Neotropica](https://www.biotaneotropica.org.br/BN/article/view/418)
-- [Ondas de calor em recifes brasileiros — Frontiers in Marine Science](https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2020.00179/full)
-- [Degree Heating Weeks e risco de branqueamento — NOAA Coral Reef Watch](https://coralreefwatch.noaa.gov/product/5km_v3.1_op/index_5km_dhw.php)
-- [Acidificação dos oceanos — NOAA](https://www.noaa.gov/ocean-acidification)
-- [Microplásticos no ambiente marinho — NOAA Marine Debris Program](https://marinedebris.noaa.gov/what-marine-debris/microplastics)
-- [Impactos de derramamentos de óleo — NOAA](https://www.noaa.gov/explainers/oil-spills-major-marine-ecosystem-threat)
+- [Características oceanográficas da Baía de Todos-os-Santos — Cirano & Lessa](https://doi.org/10.1590/S0102-261X2007000400002)
+- [Recifes de coral da APA Baía de Todos-os-Santos — Cruz, Kikuchi & Leão](https://doi.org/10.5894/rgci150)
+- [Degree Heating Weeks e limiares de branqueamento — NOAA Coral Reef Watch](https://www.coralreefwatch.noaa.gov/product/vs/description.php)
+- [Oxigênio dissolvido e faixas de estresse — US EPA](https://www.epa.gov/national-aquatic-resource-surveys/indicators-dissolved-oxygen)
+- [Recuperação de recifes após branqueamento — Coral Reefs](https://doi.org/10.1007/s00338-019-01831-7)
+- [Óleo em recifes: resposta e recuperação — NOAA](https://response.restoration.noaa.gov/sites/default/files/Oil_Spill_Coral.pdf)
 
 ### Limitação importante
 
-Esta é uma representação educativa simplificada, não um modelo oceanográfico preditivo. Os índices de poluição não correspondem diretamente a concentrações medidas, e os percentuais de saúde não devem ser interpretados como previsões de mortalidade real.
+Esta é uma representação educativa determinística, não um modelo oceanográfico preditivo. As cargas têm unidades físicas e um recorte espacial explícito, mas seus efeitos ainda são normalizados e não substituem medições, laudos ou um modelo de dispersão calibrado para a BTS.
+
+## Evolução opcional: fauna 3D em cena 2.5D
+
+O frontend não precisa ser refeito para experimentar peixes 3D. Uma evolução segura é manter React, o motor científico e o cenário PixiJS, usando Three.js somente em uma camada WebGL de fauna. Modelos GLB low-poly, com esqueleto simples e animações de nado, curva, fuga e morte, seriam renderizados por uma câmera ortográfica para preservar a composição lateral 2.5D.
+
+Essa abordagem deve entrar primeiro como prova de desempenho com uma espécie e dezenas de instâncias. Migrar todo o recife para 3D aumentaria produção artística, memória de GPU e risco em computadores escolares sem melhorar na mesma proporção a clareza da aula.
 
 ## Tecnologias
 

@@ -307,13 +307,9 @@ function drawDistantReef(graphics: Graphics, width: number, height: number) {
 /** Faixa luminosa da superfície. */
 function drawSurfaceBand(graphics: Graphics, width: number, height: number) {
   graphics.clear();
-  const band = Math.max(30, height * 0.06);
-  const slices = 9;
-  for (let index = 0; index < slices; index += 1) {
-    graphics
-      .rect(0, (band / slices) * index, width, band / slices + 1)
-      .fill({ color: 0xcaf7ff, alpha: 0.2 * (1 - index / slices) });
-  }
+  graphics
+    .ellipse(width * 0.5, -height * 0.025, width * 0.82, Math.max(42, height * 0.12))
+    .fill({ color: 0xcaf7ff, alpha: 0.13 });
 }
 
 /** Ondas da superfície: desenhadas em dobro para deslizar sem emenda. */

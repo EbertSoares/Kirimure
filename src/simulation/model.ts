@@ -63,8 +63,8 @@ export function countActiveFactors(environment: Environment) {
 /**
  * Acidez extra que a poluição orgânica soma à água (0 = água sem poluição).
  *
- * A barra de pH representa o gás carbônico do ar; esgoto e óleo em decomposição
- * liberam CO₂ dentro da água, então o pH que o recife sente fica mais baixo.
+ * A barra de pH representa acidificação da coluna d'água. A respiração e a
+ * decomposição ligadas à matéria orgânica do esgoto acrescentam uma queda local.
  */
 export function pollutionAcidity(env: Environment) {
   const weights = PARAMETERS.ph.pollutionWeights;
