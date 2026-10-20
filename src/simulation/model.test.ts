@@ -207,6 +207,7 @@ describe('modelo de simulação', () => {
 
   it('converte cargas da célula de referência sem usar porcentagens', () => {
     expect(microplasticsMgPerM3(50)).toBeCloseTo(10);
+    expect(oilGramsPerM2(50)).toBeCloseTo(0.05);
     expect(oilGramsPerM2(50_000)).toBeCloseTo(50);
     expect(sewageNitrogenMgPerLDay(2_000)).toBeCloseTo(0.4);
   });

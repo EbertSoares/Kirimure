@@ -219,7 +219,7 @@ export const ITEM_DEFINITIONS = {
     shortLabel: 'Óleo',
     min: 0,
     max: POLLUTANT_SCALES.oil.severe,
-    step: 500,
+    step: 50,
     unit: 'kg',
     help: 'Massa derramada sobre a célula de 1 km². A carga superficial é mais informativa do que uma porcentagem porque o óleo se espalha primeiro na superfície.',
     icon: 'drop',
