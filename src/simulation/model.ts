@@ -8,7 +8,7 @@ import {
   PRESSURE_IDS,
   type MassLoadId,
 } from './config';
-import { calculateWeissOxygenSaturation, integrateOxygenKinetics } from './oxygen';
+import { calculateEquilibriumOxygen, calculateWeissOxygenSaturation, integrateOxygenKinetics } from './oxygen';
 import type {
   BtsSectorId,
   Environment,
@@ -265,6 +265,8 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
   const nextSample = Math.floor(next.elapsedDays / sampleDays);
   if (nextSample <= previousSample) return next;
 
+  const sector = BTS_SECTORS.find((s) => s.id === next.sector) ?? BTS_SECTORS[0];
+
   const point = {
     day: Math.round(next.elapsedDays),
     coral: next.health.coral,
@@ -276,7 +278,7 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
     dhw: next.degreeHeatingWeeks,
     dissolvedOxygen: next.dissolvedOxygen,
     bod: next.biochemicalOxygenDemand,
-    saturationOxygen: calculateWeissOxygenSaturation(next.env.temperature),
+    saturationOxygen: calculateWeissOxygenSaturation(next.env.temperature, sector.baselineSalinity),
     sewage: next.env.sewage,
     microplastics: next.env.microplastics,
     oil: next.env.oil,
@@ -442,12 +444,18 @@ export interface DissolvedOxygenBreakdown {
 export function getDissolvedOxygenBreakdown(
   env: Environment,
   algae = 0,
+  sectorId: BtsSectorId = 'frades',
 ): DissolvedOxygenBreakdown {
-  const saturation = calculateWeissOxygenSaturation(env.temperature, 35.0);
-  const temperatureEffect = (env.temperature - BASELINE.temperature) * 0.08;
-  const organicDemand = normalizedReceivedLoad('sewage', env.sewage) * 4.4;
-  const algalDemand = (algae / 100) * 1.1;
-  const dissolvedOxygen = clamp(saturation - organicDemand - algalDemand, 0.4, 8.5);
+  const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+  const saturation = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
+  const baselineSat = calculateWeissOxygenSaturation(BASELINE.temperature, sector.baselineSalinity);
+  const temperatureEffect = baselineSat - saturation;
+
+  const dissolvedOxygen = calculateEquilibriumOxygen(env, sectorId, algae);
+  const totalDeficit = Math.max(0, saturation - dissolvedOxygen);
+  const algalShare = Math.min(1, (algae / 100) * 0.35);
+  const algalDemand = totalDeficit * algalShare;
+  const organicDemand = totalDeficit - algalDemand;
 
   return {
     saturation,
@@ -460,21 +468,20 @@ export function getDissolvedOxygenBreakdown(
 
 /**
  * Estimativa físico-química de oxigênio dissolvido em mg/L [Produto de Modelo / Padrão CONAMA 357].
- * Baseada na equação de saturação de Weiss (1970) para água marinha tropical da BTS
- * e no consumo biológico por oxidação de DBO e floração de algas.
+ * Baseada no balanço analítico em estado estacionário acoplado à equação de Weiss (1970).
  */
 export function calculateDissolvedOxygen(
-  state: { env: Environment; pressures?: Pressures; health?: Health; dissolvedOxygen?: number },
+  state: { env: Environment; pressures?: Pressures; health?: Health; dissolvedOxygen?: number; sector?: BtsSectorId },
   algae?: number,
 ) {
   const currentAlgae = algae ?? (state.health ? calculateAlgae(state.env, state.health) : 0);
-  return getDissolvedOxygenBreakdown(state.env, currentAlgae).dissolvedOxygen;
+  return calculateEquilibriumOxygen(state.env, state.sector ?? 'frades', currentAlgae);
 }
 
 /** Indicadores derivados que o aluno acompanha no painel. */
 export function deriveIndicators(state: SimulationState): Indicator[] {
   const algae = calculateAlgae(state.env, state.health);
-  const oxygen = state.elapsedDays > 0 && state.dissolvedOxygen !== undefined
+  const oxygen = state.elapsedDays > 0
     ? state.dissolvedOxygen
     : calculateDissolvedOxygen(state, algae);
   const oxygenScore = clamp((oxygen - 2) / 4, 0, 1) * 100;

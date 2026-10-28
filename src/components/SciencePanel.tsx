@@ -8,11 +8,12 @@ import { NicheToleranceCurve } from './NicheToleranceCurve';
 import { FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
 import { calculateAlgae, calculateFishPressures, calculateTrophicBalance } from '../simulation/model';
 import { calculateCarbonateSystem } from '../simulation/carbonate';
-import { calculateOilFateBudget } from '../simulation/contaminants';
+import { calculateOilFateBudget, BTS_MICROPLASTICS_SURVEY } from '../simulation/contaminants';
 import { evaluateChallenge, type ChallengeProgress } from '../simulation/challenges';
 import { getMessageById } from '../simulation/messages';
 import { MISSION_01_OXYGEN } from '../simulation/missions';
 import { formatSimulatedTime } from '../simulation/time';
+import type { OceanDataState } from '../hooks/useOceanData';
 import type {
   Challenge,
   EducationalMessage,
@@ -24,7 +25,7 @@ import type {
   SimulationState,
 } from '../simulation/types';
 
-export type PanelTab = 'now' | 'indicators' | 'species' | 'timeline' | 'challenges';
+export type PanelTab = 'now' | 'indicators' | 'species' | 'timeline' | 'challenges' | 'oceanData';
 
 const TABS: ReadonlyArray<{ id: PanelTab; label: string }> = [
   { id: 'now', label: 'Agora' },
@@ -32,6 +33,7 @@ const TABS: ReadonlyArray<{ id: PanelTab; label: string }> = [
   { id: 'species', label: 'Espécies' },
   { id: 'timeline', label: 'Histórico' },
   { id: 'challenges', label: 'Desafios' },
+  { id: 'oceanData', label: 'Satélite & APIs' },
 ];
 
 
@@ -86,6 +88,7 @@ interface SciencePanelProps {
   onSelectChallenge: (id: string) => void;
   tab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
+  oceanData?: OceanDataState;
   missionState?: MissionState | null;
   onStartMission?: (id: string) => void;
   onMissionStepChange?: (step: MissionStepId) => void;
@@ -104,6 +107,7 @@ export function SciencePanel({
   onSelectChallenge,
   tab,
   onTabChange,
+  oceanData,
   missionState,
   onStartMission,
   onMissionStepChange,
@@ -818,6 +822,197 @@ export function SciencePanel({
                 </ul>
               </>
             )}
+          </section>
+        )}
+
+        {tab === 'oceanData' && (
+          <section className="panel-section" aria-label="Dados Oceanográficos Externos e Satélite">
+            <header style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="epistemological-badge">Modo de Referência Ambiental</span>
+                {oceanData && (
+                  <button
+                    type="button"
+                    onClick={() => oceanData.refresh()}
+                    disabled={oceanData.loading}
+                    style={{
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.4)',
+                      color: '#38bdf8',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {oceanData.loading ? 'Atualizando...' : 'Atualizar Dados'}
+                  </button>
+                )}
+              </div>
+              <h2 style={{ fontSize: '18px', margin: '8px 0 4px', color: '#fff' }}>
+                Monitoramento Satelital & Previsão da BTS
+              </h2>
+              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', margin: 0 }}>
+                Dados observados e produtos de modelo em grade regional da Baía de Todos-os-Santos.
+                Distinção transparente entre <strong>dados externos</strong> e o <strong>cenário didático experimental</strong>.
+              </p>
+            </header>
+
+            {/* Banner de Fallback / Contingência se offline */}
+            {oceanData?.isFallback && (
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                marginBottom: '16px',
+                fontSize: '12px',
+                color: '#f59e0b',
+                lineHeight: 1.4,
+              }}>
+                <strong>Modo Offline / Snapshot de Contingência Histórico:</strong>
+                <p style={{ margin: '4px 0 0' }}>
+                  A rede remota externa está inacessível no momento. O laboratório exibe os snapshots históricos calibrados
+                  do evento de branqueamento El Niño de março/abril de 2024 para fins de estudo comparativo.
+                </p>
+              </div>
+            )}
+
+            {/* NOAA Coral Reef Watch Card */}
+            <article className="compare-card" style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>NOAA Coral Reef Watch (CRW v3.1 5km)</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
+                Pixel Central BTS (-12.85°, -38.55° · Ilha dos Frades / Itaparica) · Dataset <code>NOAA_DHW</code> CoastWatch ERDDAP
+              </p>
+
+              {oceanData?.latestCrw ? (
+                <>
+                  <ul>
+                    <li>
+                      <span>Temperatura de Superfície (SST Satélite)</span>
+                      <strong>{oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C</strong>
+                    </li>
+                    <li>
+                      <span>Anomalia de SST Oficial (CRW_SSTANOMALY)</span>
+                      <strong className={oceanData.latestCrw.sstAnomalyDegC > 1.0 ? 'critical' : oceanData.latestCrw.sstAnomalyDegC > 0 ? 'watch' : 'healthy'}>
+                        {oceanData.latestCrw.sstAnomalyDegC > 0 ? '+' : ''}{oceanData.latestCrw.sstAnomalyDegC.toFixed(2)} °C
+                      </strong>
+                    </li>
+                    <li>
+                      <span>HotSpot Térmico (acima da MMM de 28 °C)</span>
+                      <strong>{oceanData.latestCrw.hotSpotDegC.toFixed(1)} °C</strong>
+                    </li>
+                    <li>
+                      <span>Degree Heating Weeks (DHW Satélite)</span>
+                      <strong className={oceanData.latestCrw.degreeHeatingWeeks >= 8 ? 'critical' : oceanData.latestCrw.degreeHeatingWeeks >= 4 ? 'watch' : 'healthy'}>
+                        {oceanData.latestCrw.degreeHeatingWeeks.toFixed(1)} °C-semana
+                      </strong>
+                    </li>
+                    <li>
+                      <span>Nível Operacional de Alerta (BAA)</span>
+                      <em>
+                        {oceanData.latestCrw.bleachingAlertLevel === 4
+                          ? 'Alerta 2 (Mortalidade em espécies vulneráveis)'
+                          : oceanData.latestCrw.bleachingAlertLevel === 3
+                            ? 'Alerta 1 (Risco significativo de branqueamento)'
+                            : oceanData.latestCrw.bleachingAlertLevel === 2
+                              ? 'Aviso Térmico (Warning)'
+                              : oceanData.latestCrw.bleachingAlertLevel === 1
+                                ? 'Vigilância (Watch)'
+                                : 'Sem Estresse Térmico'}
+                      </em>
+                    </li>
+                  </ul>
+
+                  {/* Comparativo Didático vs Real */}
+                  <div style={{ marginTop: '12px', background: 'rgba(0,0,0,0.25)', padding: '10px', borderRadius: '6px', fontSize: '11px', lineHeight: 1.5 }}>
+                    <strong style={{ color: '#38bdf8' }}>Comparação de Governança Epistemológica:</strong>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
+                      <div style={{ borderLeft: '2px solid #38bdf8', paddingLeft: '8px' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>Satélite NOAA CRW:</span><br />
+                        SST: {oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C · DHW: {oceanData.latestCrw.degreeHeatingWeeks.toFixed(1)} °C-sem
+                      </div>
+                      <div style={{ borderLeft: '2px solid #a855f7', paddingLeft: '8px' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>Cenário Simulador Aluno:</span><br />
+                        SST: {state.env.temperature.toFixed(1)} °C · DHW: {state.degreeHeatingWeeks.toFixed(1)} °C-sem
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p>Nenhum dado térmico disponível no momento.</p>
+              )}
+            </article>
+
+            {/* Open-Meteo Marine Card */}
+            <article className="compare-card" style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Open-Meteo Marine (Previsão Costeira)</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
+                Barra / Canal de Salvador (-12.97°, -38.50°) · Grade nominal 8 km (Copernicus/ECMWF)
+              </p>
+
+              {oceanData?.latestMeteo ? (
+                <ul>
+                  <li>
+                    <span>Altura Significativa de Ondas (Hs)</span>
+                    <strong>{oceanData.latestMeteo.waveHeightM !== null ? `${oceanData.latestMeteo.waveHeightM.toFixed(1)} m` : 'Dado não disponível'}</strong>
+                  </li>
+                  <li>
+                    <span>Velocidade da Corrente Marinha</span>
+                    <strong>{oceanData.latestMeteo.currentVelocityMs !== null ? `${oceanData.latestMeteo.currentVelocityMs.toFixed(2)} m/s` : 'Dado não disponível'}</strong>
+                  </li>
+                  {oceanData.latestMeteo.currentDirectionDeg !== null && (
+                    <li>
+                      <span>Direção da Corrente</span>
+                      <span>{oceanData.latestMeteo.currentDirectionDeg}° (azimute náutico)</span>
+                    </li>
+                  )}
+                  <li>
+                    <span>Nível do Mar Modelado (MSL)</span>
+                    <strong>{oceanData.latestMeteo.seaLevelHeightM !== null ? `${oceanData.latestMeteo.seaLevelHeightM.toFixed(2)} m` : 'Dado não disponível'}</strong>
+                  </li>
+                  <li>
+                    <span>Temperatura de Superfície (Meteo)</span>
+                    <strong>{oceanData.latestMeteo.seaSurfaceTemperatureDegC !== null ? `${oceanData.latestMeteo.seaSurfaceTemperatureDegC.toFixed(1)} °C` : 'Dado não disponível'}</strong>
+                  </li>
+                </ul>
+              ) : (
+                <p>Nenhum dado meteorológico disponível no momento.</p>
+              )}
+            </article>
+
+            {/* Microplásticos In Situ na BTS */}
+            <article className="compare-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Microplásticos nos Estuários da BTS</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Dado Local BTS</span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
+                Campanhas empíricas publicadas por Trindade et al. (2023 / UFRB / Environmental Pollution)
+              </p>
+              <ul>
+                {BTS_MICROPLASTICS_SURVEY.map((pt) => (
+                  <li key={pt.estuaryName} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                      <strong>{pt.riverName}</strong>
+                      <span style={{ color: '#38bdf8' }}>{pt.meanCountPerM3.toLocaleString('pt-BR')} itens/m³ (méd.)</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+                      Faixa: {pt.minCountPerM3.toLocaleString('pt-BR')} a {pt.maxCountPerM3.toLocaleString('pt-BR')} itens/m³ · {pt.particleSizeFractionUnder300Um}% &lt; 300 µm
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
+                Aporte fluvial anual estimado em 3,88 trilhões de partículas. Valores mantidos em itens/m³ para evitar falsa equivalência de biomassa/massa sem granulometria e densidade polimérica.
+              </p>
+            </article>
           </section>
         )}
       </div>

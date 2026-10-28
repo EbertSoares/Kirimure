@@ -15,6 +15,8 @@ export interface OilFateBudget {
   waterColumnDispersedKg: number;
   dissolvedPahKg: number;
   sedimentedKg: number;
+  evaporatedKg: number;
+  exportedKg: number;
   evaporatedExportedKg: number;
   /** Concentração da fração dissolvida biodisponível (tPAH50) em µg/L. */
   dissolvedPahConcentrationUgL: number;
@@ -103,6 +105,8 @@ export function calculateOilFateBudget(
       waterColumnDispersedKg: 0,
       dissolvedPahKg: 0,
       sedimentedKg: 0,
+      evaporatedKg: 0,
+      exportedKg: 0,
       evaporatedExportedKg: 0,
       dissolvedPahConcentrationUgL: 0,
       surfaceFilmThicknessUm: 0,
@@ -113,51 +117,63 @@ export function calculateOilFateBudget(
 
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
 
-  // Cinética de intemperismo (evaporação rápida de voláteis + dispersão natural por ondas)
-  // Cerca de 25% a 40% de óleo cru evapora nas primeiras 48h (NOAA ADIOS)
-  const evapFraction = Math.min(0.40, 0.20 + (1 - Math.exp(-elapsedDays / 2.0)) * 0.20);
+  // 1. Evaporação atmosférica de voláteis leves (C1-C10) segundo cinética ADIOS:
+  // Decaimento exponencial rápido atingindo assíntota de 25% a 35% nas primeiras 72h
+  const maxEvapFraction = 0.30;
+  const evapFraction = maxEvapFraction * (1 - Math.exp(-elapsedDays / 1.5));
   const evaporatedKg = totalInputKg * evapFraction;
-  const remainingKg = totalInputKg - evaporatedKg;
 
-  // Partição do óleo remanescente entre superfície, coluna d'água e sedimento
-  // Superfície: 55% decaindo por emulsão e espalhamento
-  const surfaceFraction = 0.55 * Math.exp(-elapsedDays / 5.0);
-  // Coluna d'água (gotículas em suspensão por turbulência): ~25%
-  const dispersedFraction = 0.25 * (1 - Math.exp(-elapsedDays / 1.5)) * Math.exp(-elapsedDays / 10.0);
-  // Sedimento: deposição bentônica por agregação com partículas minerais/orgânicas
-  const sedimentFraction = Math.min(0.20, 0.05 + (1 - Math.exp(-elapsedDays / 7.0)) * 0.15);
+  // 2. Exportação hidrodinâmica advectiva para o oceano externo via tempo de renovação (tau):
+  // Fração exportada proporcional ao tempo de troca hidráulica do setor
+  const exportFraction = 0.20 * (1 - Math.exp(-elapsedDays / sector.dischargeDays));
+  const exportedKg = totalInputKg * exportFraction;
 
-  const surfaceFilmKg = remainingKg * surfaceFraction;
-  const waterColumnDispersedKg = remainingKg * dispersedFraction;
-  const sedimentedKg = remainingKg * sedimentFraction;
+  // Massa disponível para partição nos reservatórios internos da baía
+  const internalAvailableKg = Math.max(0, totalInputKg - evaporatedKg - exportedKg);
 
-  // Fração dissolvida solúvel (HPAs de 2 a 4 anéis, como naftalenos, fenantrenos: ~1% a 3% do óleo total)
-  const dissolvedPahKg = remainingKg * 0.018 * (1 - Math.exp(-elapsedDays / 3.0));
+  // 3. Partição entre os 4 reservatórios físicos internos da baía:
+  // Filme superficial: espalhamento inicial com afundamento gradual
+  const surfCoeff = 0.60 * Math.exp(-elapsedDays / 4.0);
+  // Coluna d'água: gotículas dispersas por ondas/turbulência
+  const dispCoeff = 0.25 * (1 - Math.exp(-elapsedDays / 2.0)) * Math.exp(-elapsedDays / 8.0);
+  // Sedimento bentônico: deposição e agregação mineral
+  const sedCoeff = Math.min(0.25, 0.05 + (1 - Math.exp(-elapsedDays / 6.0)) * 0.15);
+  // HPAs solúveis dissolvidos (fração tPAH50 de 2 a 4 anéis): ~1,5% da massa disponível
+  const pahCoeff = 0.015 * (1 - Math.exp(-elapsedDays / 2.5));
 
-  // Exportação hidrodinâmica para fora da baía
-  const accountedSoFar = surfaceFilmKg + waterColumnDispersedKg + sedimentedKg + dissolvedPahKg;
-  const exportedKg = Math.max(0, remainingKg - accountedSoFar);
+  const totalCoeff = surfCoeff + dispCoeff + sedCoeff + pahCoeff;
+  const normFactor = totalCoeff > 0 ? 1 / totalCoeff : 1;
+
+  const surfaceFilmKg = internalAvailableKg * (surfCoeff * normFactor);
+  const waterColumnDispersedKg = internalAvailableKg * (dispCoeff * normFactor);
+  const dissolvedPahKg = internalAvailableKg * (pahCoeff * normFactor);
+  const sedimentedKg = internalAvailableKg * (sedCoeff * normFactor);
+
   const totalLostKg = evaporatedKg + exportedKg;
 
   // Concentração de tPAH50 dissolvido na coluna d'água:
   // kg * 1e9 ug / (volumeM3 * 1000 L) = ug/L
   const dissolvedPahConcentrationUgL = (dissolvedPahKg * 1e9) / (sector.mixingVolumeM3 * 1000);
 
-  // Espessura estimada do filme superficial (assumindo área de espalhamento de ~500.000 m^2 na enseada)
+  // Espessura estimada do filme superficial (área de mancha estimada entre 10.000 e 2.000.000 m²)
   const slickAreaM2 = Math.max(1e4, Math.min(2e6, surfaceFilmKg * 150));
-  // Volume m^3 = kg / densidade (880 kg/m^3); espessura m = volume / area; * 1e6 = um
   const surfaceFilmThicknessUm = (surfaceFilmKg / 880 / slickAreaM2) * 1e6;
-  const lightAttenuation = Math.min(0.95, surfaceFilmThicknessUm > 0.1 ? 0.3 + Math.log10(1 + surfaceFilmThicknessUm) * 0.25 : 0);
-
-  const massBalanceResidualKg = Math.abs(
-    totalInputKg - (surfaceFilmKg + waterColumnDispersedKg + dissolvedPahKg + sedimentedKg + totalLostKg),
+  const lightAttenuation = Math.min(
+    0.95,
+    surfaceFilmThicknessUm > 0.1 ? 0.3 + Math.log10(1 + surfaceFilmThicknessUm) * 0.25 : 0,
   );
+
+  // Resíduo numérico de conservação de massa independente
+  const sumReservoirs = surfaceFilmKg + waterColumnDispersedKg + dissolvedPahKg + sedimentedKg + evaporatedKg + exportedKg;
+  const massBalanceResidualKg = Math.abs(totalInputKg - sumReservoirs);
 
   return {
     surfaceFilmKg: parseFloat(surfaceFilmKg.toFixed(1)),
     waterColumnDispersedKg: parseFloat(waterColumnDispersedKg.toFixed(1)),
     dissolvedPahKg: parseFloat(dissolvedPahKg.toFixed(2)),
     sedimentedKg: parseFloat(sedimentedKg.toFixed(1)),
+    evaporatedKg: parseFloat(evaporatedKg.toFixed(1)),
+    exportedKg: parseFloat(exportedKg.toFixed(1)),
     evaporatedExportedKg: parseFloat(totalLostKg.toFixed(1)),
     dissolvedPahConcentrationUgL: parseFloat(dissolvedPahConcentrationUgL.toFixed(3)),
     surfaceFilmThicknessUm: parseFloat(surfaceFilmThicknessUm.toFixed(2)),

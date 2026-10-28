@@ -4,12 +4,14 @@ import type { BtsSectorId, Environment, EpistemologicalBadge, ScientificMetadata
 /**
  * Módulo de Oxigênio Dissolvido (OD) e Demanda Bioquímica de Oxigênio (DBO).
  *
- * Implementa balanço acoplado de transporte e cinética de primeira ordem:
+ * Implementa balanço cinético acoplado de transporte de massa e reações de primeira ordem:
  * - Solubilidade de equilíbrio ar-mar segundo Weiss (1970);
- * - Reaeração superficial ar-mar dependente de vento e profundidade;
- * - Oxidação bacteriana da DBO com correção térmica de Arrhenius;
+ * - Reaeração superficial ar-mar dependente de vento, profundidade e temperatura;
+ * - Conversão estequiométrica de DBO₅ para Demanda Bioquímica Última (CBODu);
+ * - Oxidação bacteriana da CBODu com correção térmica de Arrhenius;
  * - Demanda bentônica de oxigênio do sedimento (SOD);
- * - Saldo metabólico fotossíntese/respiração atenuado por turbidez e óleo.
+ * - Saldo metabólico fotossíntese/respiração atenuado por turbidez e óleo;
+ * - Solução analítica de estado estacionário para cálculo instantâneo coerente com a EDO.
  */
 
 export type OxygenCategory =
@@ -62,6 +64,17 @@ export function calculateWeissOxygenSaturation(temperature: number, salinity = 3
 }
 
 /**
+ * Converte DBO₅ laboratorial (ensaio de 5 dias a 20 °C) para Demanda Bioquímica Última
+ * Carbonácea (CBODu) assumindo cinética de 1ª ordem (kd20 = 0,12 dia^-1):
+ * DBO5 = CBODu * (1 - exp(-5 * kd20)) => CBODu = DBO5 / (1 - exp(-0.60)) ≈ 2.216 * DBO5.
+ */
+export function convertBOD5ToUltimateBOD(bod5Kg: number): number {
+  const kd20 = PARAMETERS.oxygen.deoxygenationRate;
+  const fraction5d = 1 - Math.exp(-5 * kd20);
+  return bod5Kg / fraction5d;
+}
+
+/**
  * Coeficiente de reaeração superficial ar-mar (ka) em dia^-1
  * baseado no vento (m/s), profundidade (m) e temperatura (°C).
  */
@@ -88,7 +101,7 @@ export function calculateDeoxygenationRate(temperature = 26.8): number {
 }
 
 /**
- * Classificação limnológica/oceanográfica rigorosa do oxigênio dissolvido
+ * Classificação limnológica/oceanográfica do oxigênio dissolvido
  * [Padrão US EPA / Resolução CONAMA 357].
  */
 export function classifyDissolvedOxygen(dissolvedOxygen: number): OxygenStatus {
@@ -147,8 +160,12 @@ export interface OxygenKineticsStep {
   metabolicFlux: number;
 }
 
+export type SewageDischargeType = 'continuous_daily' | 'instant_pulse';
+
 /**
  * Passo de integração do sistema acoplado DBO/OD para um intervalo dt (dias).
+ *
+ * @param dischargeType 'continuous_daily' interpreta a entrada como taxa de carga contínua (kg DBO5/dia).
  */
 export function integrateOxygenKinetics(
   currentDo: number,
@@ -157,6 +174,7 @@ export function integrateOxygenKinetics(
   sectorId: BtsSectorId,
   dtDays: number,
   algaeCoverage = 15,
+  dischargeType: SewageDischargeType = 'continuous_daily',
 ): OxygenKineticsStep {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const saturation = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
@@ -164,17 +182,19 @@ export function integrateOxygenKinetics(
   const ka = calculateReaerationRate(sector.meanWindSpeed, sector.depthMeters, env.temperature);
   const kd = calculateDeoxygenationRate(env.temperature);
 
-  // Aporte diário de carga orgânica diluído no volume do compartimento (mg O2 / L / dia)
-  // Massa de DBO em kg convertida para mg: kg * 1e6 mg / (mixingVolumeM3 * 1000 L) = kg / mixingVolumeM3 * 1000
-  // Carga ativa do cenário: se esgoto > 0, taxa de entrada contínua
-  const bodInputDailyMgL = env.sewage > 0
-    ? (env.sewage * 1000) / sector.mixingVolumeM3
-    : 0;
+  // Aporte contínuo de matéria orgânica: kg DBO5/dia convertido para CBOD última em mg/L/dia
+  let bodInputDailyMgL = 0;
+  if (env.sewage > 0) {
+    const cbodDailyKg = convertBOD5ToUltimateBOD(env.sewage);
+    bodInputDailyMgL = dischargeType === 'continuous_daily'
+      ? (cbodDailyKg * 1000) / sector.mixingVolumeM3
+      : 0;
+  }
 
   // Taxa de exportação hidrodinâmica (troca com oceano adjacente)
   const hydroExportRate = 1 / sector.dischargeDays;
 
-  // 1. Balanço de DBO: d[B]/dt = L_entrada - kd * [B] - [B]/tau
+  // 1. Balanço de CBODu: d[B]/dt = L_entrada - kd * [B] - [B]/tau
   const bodDecayRate = kd + hydroExportRate;
   const nextBod = Math.max(
     0,
@@ -210,6 +230,37 @@ export function integrateOxygenKinetics(
 }
 
 /**
+ * Solução analítica de estado estacionário (equilíbrio) do sistema acoplado DBO/OD.
+ * Substitui completamente fórmulas algébricas simplificadas, garantindo que
+ * o oxigênio estático seja 100% coerente com o modelo diferencial.
+ */
+export function calculateEquilibriumOxygen(
+  env: Environment,
+  sectorId: BtsSectorId = 'frades',
+  algaeCoverage = 15,
+): number {
+  const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+  const saturation = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
+  const ka = calculateReaerationRate(sector.meanWindSpeed, sector.depthMeters, env.temperature);
+  const kd = calculateDeoxygenationRate(env.temperature);
+  const hydroExportRate = 1 / sector.dischargeDays;
+
+  const cbodDailyKg = env.sewage > 0 ? convertBOD5ToUltimateBOD(env.sewage) : 0;
+  const bodInputDailyMgL = (cbodDailyKg * 1000) / sector.mixingVolumeM3;
+  const bodEq = bodInputDailyMgL / (kd + hydroExportRate);
+
+  const sodFlux = PARAMETERS.oxygen.sodRate / sector.depthMeters;
+  const lightBlock = Math.min(1, (env.turbidity / 100) * 0.7 + (env.oil > 0 ? 0.35 : 0));
+  const photosynthesis = 0.5 * (1 - lightBlock);
+  const respiration = 0.35 + (algaeCoverage / 100) * 0.4;
+  const metabolicFlux = photosynthesis - respiration;
+
+  // No equilíbrio: ka*(Cs - O_eq) = kd*B_eq + sodFlux - metabolicFlux
+  const oxygenDeficit = (kd * bodEq + sodFlux - metabolicFlux) / ka;
+  return Math.max(0.05, Math.min(saturation * 1.25, saturation - oxygenDeficit));
+}
+
+/**
  * Gera os metadados científicos da variável Oxigênio Dissolvido para auditoria.
  */
 export function getOxygenMetadata(
@@ -227,14 +278,14 @@ export function getOxygenMetadata(
     value: parseFloat(dissolvedOxygen.toFixed(2)),
     unit: 'mg O₂/L',
     quantityKind: 'concentration',
-    epistemicClass: status.badge,
-    source: 'Balanço Acoplado Weiss (1970) / CONAMA 357 / Cirano & Lessa (2007)',
+    epistemicClass: 'Produto de Modelo',
+    source: 'Balanço Cinético Acoplado Weiss (1970) / CONAMA 357 / Cirano & Lessa (2007)',
     sourceUrl: 'doi:10.1590/S0102-261X2007000400002',
     datasetId: 'BTS_DO_BOD_KINETICS',
-    method: 'Balanço cinético de advecção-reaeração ar-mar e decomposição de DBO',
+    method: 'Balanço cinético de advecção-reaeração ar-mar e decomposição de CBODu',
     spatialResolution: 'Compartimento homogêneo de mistura (Caixa)',
     temporalResolution: '0,1 dia simulado',
-    uncertainty: `Saturação calculada: ${saturation.toFixed(2)} mg/L (±0,15 mg/L)`,
+    uncertainty: `Saturação termodinâmica: ${saturation.toFixed(2)} mg/L (sensibilidade de taxas cinéticas ka e kd)`,
     notes: status.description,
   };
 }

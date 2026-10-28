@@ -5,6 +5,7 @@ import { Icon } from './components/Icons';
 import { IndicatorModal, type IndicatorDetailId } from './components/IndicatorModal';
 import { SciencePanel, type PanelTab } from './components/SciencePanel';
 import { TimelineBar } from './components/TimelineBar';
+import { useOceanData } from './hooks/useOceanData';
 import { BASELINE, FACTOR_ORDER, isMassLoadId, ITEM_DEFINITIONS } from './simulation/config';
 import { CHALLENGES, evaluateChallenge } from './simulation/challenges';
 import { MISSION_01_OXYGEN } from './simulation/missions';
@@ -296,6 +297,7 @@ export function App() {
   const [resetToken, setResetToken] = useState(0);
   const [simulation, setSimulation] = useState(createInitialState);
   const [panelTab, setPanelTab] = useState<PanelTab>('now');
+  const oceanData = useOceanData();
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [criticalDays, setCriticalDays] = useState<number | null | undefined>(undefined);
   const [missionState, setMissionState] = useState<MissionState | null>(null);
@@ -645,6 +647,7 @@ export function App() {
           onSelectChallenge={(id) => setChallengeId((current) => (current === id ? null : id))}
           tab={panelTab}
           onTabChange={setPanelTab}
+          oceanData={oceanData}
           missionState={missionState}
           onStartMission={startMission}
           onMissionStepChange={handleMissionStepChange}

@@ -18,9 +18,11 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
   it('preserva integridade do snapshot de contingência do NOAA CRW', () => {
     expect(BTS_CRW_FALLBACK_SNAPSHOT).toHaveLength(4);
     const maxStress = BTS_CRW_FALLBACK_SNAPSHOT[3];
-    expect(maxStress.bleachingAlertArea).toBe(4); // Alert 2
+    expect(maxStress.bleachingAlertLevel).toBe(4); // Alert 2
+    expect(maxStress.bleachingAlertArea).toBe(4);
     expect(maxStress.degreeHeatingWeeks).toBe(8.2);
     expect(maxStress.provenance.isCachedFallback).toBe(true);
+    expect(maxStress.provenance.fallbackNote).toContain('Snapshot histórico de contingência');
   });
 
   it('fornece dados hidrodinâmicos e de ondas da Open-Meteo Marine', async () => {

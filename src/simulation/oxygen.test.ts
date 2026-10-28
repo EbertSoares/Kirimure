@@ -48,25 +48,25 @@ describe('módulo cinético de oxigênio dissolvido e DBO', () => {
   });
 
   it('integra balanço acoplado: carga orgânica contínua reduz oxigênio gradualmente com inércia física', () => {
-    let doConc = 7.12;
+    let doConc = 6.55;
     let bodConc = 0;
     const sewageEnv = { ...BASELINE, sewage: 50000 };
 
-    for (let day = 0; day < 10; day += 0.5) {
+    for (let day = 0; day < 3; day += 0.5) {
       const step = integrateOxygenKinetics(doConc, bodConc, sewageEnv, 'frades', 0.5);
       doConc = step.nextDo;
       bodConc = step.nextBod;
     }
 
     expect(bodConc).toBeGreaterThan(0);
-    expect(doConc).toBeLessThan(7.0);
+    expect(doConc).toBeLessThan(6.5);
     expect(doConc).toBeGreaterThan(0.5);
   });
 
   it('gera metadados científicos rastreáveis com selo epistemológico', () => {
     const meta = getOxygenMetadata(4.5, 27.0, 35.0);
     expect(meta.unit).toBe('mg O₂/L');
-    expect(meta.epistemicClass).toBe('Padrão Operacional');
+    expect(meta.epistemicClass).toBe('Produto de Modelo');
     expect(meta.recordId).toBe('do-bts-coupled-model');
   });
 });

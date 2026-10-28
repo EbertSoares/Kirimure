@@ -15,7 +15,9 @@ describe('módulo de contaminantes: destino de óleo e microplásticos', () => {
     expect(budget.waterColumnDispersedKg).toBeGreaterThan(0);
     expect(budget.dissolvedPahKg).toBeGreaterThan(0);
     expect(budget.sedimentedKg).toBeGreaterThan(0);
-    expect(budget.evaporatedExportedKg).toBeGreaterThan(0);
+    expect(budget.evaporatedKg).toBeGreaterThan(0);
+    expect(budget.exportedKg).toBeGreaterThan(0);
+    expect(budget.evaporatedExportedKg).toBeCloseTo(budget.evaporatedKg + budget.exportedKg, 1);
 
     // Verificação do balanço de conservação de massa (resíduo numérico < 0.1 kg)
     expect(budget.massBalanceResidualKg).toBeLessThan(0.1);

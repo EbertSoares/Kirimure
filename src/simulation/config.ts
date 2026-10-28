@@ -131,8 +131,8 @@ export const PARAMETERS = {
     fishMax: 31,
   },
   oxygen: {
-    // Saturação físico-química natural em água marinha tropical (26,8 °C, 35 PSU)
-    saturationMgL: 7.12,
+    // Saturação físico-química de Weiss (1970) em água marinha tropical da BTS (26,8 °C, 35 PSU: 6,55 mg/L)
+    saturationMgL: 6.55,
     // Coeficiente de reaeração superficial ar-mar (vento e ondas) em dia^-1
     reaerationRate: 0.35,
     // Coeficiente de oxidação bacteriana da DBO em dia^-1 a 20 °C
@@ -331,17 +331,17 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     massOptionsKg: MASS_LOAD_OPTIONS_KG,
   },
   sewage: {
-    label: 'Carga Orgânica (Esgoto / DBO₅)',
-    shortLabel: 'Carga Orgânica (DBO)',
+    label: 'Aporte Contínuo de DBO₅ (Esgoto)',
+    shortLabel: 'Aporte DBO₅/dia',
     min: 0,
     max: 100000,
     step: 1,
-    unit: 'kg DBO₅',
-    reference: 'Demanda Bioquímica de Oxigênio (DBO₅)',
-    help: 'Regra do Modelo / Padrão US EPA / CONAMA 357: Representa a matéria orgânica pelo consumo de oxigênio (DBO₅ a 20 °C). Bactérias decompositoras aeróbicas consomem o oxigênio dissolvido da água, gerando estresse e risco de hipóxia para peixes.',
+    unit: 'kg DBO₅/dia',
+    reference: 'Taxa diária de DBO₅ lançada (kg/dia ou t/dia)',
+    help: 'Cenário Didático: Taxa diária contínua de matéria orgânica biodegradável (DBO₅ a 20 °C) diluída no volume de mistura. O modelo converte estequiometricamente para Demanda Última (CBODu) e integra o consumo bacteriano no tempo.',
     icon: 'sewage',
     massLoad: true,
-    massQualifier: 'DBO₅',
+    massQualifier: 'DBO₅/d',
     massOptionsKg: MASS_LOAD_OPTIONS_KG,
   },
   turbidity: {
