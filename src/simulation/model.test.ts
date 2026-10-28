@@ -19,6 +19,7 @@ import {
 } from './model';
 import { formatSimulatedTime } from './time';
 import { evaluateMessages } from './messages';
+import { integrateOxygenKinetics } from './oxygen';
 import type { SimulationState } from './types';
 
 /** Roda a simulação por um número de dias simulados, em passos de `stepSeconds`. */
@@ -62,7 +63,7 @@ describe('modelo de simulação', () => {
       oil: receivedLoadRange(50000).centralKg,
       temperature: 31,
       ph: 7.8,
-      sewage: receivedLoadRange(5000).centralKg,
+      sewage: 5000,
     });
     expect(countActiveFactors({ ...BASELINE, oil: 50000, sewage: 5000 })).toBe(2);
   });
@@ -280,10 +281,15 @@ describe('modelo de simulação', () => {
   });
 
   it('ajusta retenção e alvos de carga conforme o compartimento da BTS', () => {
-    const fradesTargets = buildTargets({ ...BASELINE, sewage: 10000 }, 'frades');
-    const barraTargets = buildTargets({ ...BASELINE, sewage: 10000 }, 'barra');
-    // Na Boca da Barra (baixa retenção, descarga rápida), a massa retida é bem menor que na Ilha dos Frades
-    expect(barraTargets.sewage).toBeLessThan(fradesTargets.sewage);
+    // Para óleo (modelo de partição estática), o alvo é modulado pela retenção física do setor
+    const fradesTargets = buildTargets({ ...BASELINE, oil: 10000 }, 'frades');
+    const barraTargets = buildTargets({ ...BASELINE, oil: 10000 }, 'barra');
+    expect(barraTargets.oil).toBeLessThan(fradesTargets.oil);
+
+    // Para esgoto (modelo cinético acoplado), a retenção atua via flushing hidrodinâmico (washout = 1/tau)
+    const fradesKinetics = integrateOxygenKinetics(6.0, 2.0, { ...BASELINE, sewage: 5000 }, 'frades', 5);
+    const barraKinetics = integrateOxygenKinetics(6.0, 2.0, { ...BASELINE, sewage: 5000 }, 'barra', 5);
+    expect(barraKinetics.nextBod).toBeLessThan(fradesKinetics.nextBod);
   });
 
   it('isola os dois caminhos causais do oxigênio dissolvido (DBO direta vs algas)', () => {

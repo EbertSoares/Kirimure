@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { fetchBtsThermalForcing, BTS_CRW_FALLBACK_SNAPSHOT } from '../services/noaaCrw';
-import { fetchBtsMarineMeteo, BTS_METEO_FALLBACK_SNAPSHOT } from '../services/openMeteo';
+import { fetchBtsMarineMeteo, BTS_METEO_FALLBACK_SNAPSHOT, findClosestHourlyPoint } from '../services/openMeteo';
 import type { MarineMeteoPoint, ThermalForcingPoint } from '../services/types';
 import type { BtsSectorId } from '../simulation/types';
 
@@ -123,7 +123,7 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
   }, [loadData, sectorId]);
 
   const latestCrw = crwData.length > 0 ? crwData[crwData.length - 1] : null;
-  const latestMeteo = meteoData.length > 0 ? meteoData[0] : null;
+  const latestMeteo = meteoData.length > 0 ? findClosestHourlyPoint(meteoData) : null;
   const isFallback = Boolean(noaaStatus.isFallback || meteoStatus.isFallback);
 
   return {

@@ -307,7 +307,7 @@ export function SciencePanel({
               <article className="compare-card" style={{ marginTop: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0 }}>Destino do Óleo (4 Reservatórios)</h3>
-                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Ref. Laboratorial Externa</span>
+                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Cenário Didático / Modelo de Caixa</span>
                 </div>
                 <ul style={{ marginTop: '12px' }}>
                   <li>
@@ -346,7 +346,7 @@ export function SciencePanel({
                   </li>
                 </ul>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
-                  Partição física em compartimentos e bioensaio subletal controlado de 96h (May et al., 2020: EC50 tecidual 10 µg/L). Ressalva científica: a concentração de HPAs é uma saída exploratória; no modelo didático, a resposta biológica sintetiza estresse de habitat, não uma curva letal aguda descalibrada de campo.
+                  Balanço em 4 reservatórios (superfície, dispersão, dissolução e sedimento) com taxas de perda advectiva e atmosférica (resíduo de balanço de massa &lt; 0,1% como verificação de consistência aritmética). A concentração de HPAs (tPAH50) é uma estimativa diagnóstica exploratória baseada na fração aromática solúvel (~1,5%) com EC50 de 10 µg/L para regeneração tecidual (May et al., 2020). No modelo geral da simulação, a pressão de óleo atua como estressor subletal composto e atenuação luminosa, e não como curva aguda letal de campo descalibrada.
                 </p>
               </article>
             )}
@@ -953,7 +953,7 @@ export function SciencePanel({
                       </strong>
                     </li>
                     <li>
-                      <span>HotSpot Térmico Oficial (CRW_HOTSPOT)</span>
+                      <span>HotSpot Térmico Oficial (CRW_HOTSPOT vs. Climatologia Local)</span>
                       <strong>{oceanData.latestCrw.hotSpotDegC !== null ? `${oceanData.latestCrw.hotSpotDegC.toFixed(1)} °C` : 'Ausente'}</strong>
                     </li>
                     <li>
@@ -1018,7 +1018,7 @@ export function SciencePanel({
                       </div>
                     </div>
                     <p style={{ margin: '8px 0 0', color: 'rgba(255,255,255,0.5)', fontSize: '10.5px' }}>
-                      Nota: O BAA do NOAA é um índice operacional de satélite em grade de 5 km; não é medição de campo in situ nem equivale à mortalidade direta de corais. Ao alterar os controles da bancada, o Kirimurê calcula o estresse experimental sem sobrescrever o registro de satélite.
+                      Nota: O BAA e o HotSpot do NOAA são calculados sobre a climatologia do pixel (MMM de satélite em grade de 5 km), enquanto o estresse didático no Kirimurê utiliza a linha base pedagógica configurada. Ao alterar os controles da bancada, o Kirimurê calcula o estresse experimental sem sobrescrever o registro de satélite.
                     </p>
                   </div>
                 </>
@@ -1035,6 +1035,9 @@ export function SciencePanel({
               </div>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 8px' }}>
                 Canal de Entrada da BTS (-12.97°, -38.50°) · Grade nominal 8 km (Copernicus / ECMWF)
+                {oceanData?.latestMeteo?.timestampUtc && (
+                  <span> · Registro Horário: {oceanData.latestMeteo.timestampUtc.replace('T', ' ').substring(0, 16)} UTC</span>
+                )}
               </p>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                 <span style={{

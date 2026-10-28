@@ -8,7 +8,8 @@ import {
   PRESSURE_IDS,
   type MassLoadId,
 } from './config';
-import { calculateEquilibriumOxygen, calculateWeissOxygenSaturation, integrateOxygenKinetics } from './oxygen';
+import { calculateCarbonateSystem, calculateRespirationPhImpact } from './carbonate';
+import { calculateEquilibriumOxygen, calculateWeissOxygenSaturation, convertBOD5ToUltimateBOD, integrateOxygenKinetics } from './oxygen';
 import type {
   BtsSectorId,
   Environment,
@@ -47,8 +48,8 @@ export function countActiveFactors(environment: Environment) {
 /** Faixa sazonal da massa que permanece na BTS após 30 dias com base no compartimento ativo. */
 export function receivedLoadRange(inputKg: number, sectorId: BtsSectorId = 'frades') {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
-  const tauWinter = sector.dischargeDays;
-  const tauSummer = sector.dischargeDays * 1.6;
+  const tauWinter = sector.dischargeRange[0];
+  const tauSummer = sector.dischargeRange[1];
   const winterRetention = Math.exp(-30 / tauWinter);
   const summerRetention = Math.exp(-30 / tauSummer);
   return {
@@ -64,21 +65,41 @@ export function normalizedReceivedLoad(id: MassLoadId, valueKg: number) {
 }
 
 /**
- * Queda costeira adicional do pH associada à respiração da matéria orgânica.
- * Óleo e microplásticos não entram nesta relação simplificada.
+ * pH que o recife sente: pH de contorno ajustado termodinamicamente pela respiração
+ * microbiana da matéria orgânica (DBO) que eleva o DIC, eliminando deduções lineares fictícias.
  */
-export function pollutionAcidity(env: Environment) {
-  return normalizedReceivedLoad('sewage', env.sewage) * PARAMETERS.ph.sewageMaxDrop;
-}
+export function effectivePh(
+  env: Environment,
+  bodConcentrationMgL = 0,
+  sectorId: BtsSectorId = 'frades',
+): number {
+  if (bodConcentrationMgL <= 0 && env.sewage <= 0) {
+    return env.ph;
+  }
+  const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+  const scaledTa = 2350 * (sector.baselineSalinity / 35.0);
+  const effectiveBodMgL = bodConcentrationMgL > 0
+    ? bodConcentrationMgL
+    : (convertBOD5ToUltimateBOD(env.sewage) * 1000) / sector.mixingVolumeM3;
 
-/** pH que o recife sente: o da barra menos a acidez vinda da poluição. */
-export function effectivePh(env: Environment) {
-  return env.ph - pollutionAcidity(env);
+  const impact = calculateRespirationPhImpact(
+    env.ph,
+    effectiveBodMgL,
+    scaledTa,
+    env.temperature,
+    sector.baselineSalinity,
+  );
+  return impact.effectivePh;
 }
 
 /** Traduz o ambiente em pressões de 0 a 1 sobre o recife. */
-export function calculatePressures(env: Environment, dhw = 0): Pressures {
-  const ph = effectivePh(env);
+export function calculatePressures(
+  env: Environment,
+  dhw = 0,
+  bodConcentrationMgL = 0,
+  sectorId: BtsSectorId = 'frades',
+): Pressures {
+  const ph = effectivePh(env, bodConcentrationMgL, sectorId);
   const currentHeat = stressAbove(
     env.temperature,
     PARAMETERS.temperature.bleachingThreshold,
@@ -116,13 +137,19 @@ export function hypoxiaStress(dissolvedOxygen = 7.12): number {
 }
 
 /** Peixes toleram mais calor e menos acidez que os corais, mas sofrem estresse agudo por hipóxia. */
-export function calculateFishPressures(env: Environment, dhw = 0, dissolvedOxygen = 7.12): Pressures {
-  const base = calculatePressures(env, dhw);
+export function calculateFishPressures(
+  env: Environment,
+  dhw = 0,
+  dissolvedOxygen = 7.12,
+  bodConcentrationMgL = 0,
+  sectorId: BtsSectorId = 'frades',
+): Pressures {
+  const base = calculatePressures(env, dhw, bodConcentrationMgL, sectorId);
   const hypoxia = hypoxiaStress(dissolvedOxygen);
   return {
     ...base,
     thermal: stressAbove(env.temperature, PARAMETERS.temperature.fishStart, PARAMETERS.temperature.fishMax),
-    acidification: stressBelow(effectivePh(env), PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
+    acidification: stressBelow(effectivePh(env, bodConcentrationMgL, sectorId), PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
     // A hipóxia acopla-se à pressão de efluentes/esgoto, expressando o mecanismo biológico de asfixia
     sewage: combine([base.sewage, hypoxia]),
   };
@@ -150,9 +177,15 @@ export function speciesStress(pressures: Pressures, id: FishSpeciesId) {
   );
 }
 
-export function calculateStress(env: Environment, dhw = 0, dissolvedOxygen = 7.12) {
-  const pressures = calculatePressures(env, dhw);
-  const fishPressures = calculateFishPressures(env, dhw, dissolvedOxygen);
+export function calculateStress(
+  env: Environment,
+  dhw = 0,
+  dissolvedOxygen = 7.12,
+  bodConcentrationMgL = 0,
+  sectorId: BtsSectorId = 'frades',
+) {
+  const pressures = calculatePressures(env, dhw, bodConcentrationMgL, sectorId);
+  const fishPressures = calculateFishPressures(env, dhw, dissolvedOxygen, bodConcentrationMgL, sectorId);
   const species = Object.fromEntries(
     FISH_SPECIES.map((item) => [item.id, speciesStress(fishPressures, item.id)]),
   ) as Record<FishSpeciesId, number>;
@@ -250,11 +283,24 @@ export function createInitialState(sectorId: BtsSectorId = 'frades'): Simulation
   };
 }
 
-export function buildTargets(controls: Environment, sectorId: BtsSectorId = 'frades'): Environment {
+export function buildTargets(
+  controls: Environment,
+  sectorId: BtsSectorId = 'frades',
+  dischargeMode: 'continuous' | 'pulse' = 'continuous',
+): Environment {
   return (Object.keys(BASELINE) as ItemId[]).reduce(
     (result, id) => {
-      if (!isFactorActive(id, controls[id])) result[id] = BASELINE[id];
-      else result[id] = isMassLoadId(id) ? receivedLoadRange(controls[id], sectorId).centralKg : controls[id];
+      if (!isFactorActive(id, controls[id])) {
+        result[id] = BASELINE[id];
+      } else if (id === 'sewage') {
+        // No modo pulso, o efluente não tem taxa contínua (a massa é injetada instantaneamente em [CBOD])
+        // No modo contínuo, a taxa diária (kg DBO5/dia) vai direto para a EDO sem passar por retenção de 30d
+        result.sewage = dischargeMode === 'pulse' ? 0 : controls.sewage;
+      } else if (isMassLoadId(id)) {
+        result[id] = receivedLoadRange(controls[id], sectorId).centralKg;
+      } else {
+        result[id] = controls[id];
+      }
       return result;
     },
     { ...BASELINE },
@@ -276,7 +322,7 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
     overall: next.overall,
     algae: calculateAlgae(next.env, next.health),
     temperature: next.env.temperature,
-    ph: effectivePh(next.env),
+    ph: effectivePh(next.env, next.biochemicalOxygenDemand, next.sector),
     dhw: next.degreeHeatingWeeks,
     dissolvedOxygen: next.dissolvedOxygen,
     bod: next.biochemicalOxygenDemand,
@@ -349,7 +395,7 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
   const bod = oxygenKinetics.nextBod;
 
   const thermal = updateThermalDose(state, env.temperature, dtDays);
-  const stress = calculateStress(env, thermal.degreeHeatingWeeks, oxygen);
+  const stress = calculateStress(env, thermal.degreeHeatingWeeks, oxygen, bod, state.sector);
   const protection = clamp(env.recovery / 100);
   const exposure = PRESSURE_IDS.reduce(
     (result, id) => {

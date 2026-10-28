@@ -60,6 +60,8 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
       validTimeStartUtc: '2024-03-01T12:00:00Z',
       validTimeEndUtc: '2024-03-02T00:00:00Z',
       retrievedAtUtc: '2024-03-01T06:00:00Z',
+      queryUrl: 'https://marine-api.open-meteo.com/v1/marine?latitude=-12.97&longitude=-38.50',
+      responseHash: 'a71e892c',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
       fallbackNote: 'Snapshot meteorológico de contingência marinho (Salvador/Barra). Não representa a previsão horária do dia atual.',
@@ -85,6 +87,8 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
       validTimeStartUtc: '2024-03-01T12:00:00Z',
       validTimeEndUtc: '2024-03-02T00:00:00Z',
       retrievedAtUtc: '2024-03-01T06:00:00Z',
+      queryUrl: 'https://marine-api.open-meteo.com/v1/marine?latitude=-12.97&longitude=-38.50',
+      responseHash: 'b921ef45',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
       fallbackNote: 'Snapshot meteorológico de contingência marinho (Salvador/Barra). Não representa a previsão horária do dia atual.',
@@ -110,12 +114,41 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
       validTimeStartUtc: '2024-03-01T12:00:00Z',
       validTimeEndUtc: '2024-03-02T00:00:00Z',
       retrievedAtUtc: '2024-03-01T06:00:00Z',
+      queryUrl: 'https://marine-api.open-meteo.com/v1/marine?latitude=-12.97&longitude=-38.50',
+      responseHash: 'c834da19',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
       fallbackNote: 'Snapshot meteorológico de contingência marinho (Salvador/Barra). Não representa a previsão horária do dia atual.',
     },
   },
 ];
+
+/**
+ * Localiza na série temporal horária o registro cujo timestamp é mais próximo
+ * do horário atual (ou de um horário de referência informado).
+ * Evita retornar cegamente o índice [0], que corresponde ao início do dia (00:00 UTC).
+ */
+export function findClosestHourlyPoint(
+  points: MarineMeteoPoint[],
+  targetDate: Date = new Date(),
+): MarineMeteoPoint | null {
+  if (points.length === 0) return null;
+  const targetMs = targetDate.getTime();
+  let closest = points[0];
+  let minDiff = Math.abs(new Date(points[0].timestampUtc).getTime() - targetMs);
+
+  for (let i = 1; i < points.length; i += 1) {
+    const ptMs = new Date(points[i].timestampUtc).getTime();
+    if (Number.isFinite(ptMs)) {
+      const diff = Math.abs(ptMs - targetMs);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = points[i];
+      }
+    }
+  }
+  return closest;
+}
 
 export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Promise<MarineMeteoPoint[]> {
   const coords = getMeteoCoordinates(sectorId);

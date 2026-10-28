@@ -25,7 +25,7 @@ export interface CarbonateSystemState {
  * Constante aparente de produto de solubilidade da aragonita K'sp (mol^2/kg^2)
  * em função da temperatura (K) e salinidade (Mucci, 1983).
  */
-function calculateKspAragonite(tempCelsius: number, salinity = 35.0): number {
+export function calculateKspAragonite(tempCelsius: number, salinity = 35.0): number {
   const tk = tempCelsius + 273.15;
   const logKsp0 =
     -171.945 -
@@ -37,6 +37,26 @@ function calculateKspAragonite(tempCelsius: number, salinity = 35.0): number {
     (-0.068393 + 0.0017276 * tk + 88.135 / tk) * Math.sqrt(salinity) -
     0.10018 * salinity +
     0.0059415 * Math.pow(salinity, 1.5);
+
+  return Math.pow(10, logKsp0 + salCorr);
+}
+
+/**
+ * Constante aparente de produto de solubilidade da calcita K'sp (mol^2/kg^2)
+ * segundo Mucci (1983) e Dickson et al. (2007) / CO2SYS.
+ */
+export function calculateKspCalcite(tempCelsius: number, salinity = 35.0): number {
+  const tk = tempCelsius + 273.15;
+  const logKsp0 =
+    -171.9065 -
+    0.077993 * tk +
+    2839.319 / tk +
+    71.595 * Math.log10(tk);
+
+  const salCorr =
+    (-0.77712 + 0.0028426 * tk + 178.34 / tk) * Math.sqrt(salinity) -
+    0.07711 * salinity +
+    0.0041249 * Math.pow(salinity, 1.5);
 
   return Math.pow(10, logKsp0 + salCorr);
 }
@@ -95,11 +115,12 @@ export function calculateCarbonateSystem(
   const k0 = Math.exp(lnK0);
   const pCO2Uatm = (co2MolKg / k0) * 1e6;
 
-  // Saturação de aragonita e calcita
+  // Saturação termodinâmica estrita de aragonita e calcita (Mucci, 1983)
   const caMolKg = calculateCalciumConcentration(salinity);
   const kspArag = calculateKspAragonite(temperature, salinity);
+  const kspCalc = calculateKspCalcite(temperature, salinity);
   const omegaAragonite = (caMolKg * co3MolKg) / kspArag;
-  const omegaCalcite = omegaAragonite * 1.5;
+  const omegaCalcite = (caMolKg * co3MolKg) / kspCalc;
 
   let calcificationStatus: CarbonateSystemState['calcificationStatus'] = 'optimum';
   if (omegaAragonite >= 3.5) calcificationStatus = 'optimum';
@@ -177,6 +198,6 @@ export function getCarbonateMetadata(system: CarbonateSystemState): ScientificMe
     sourceUrl: 'doi:10.1016/S0304-4203(00)00022-0',
     method: 'Resolução das espécies DIC a partir de TA, pH e constantes térmicas',
     uncertainty: `pCO₂: ${system.pCO2Uatm} µatm; CO₃²⁻: ${system.carbonateIonUmolKg} µmol/kg`,
-    notes: `Estado de calcificação: ${system.calcificationStatus}. Ωarag > 3.0 necessário para crescimento sustentado de Siderastrea stellata e Mussismilia.`,
+    notes: `Estado de calcificação: ${system.calcificationStatus}. Ωarag > 3.0 é considerado referencial ótimo para escleractíneos em geral (Guinotte et al., 2003); corais da BTS (Siderastrea stellata e Mussismilia hispida) toleram variações, mas a calcificação decresce sob acidificação progressiva.`,
   };
 }
