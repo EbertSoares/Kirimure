@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BTS_CRW_FALLBACK_SNAPSHOT, fetchBtsThermalForcing } from './noaaCrw';
-import { BTS_METEO_FALLBACK_SNAPSHOT, fetchBtsMarineMeteo } from './openMeteo';
+import { BTS_CRW_FALLBACK_SNAPSHOT, fetchBtsThermalForcing, getSectorCoordinates } from './noaaCrw';
+import { BTS_METEO_FALLBACK_SNAPSHOT, fetchBtsMarineMeteo, getMeteoCoordinates } from './openMeteo';
 
 describe('camada de serviços de dados oceanográficos e proveniência', () => {
   it('fornece snapshot calibrado do NOAA CRW para a Baía de Todos-os-Santos', async () => {
@@ -15,6 +15,24 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
     expect(first.provenance.datasetId).toBe('NOAA_DHW');
   });
 
+  it('mapeia coordenadas geográficas distintas por setor da BTS para NOAA e Open-Meteo', () => {
+    const frades = getSectorCoordinates('frades');
+    const paraguacu = getSectorCoordinates('paraguacu');
+    const barra = getSectorCoordinates('barra');
+
+    expect(frades.latitude).toBe(-12.85);
+    expect(frades.longitude).toBe(-38.55);
+
+    expect(paraguacu.latitude).toBe(-12.75);
+    expect(paraguacu.longitude).toBe(-38.85);
+
+    expect(barra.latitude).toBe(-12.97);
+    expect(barra.longitude).toBe(-38.50);
+
+    const meteoBarra = getMeteoCoordinates('barra');
+    expect(meteoBarra.latitude).toBe(-12.97);
+  });
+
   it('preserva integridade do snapshot de contingência do NOAA CRW', () => {
     expect(BTS_CRW_FALLBACK_SNAPSHOT).toHaveLength(4);
     const maxStress = BTS_CRW_FALLBACK_SNAPSHOT[3];
@@ -22,6 +40,7 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
     expect(maxStress.bleachingAlertArea).toBe(4);
     expect(maxStress.degreeHeatingWeeks).toBe(8.2);
     expect(maxStress.provenance.isCachedFallback).toBe(true);
+    expect(maxStress.provenance.fetchStatus).toBe('fallback_cached');
     expect(maxStress.provenance.fallbackNote).toContain('Snapshot histórico de contingência');
   });
 
@@ -39,5 +58,7 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
   it('preserva integridade do snapshot de contingência meteorológico', () => {
     expect(BTS_METEO_FALLBACK_SNAPSHOT).toHaveLength(3);
     expect(BTS_METEO_FALLBACK_SNAPSHOT[0].waveHeightM).toBe(1.1);
+    expect(BTS_METEO_FALLBACK_SNAPSHOT[0].provenance.isCachedFallback).toBe(true);
+    expect(BTS_METEO_FALLBACK_SNAPSHOT[0].provenance.fetchStatus).toBe('fallback_cached');
   });
 });

@@ -36,6 +36,7 @@ export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
     depthMeters: 8.0,
     meanWindSpeed: 4.0,
     mixingVolumeM3: 3.2e7,
+    coordinates: { latitude: -12.85, longitude: -38.55 },
   },
   {
     id: 'paraguacu',
@@ -51,6 +52,7 @@ export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
     depthMeters: 5.0,
     meanWindSpeed: 3.0,
     mixingVolumeM3: 1.5e7,
+    coordinates: { latitude: -12.75, longitude: -38.85 },
   },
   {
     id: 'barra',
@@ -66,6 +68,7 @@ export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
     depthMeters: 25.0,
     meanWindSpeed: 5.5,
     mixingVolumeM3: 1.0e8,
+    coordinates: { latitude: -12.97, longitude: -38.50 },
   },
 ] as const;
 

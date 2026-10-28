@@ -243,6 +243,8 @@ export function createInitialState(sectorId: BtsSectorId = 'frades'): Simulation
     latestMessageId: null,
     messageCooldown: 0,
     sector: sectorId,
+    sewageDischargeMode: 'continuous',
+    initialConditionSource: 'PADRAO_CALIBRADO',
     dissolvedOxygen: initialDo,
     biochemicalOxygenDemand: 0,
   };
@@ -333,6 +335,7 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
   const algae = calculateAlgae(env, state.health);
   const currentBod = state.biochemicalOxygenDemand ?? 0;
   const currentDo = state.dissolvedOxygen ?? calculateWeissOxygenSaturation(env.temperature);
+  const dischargeType = state.sewageDischargeMode === 'pulse' ? 'instant_pulse' : 'continuous_daily';
   const oxygenKinetics = integrateOxygenKinetics(
     currentDo,
     currentBod,
@@ -340,6 +343,7 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
     state.sector,
     dtDays,
     algae,
+    dischargeType,
   );
   const oxygen = oxygenKinetics.nextDo;
   const bod = oxygenKinetics.nextBod;
@@ -471,11 +475,19 @@ export function getDissolvedOxygenBreakdown(
  * Baseada no balanço analítico em estado estacionário acoplado à equação de Weiss (1970).
  */
 export function calculateDissolvedOxygen(
-  state: { env: Environment; pressures?: Pressures; health?: Health; dissolvedOxygen?: number; sector?: BtsSectorId },
+  state: {
+    env: Environment;
+    pressures?: Pressures;
+    health?: Health;
+    dissolvedOxygen?: number;
+    sector?: BtsSectorId;
+    sewageDischargeMode?: 'continuous' | 'pulse';
+  },
   algae?: number,
 ) {
   const currentAlgae = algae ?? (state.health ? calculateAlgae(state.env, state.health) : 0);
-  return calculateEquilibriumOxygen(state.env, state.sector ?? 'frades', currentAlgae);
+  const dischargeType = state.sewageDischargeMode === 'pulse' ? 'instant_pulse' : 'continuous_daily';
+  return calculateEquilibriumOxygen(state.env, state.sector ?? 'frades', currentAlgae, dischargeType);
 }
 
 /** Indicadores derivados que o aluno acompanha no painel. */

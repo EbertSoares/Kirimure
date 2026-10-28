@@ -75,6 +75,16 @@ export function convertBOD5ToUltimateBOD(bod5Kg: number): number {
 }
 
 /**
+ * Converte a massa total de um pulso de DBO₅ (kg) em acréscimo instantâneo
+ * da concentração de CBODu na caixa de mistura do compartimento (mg O₂/L).
+ */
+export function convertBOD5ToPulseDeltaMgL(bod5Kg: number, mixingVolumeM3: number): number {
+  if (bod5Kg <= 0 || mixingVolumeM3 <= 0) return 0;
+  const cbodTotalKg = convertBOD5ToUltimateBOD(bod5Kg);
+  return (cbodTotalKg * 1000) / mixingVolumeM3;
+}
+
+/**
  * Coeficiente de reaeração superficial ar-mar (ka) em dia^-1
  * baseado no vento (m/s), profundidade (m) e temperatura (°C).
  */
@@ -238,6 +248,7 @@ export function calculateEquilibriumOxygen(
   env: Environment,
   sectorId: BtsSectorId = 'frades',
   algaeCoverage = 15,
+  dischargeType: SewageDischargeType = 'continuous_daily',
 ): number {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const saturation = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
@@ -245,9 +256,12 @@ export function calculateEquilibriumOxygen(
   const kd = calculateDeoxygenationRate(env.temperature);
   const hydroExportRate = 1 / sector.dischargeDays;
 
-  const cbodDailyKg = env.sewage > 0 ? convertBOD5ToUltimateBOD(env.sewage) : 0;
-  const bodInputDailyMgL = (cbodDailyKg * 1000) / sector.mixingVolumeM3;
-  const bodEq = bodInputDailyMgL / (kd + hydroExportRate);
+  let bodEq = 0;
+  if (dischargeType === 'continuous_daily' && env.sewage > 0) {
+    const cbodDailyKg = convertBOD5ToUltimateBOD(env.sewage);
+    const bodInputDailyMgL = (cbodDailyKg * 1000) / sector.mixingVolumeM3;
+    bodEq = bodInputDailyMgL / (kd + hydroExportRate);
+  }
 
   const sodFlux = PARAMETERS.oxygen.sodRate / sector.depthMeters;
   const lightBlock = Math.min(1, (env.turbidity / 100) * 0.7 + (env.oil > 0 ? 0.35 : 0));

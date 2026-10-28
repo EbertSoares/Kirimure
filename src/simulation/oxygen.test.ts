@@ -4,6 +4,7 @@ import {
   calculateReaerationRate,
   calculateWeissOxygenSaturation,
   classifyDissolvedOxygen,
+  convertBOD5ToPulseDeltaMgL,
   getOxygenMetadata,
   integrateOxygenKinetics,
 } from './oxygen';
@@ -61,6 +62,38 @@ describe('módulo cinético de oxigênio dissolvido e DBO', () => {
     expect(bodConc).toBeGreaterThan(0);
     expect(doConc).toBeLessThan(6.5);
     expect(doConc).toBeGreaterThan(0.5);
+  });
+
+  it('diferencia dimensionalmente e dinamicamente pulso instantâneo de carga contínua', () => {
+    // 1. Pulso instantâneo: 50.000 kg DBO aplicados no instante inicial
+    const pulseDelta = convertBOD5ToPulseDeltaMgL(50000, 3.2e7);
+    expect(pulseDelta).toBeGreaterThan(0);
+
+    let doPulse = 6.55;
+    let bodPulse = pulseDelta;
+    const zeroContinuousEnv = { ...BASELINE, sewage: 0 };
+
+    // Simula 10 dias após o pulso: sem nova entrada diária, DBO decai e oxigênio se recupera
+    for (let day = 0; day < 10; day += 0.5) {
+      const step = integrateOxygenKinetics(doPulse, bodPulse, zeroContinuousEnv, 'frades', 0.5, 15, 'instant_pulse');
+      doPulse = step.nextDo;
+      bodPulse = step.nextBod;
+    }
+
+    // O CBOD residual do pulso deve ter decaído significativamente
+    expect(bodPulse).toBeLessThan(pulseDelta * 0.35);
+    expect(doPulse).toBeGreaterThan(5.0); // oxigênio recuperado em direção à saturação
+
+    // 2. Carga contínua diária de 50.000 kg/dia mantém depressão constante
+    let doCont = 6.55;
+    let bodCont = 0;
+    const sewageEnv = { ...BASELINE, sewage: 50000 };
+    for (let day = 0; day < 10; day += 0.5) {
+      const step = integrateOxygenKinetics(doCont, bodCont, sewageEnv, 'frades', 0.5, 15, 'continuous_daily');
+      doCont = step.nextDo;
+      bodCont = step.nextBod;
+    }
+    expect(doCont).toBeLessThan(1.0); // continua em hipóxia/anóxia severa contínua
   });
 
   it('gera metadados científicos rastreáveis com selo epistemológico', () => {

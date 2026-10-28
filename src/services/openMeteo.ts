@@ -1,17 +1,33 @@
+import { BTS_SECTORS } from '../simulation/config';
+import type { BtsSectorId } from '../simulation/types';
 import type { DatasetProvenance, MarineMeteoPoint } from './types';
 
 /**
  * Cliente da Open-Meteo Marine API.
  *
- * Coordenadas de entrada da Baía de Todos-os-Santos (Canal de Salvador / Barra):
- * Latitude: -12.97°, Longitude: -38.50°.
+ * Coordenadas por compartimento da Baía de Todos-os-Santos:
+ * - Barra / Entrada Oceânica (padrão hidrodinâmico): Lat -12.97°, Lon -38.50°
+ * - Frades / Baía Central: Lat -12.85°, Lon -38.55°
+ * - Paraguaçu / Fundo da Baía: Lat -12.75°, Lon -38.85°
  *
- * Resolução do modelo oceânico global: ~8 km (dados hidrodinâmicos modelados).
- * Nota de proveniência: campos contextuais de maré/onda; não substituem hidrodinâmica fina local.
+ * Resolução do modelo oceânico global: ~5 a 8 km (dados hidrodinâmicos modelados).
+ * Nota de proveniência: campos contextuais de maré/onda; não substituem hidrodinâmica fina local
+ * para transporte advectivo em canais estuarinos estreitos.
  */
 
-const BTS_METEO_LATITUDE = -12.97;
-const BTS_METEO_LONGITUDE = -38.50;
+export function getMeteoCoordinates(sectorId: BtsSectorId = 'barra'): { latitude: number; longitude: number } {
+  const sector = BTS_SECTORS.find((s) => s.id === sectorId);
+  return sector?.coordinates ?? { latitude: -12.97, longitude: -38.50 };
+}
+
+function computeSimpleHash(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
 
 const OPEN_METEO_PROVENANCE_BASE: Omit<DatasetProvenance, 'validTimeStartUtc' | 'validTimeEndUtc' | 'retrievedAtUtc' | 'isCachedFallback'> = {
   sourceName: 'Open-Meteo Marine Weather API',
@@ -20,7 +36,7 @@ const OPEN_METEO_PROVENANCE_BASE: Omit<DatasetProvenance, 'validTimeStartUtc' | 
   datasetVersion: 'v1 Global 5km/8km Models (Copernicus/MeteoFrance/ECMWF)',
   epistemicClass: 'Produto de Modelo',
   license: 'Creative Commons Attribution 4.0 International (CC BY 4.0)',
-  citation: 'Open-Meteo Marine Weather API under CC BY 4.0 license.',
+  citation: 'Open-Meteo Marine Weather API under CC BY 4.0 license. Global numerical model product; not in-situ tide gauge.',
 };
 
 export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
@@ -31,7 +47,7 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
     currentDirectionDeg: 145,
     seaLevelHeightM: 0.45,
     seaSurfaceTemperatureDegC: 28.2,
-    gridCell: { latitude: BTS_METEO_LATITUDE, longitude: BTS_METEO_LONGITUDE },
+    gridCell: { latitude: -12.97, longitude: -38.50 },
     hourlyUnits: {
       wave_height: 'm',
       ocean_current_velocity: 'm/s',
@@ -45,6 +61,7 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
       validTimeEndUtc: '2024-03-02T00:00:00Z',
       retrievedAtUtc: '2024-03-01T06:00:00Z',
       isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
       fallbackNote: 'Snapshot meteorológico de contingência marinho (Salvador/Barra). Não representa a previsão horária do dia atual.',
     },
   },
@@ -55,7 +72,7 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
     currentDirectionDeg: 160,
     seaLevelHeightM: 0.92,
     seaSurfaceTemperatureDegC: 28.5,
-    gridCell: { latitude: BTS_METEO_LATITUDE, longitude: BTS_METEO_LONGITUDE },
+    gridCell: { latitude: -12.97, longitude: -38.50 },
     hourlyUnits: {
       wave_height: 'm',
       ocean_current_velocity: 'm/s',
@@ -69,6 +86,7 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
       validTimeEndUtc: '2024-03-02T00:00:00Z',
       retrievedAtUtc: '2024-03-01T06:00:00Z',
       isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
       fallbackNote: 'Snapshot meteorológico de contingência marinho (Salvador/Barra). Não representa a previsão horária do dia atual.',
     },
   },
@@ -79,7 +97,7 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
     currentDirectionDeg: 135,
     seaLevelHeightM: 0.12,
     seaSurfaceTemperatureDegC: 28.1,
-    gridCell: { latitude: BTS_METEO_LATITUDE, longitude: BTS_METEO_LONGITUDE },
+    gridCell: { latitude: -12.97, longitude: -38.50 },
     hourlyUnits: {
       wave_height: 'm',
       ocean_current_velocity: 'm/s',
@@ -93,16 +111,18 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
       validTimeEndUtc: '2024-03-02T00:00:00Z',
       retrievedAtUtc: '2024-03-01T06:00:00Z',
       isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
       fallbackNote: 'Snapshot meteorológico de contingência marinho (Salvador/Barra). Não representa a previsão horária do dia atual.',
     },
   },
 ];
 
-export async function fetchBtsMarineMeteo(): Promise<MarineMeteoPoint[]> {
+export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Promise<MarineMeteoPoint[]> {
+  const coords = getMeteoCoordinates(sectorId);
   const url = new URL('https://marine-api.open-meteo.com/v1/marine');
   url.search = new URLSearchParams({
-    latitude: BTS_METEO_LATITUDE.toString(),
-    longitude: BTS_METEO_LONGITUDE.toString(),
+    latitude: coords.latitude.toString(),
+    longitude: coords.longitude.toString(),
     hourly: 'wave_height,sea_surface_temperature,ocean_current_velocity,ocean_current_direction,sea_level_height_msl',
     forecast_days: '1',
     timezone: 'UTC',
@@ -125,7 +145,9 @@ export async function fetchBtsMarineMeteo(): Promise<MarineMeteoPoint[]> {
       return BTS_METEO_FALLBACK_SNAPSHOT;
     }
 
-    const data = await response.json();
+    const rawText = await response.text();
+    const responseHash = computeSimpleHash(rawText);
+    const data = JSON.parse(rawText);
     const hourly = data?.hourly;
     const units = data?.hourly_units ?? {};
 
@@ -136,8 +158,8 @@ export async function fetchBtsMarineMeteo(): Promise<MarineMeteoPoint[]> {
     // Se a unidade de velocidade for km/h, converter para m/s dividindo por 3.6
     const velocityIsKmH = units.ocean_current_velocity === 'km/h';
     const gridCell = {
-      latitude: typeof data.latitude === 'number' ? data.latitude : BTS_METEO_LATITUDE,
-      longitude: typeof data.longitude === 'number' ? data.longitude : BTS_METEO_LONGITUDE,
+      latitude: typeof data.latitude === 'number' ? data.latitude : coords.latitude,
+      longitude: typeof data.longitude === 'number' ? data.longitude : coords.longitude,
     };
 
     const retrievedAt = new Date().toISOString();
@@ -150,18 +172,18 @@ export async function fetchBtsMarineMeteo(): Promise<MarineMeteoPoint[]> {
     for (let i = 0; i < len; i += 1) {
       const rawVelocity = hourly.ocean_current_velocity?.[i];
       let velocityMs: number | null = null;
-      if (typeof rawVelocity === 'number') {
+      if (typeof rawVelocity === 'number' && Number.isFinite(rawVelocity)) {
         velocityMs = velocityIsKmH ? parseFloat((rawVelocity / 3.6).toFixed(3)) : parseFloat(rawVelocity.toFixed(3));
       }
 
       points.push({
         timestampUtc: hourly.time[i],
-        // Preserva null quando o modelo não tiver o dado (sem substituição por números arbitrários)
-        waveHeightM: typeof hourly.wave_height?.[i] === 'number' ? hourly.wave_height[i] : null,
+        // Preserva null quando o modelo não tiver o dado (sem substituição por números inventados)
+        waveHeightM: typeof hourly.wave_height?.[i] === 'number' && Number.isFinite(hourly.wave_height[i]) ? hourly.wave_height[i] : null,
         currentVelocityMs: velocityMs,
-        currentDirectionDeg: typeof hourly.ocean_current_direction?.[i] === 'number' ? hourly.ocean_current_direction[i] : null,
-        seaLevelHeightM: typeof hourly.sea_level_height_msl?.[i] === 'number' ? hourly.sea_level_height_msl[i] : null,
-        seaSurfaceTemperatureDegC: typeof hourly.sea_surface_temperature?.[i] === 'number' ? hourly.sea_surface_temperature[i] : null,
+        currentDirectionDeg: typeof hourly.ocean_current_direction?.[i] === 'number' && Number.isFinite(hourly.ocean_current_direction[i]) ? hourly.ocean_current_direction[i] : null,
+        seaLevelHeightM: typeof hourly.sea_level_height_msl?.[i] === 'number' && Number.isFinite(hourly.sea_level_height_msl[i]) ? hourly.sea_level_height_msl[i] : null,
+        seaSurfaceTemperatureDegC: typeof hourly.sea_surface_temperature?.[i] === 'number' && Number.isFinite(hourly.sea_surface_temperature[i]) ? hourly.sea_surface_temperature[i] : null,
         hourlyUnits: {
           ...units,
           ocean_current_velocity: 'm/s',
@@ -173,7 +195,9 @@ export async function fetchBtsMarineMeteo(): Promise<MarineMeteoPoint[]> {
           validTimeEndUtc: validEnd,
           retrievedAtUtc: retrievedAt,
           queryUrl: url.toString(),
+          responseHash,
           isCachedFallback: false,
+          fetchStatus: 'online_valid',
         },
       });
     }

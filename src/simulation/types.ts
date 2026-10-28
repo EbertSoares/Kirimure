@@ -62,6 +62,7 @@ export interface BtsSectorDefinition {
   depthMeters: number;
   meanWindSpeed: number;
   mixingVolumeM3: number;
+  coordinates: { latitude: number; longitude: number };
 }
 
 export interface Environment {
@@ -150,6 +151,10 @@ export interface SimulationState {
   biochemicalOxygenDemand: number;
   /** Compartimento oceanográfico ativo na Baía de Todos-os-Santos. */
   sector: BtsSectorId;
+  /** Regime de lançamento de efluente: carga diária contínua ou pulso de massa instantâneo. */
+  sewageDischargeMode: 'continuous' | 'pulse';
+  /** Provedor ou referência da condição inicial (ex: 'NOAA_CRW_OBSERVED' ou 'PADRAO_CALIBRADO'). */
+  initialConditionSource?: string;
   overall: number;
   elapsedDays: number;
   speed: SimulationSpeed;

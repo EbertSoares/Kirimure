@@ -5,10 +5,10 @@ import { EcosystemRadar } from './EcosystemRadar';
 import { NormativeGaugeBar } from './NormativeGaugeBar';
 import { TrophicPyramid } from './TrophicPyramid';
 import { NicheToleranceCurve } from './NicheToleranceCurve';
-import { FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
+import { BTS_SECTORS, FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
 import { calculateAlgae, calculateFishPressures, calculateTrophicBalance } from '../simulation/model';
-import { calculateCarbonateSystem } from '../simulation/carbonate';
-import { calculateOilFateBudget, BTS_MICROPLASTICS_SURVEY } from '../simulation/contaminants';
+import { calculateCarbonateSystem, calculateRespirationPhImpact } from '../simulation/carbonate';
+import { calculateOilFateBudget, evaluateOilEcotoxicity, BTS_MICROPLASTICS_SURVEY } from '../simulation/contaminants';
 import { evaluateChallenge, type ChallengeProgress } from '../simulation/challenges';
 import { getMessageById } from '../simulation/messages';
 import { MISSION_01_OXYGEN } from '../simulation/missions';
@@ -89,6 +89,7 @@ interface SciencePanelProps {
   tab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
   oceanData?: OceanDataState;
+  onApplySatelliteConditions?: (temperature: number) => void;
   missionState?: MissionState | null;
   onStartMission?: (id: string) => void;
   onMissionStepChange?: (step: MissionStepId) => void;
@@ -108,6 +109,7 @@ export function SciencePanel({
   tab,
   onTabChange,
   oceanData,
+  onApplySatelliteConditions,
   missionState,
   onStartMission,
   onMissionStepChange,
@@ -121,8 +123,20 @@ export function SciencePanel({
   const before = pastPoint(state, 30);
   const coralChip = topPressures(state, 'coral');
   const eventLog = [...state.events].reverse().slice(0, 8);
-  const carbonate = calculateCarbonateSystem(state.env.ph, 2350, state.env.temperature);
+
+  const sector = BTS_SECTORS.find((s) => s.id === state.sector) ?? BTS_SECTORS[0];
+  const sectorSalinity = sector.baselineSalinity;
+  const scaledAlkalinity = 2350 * (sectorSalinity / 35.0);
+  const respirationImpact = calculateRespirationPhImpact(
+    state.env.ph,
+    state.biochemicalOxygenDemand ?? 0,
+    scaledAlkalinity,
+    state.env.temperature,
+    sectorSalinity,
+  );
+  const carbonate = respirationImpact.carbonateSystem;
   const oilBudget = state.env.oil > 0 ? calculateOilFateBudget(state.env.oil, state.sector, state.elapsedDays) : null;
+  const oilEcotox = oilBudget ? evaluateOilEcotoxicity(oilBudget.dissolvedPahConcentrationUgL) : null;
   const isIntro = message.id === 'intro';
   const messageStatus = message.tone === 'alert'
     ? 'Atenção'
@@ -247,7 +261,10 @@ export function SciencePanel({
                 <h3 style={{ margin: 0 }}>Sistema Carbonato & Aragonita</h3>
                 <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
               </div>
-              <ul style={{ marginTop: '12px' }}>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 10px' }}>
+                Setor: <strong>{sector.label}</strong> · Salinidade Local: <strong>{sectorSalinity} PSU</strong> · TA: <strong>{carbonate.totalAlkalinityUmolKg.toFixed(0)} µmol/kg</strong>
+              </p>
+              <ul style={{ marginTop: '8px' }}>
                 <li>
                   <span>Saturação de Aragonita (Ωarag)</span>
                   <strong className={carbonate.omegaAragonite >= 3.0 ? 'healthy' : carbonate.omegaAragonite >= 2.0 ? 'watch' : 'critical'}>
@@ -262,6 +279,12 @@ export function SciencePanel({
                   <span>Carbono Inorgânico Total (DIC)</span>
                   <span>{carbonate.dissolvedInorganicCarbonUmolKg} µmol/kg</span>
                 </li>
+                {state.biochemicalOxygenDemand > 0 && (
+                  <li>
+                    <span>Acréscimo de DIC por Respiração (DBO)</span>
+                    <span style={{ color: '#ffd052' }}>+{((state.biochemicalOxygenDemand / 32) * 1000 * 0.98).toFixed(1)} µmol/kg</span>
+                  </li>
+                )}
                 <li>
                   <span>Condição de Calcificação</span>
                   <em className={carbonate.omegaAragonite >= 3.0 ? 'up' : 'down'}>
@@ -270,13 +293,13 @@ export function SciencePanel({
                       : carbonate.calcificationStatus === 'adequate'
                         ? 'Adequada para recifes'
                         : carbonate.calcificationStatus === 'marginal'
-                          ? 'Marginal (estresse)'
+                          ? 'Marginal (estresse moderado)'
                           : 'Severo / Risco de corrosão'}
                   </em>
                 </li>
               </ul>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
-                Equilíbrio termodinâmico (Lueker et al., 2000 / Mucci, 1983). Recifes de <em>Siderastrea</em> e <em>Mussismilia</em> demandam Ωarag &gt; 3,0 para biomineralização sustentada.
+                Equilíbrio termodinâmico (Lueker et al., 2000 / Mucci, 1983; compatível com formulações CO2SYS/PyCO2SYS). Acoplado à salinidade do setor e ao consumo de oxigênio por respiração microbiana.
               </p>
             </article>
 
@@ -301,17 +324,29 @@ export function SciencePanel({
                       {oilBudget.dissolvedPahConcentrationUgL.toFixed(3)} µg/L
                     </strong>
                   </li>
+                  {oilEcotox && (
+                    <li>
+                      <span>Inibição Subletal de Regeneração (May et al., 2020)</span>
+                      <strong className={oilEcotox.tissueRegenerationInhibitionPercent >= 50 ? 'critical' : oilEcotox.tissueRegenerationInhibitionPercent >= 20 ? 'watch' : 'healthy'}>
+                        {oilEcotox.tissueRegenerationInhibitionPercent}% (Risco pólipos: {oilEcotox.polypRetractionRisk})
+                      </strong>
+                    </li>
+                  )}
                   <li>
                     <span>4. Óleo Sedimentado no Fundo</span>
                     <strong>{oilBudget.sedimentedKg.toLocaleString('pt-BR')} kg</strong>
                   </li>
                   <li>
-                    <span>Evaporação & Exportação</span>
-                    <span>{oilBudget.evaporatedExportedKg.toLocaleString('pt-BR')} kg</span>
+                    <span>Evaporação Atmosférica</span>
+                    <span>{oilBudget.evaporatedKg.toLocaleString('pt-BR')} kg</span>
+                  </li>
+                  <li>
+                    <span>Exportação Hidrodinâmica Oceânica</span>
+                    <span>{oilBudget.exportedKg.toLocaleString('pt-BR')} kg</span>
                   </li>
                 </ul>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
-                  Partição em compartimentos físicos e toxicocinética de May et al. (2020): EC50 de regeneração tecidual em 10 µg/L tPAH50 e retração de pólipos em 27 µg/L.
+                  Partição física em compartimentos e bioensaio subletal controlado de 96h (May et al., 2020: EC50 tecidual 10 µg/L). Ressalva científica: a concentração de HPAs é uma saída exploratória; no modelo didático, a resposta biológica sintetiza estresse de habitat, não uma curva letal aguda descalibrada de campo.
                 </p>
               </article>
             )}
@@ -872,21 +907,37 @@ export function SciencePanel({
               }}>
                 <strong>Modo Offline / Snapshot de Contingência Histórico:</strong>
                 <p style={{ margin: '4px 0 0' }}>
-                  A rede remota externa está inacessível no momento. O laboratório exibe os snapshots históricos calibrados
+                  A rede remota externa está inacessível ou simulada. O laboratório exibe os snapshots históricos calibrados
                   do evento de branqueamento El Niño de março/abril de 2024 para fins de estudo comparativo.
                 </p>
               </div>
             )}
 
-            {/* NOAA Coral Reef Watch Card */}
+            {/* Categoria 1: PRODUTO DE SATÉLITE - NOAA Coral Reef Watch */}
             <article className="compare-card" style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>NOAA Coral Reef Watch (CRW v3.1 5km)</h3>
+                <h3 style={{ margin: 0 }}>1. Produto de Satélite: NOAA Coral Reef Watch</h3>
                 <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
               </div>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
-                Pixel Central BTS (-12.85°, -38.55° · Ilha dos Frades / Itaparica) · Dataset <code>NOAA_DHW</code> CoastWatch ERDDAP
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 8px' }}>
+                Pixel: {sector.coordinates.latitude.toFixed(2)}°, {sector.coordinates.longitude.toFixed(2)}° ({sector.label}) · Dataset <code>NOAA_DHW</code> CoastWatch ERDDAP
               </p>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <span style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: oceanData?.noaaStatus.state === 'success' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                  color: oceanData?.noaaStatus.state === 'success' ? '#4ade80' : '#fbbf24',
+                }}>
+                  {oceanData?.noaaStatus.state === 'success' ? '● Ao Vivo via ERDDAP' : '● Snapshot Histórico (Mar/Abr 2024)'}
+                </span>
+                {oceanData?.latestCrw?.provenance.responseHash && (
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', alignSelf: 'center' }}>
+                    Hash: <code>{oceanData.latestCrw.provenance.responseHash}</code>
+                  </span>
+                )}
+              </div>
 
               {oceanData?.latestCrw ? (
                 <>
@@ -897,35 +948,61 @@ export function SciencePanel({
                     </li>
                     <li>
                       <span>Anomalia de SST Oficial (CRW_SSTANOMALY)</span>
-                      <strong className={oceanData.latestCrw.sstAnomalyDegC > 1.0 ? 'critical' : oceanData.latestCrw.sstAnomalyDegC > 0 ? 'watch' : 'healthy'}>
-                        {oceanData.latestCrw.sstAnomalyDegC > 0 ? '+' : ''}{oceanData.latestCrw.sstAnomalyDegC.toFixed(2)} °C
+                      <strong className={oceanData.latestCrw.sstAnomalyDegC !== null && oceanData.latestCrw.sstAnomalyDegC > 1.0 ? 'critical' : oceanData.latestCrw.sstAnomalyDegC !== null && oceanData.latestCrw.sstAnomalyDegC > 0 ? 'watch' : 'healthy'}>
+                        {oceanData.latestCrw.sstAnomalyDegC !== null ? `${oceanData.latestCrw.sstAnomalyDegC > 0 ? '+' : ''}${oceanData.latestCrw.sstAnomalyDegC.toFixed(2)} °C` : 'Ausente'}
                       </strong>
                     </li>
                     <li>
-                      <span>HotSpot Térmico (acima da MMM de 28 °C)</span>
-                      <strong>{oceanData.latestCrw.hotSpotDegC.toFixed(1)} °C</strong>
+                      <span>HotSpot Térmico Oficial (CRW_HOTSPOT)</span>
+                      <strong>{oceanData.latestCrw.hotSpotDegC !== null ? `${oceanData.latestCrw.hotSpotDegC.toFixed(1)} °C` : 'Ausente'}</strong>
                     </li>
                     <li>
-                      <span>Degree Heating Weeks (DHW Satélite)</span>
-                      <strong className={oceanData.latestCrw.degreeHeatingWeeks >= 8 ? 'critical' : oceanData.latestCrw.degreeHeatingWeeks >= 4 ? 'watch' : 'healthy'}>
-                        {oceanData.latestCrw.degreeHeatingWeeks.toFixed(1)} °C-semana
+                      <span>Degree Heating Weeks Oficial (CRW_DHW)</span>
+                      <strong className={oceanData.latestCrw.degreeHeatingWeeks !== null && oceanData.latestCrw.degreeHeatingWeeks >= 8 ? 'critical' : oceanData.latestCrw.degreeHeatingWeeks !== null && oceanData.latestCrw.degreeHeatingWeeks >= 4 ? 'watch' : 'healthy'}>
+                        {oceanData.latestCrw.degreeHeatingWeeks !== null ? `${oceanData.latestCrw.degreeHeatingWeeks.toFixed(1)} °C-semana` : 'Ausente'}
                       </strong>
                     </li>
                     <li>
                       <span>Nível Operacional de Alerta (BAA)</span>
                       <em>
                         {oceanData.latestCrw.bleachingAlertLevel === 4
-                          ? 'Alerta 2 (Mortalidade em espécies vulneráveis)'
+                          ? 'Alerta 2 (Mortalidade de espécies vulneráveis provável)'
                           : oceanData.latestCrw.bleachingAlertLevel === 3
                             ? 'Alerta 1 (Risco significativo de branqueamento)'
                             : oceanData.latestCrw.bleachingAlertLevel === 2
                               ? 'Aviso Térmico (Warning)'
                               : oceanData.latestCrw.bleachingAlertLevel === 1
                                 ? 'Vigilância (Watch)'
-                                : 'Sem Estresse Térmico'}
+                                : 'Sem Estresse Térmico (Nível 0)'}
                       </em>
                     </li>
                   </ul>
+
+                  {onApplySatelliteConditions && (
+                    <button
+                      type="button"
+                      onClick={() => onApplySatelliteConditions(oceanData.latestCrw!.seaSurfaceTemperatureDegC)}
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(56, 189, 248, 0.15))',
+                        border: '1px solid rgba(56, 189, 248, 0.45)',
+                        color: '#e0f2fe',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Icon name="check" />
+                      <span>Adotar SST Observada ({oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como Ponto de Partida do Cenário</span>
+                    </button>
+                  )}
 
                   {/* Comparativo Didático vs Real */}
                   <div style={{ marginTop: '12px', background: 'rgba(0,0,0,0.25)', padding: '10px', borderRadius: '6px', fontSize: '11px', lineHeight: 1.5 }}>
@@ -933,13 +1010,16 @@ export function SciencePanel({
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
                       <div style={{ borderLeft: '2px solid #38bdf8', paddingLeft: '8px' }}>
                         <span style={{ color: 'rgba(255,255,255,0.6)' }}>Satélite NOAA CRW:</span><br />
-                        SST: {oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C · DHW: {oceanData.latestCrw.degreeHeatingWeeks.toFixed(1)} °C-sem
+                        SST: {oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C · DHW: {oceanData.latestCrw.degreeHeatingWeeks !== null ? `${oceanData.latestCrw.degreeHeatingWeeks.toFixed(1)} °C-sem` : '—'}
                       </div>
                       <div style={{ borderLeft: '2px solid #a855f7', paddingLeft: '8px' }}>
-                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>Cenário Simulador Aluno:</span><br />
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>Cenário Simulado Experimental:</span><br />
                         SST: {state.env.temperature.toFixed(1)} °C · DHW: {state.degreeHeatingWeeks.toFixed(1)} °C-sem
                       </div>
                     </div>
+                    <p style={{ margin: '8px 0 0', color: 'rgba(255,255,255,0.5)', fontSize: '10.5px' }}>
+                      Nota: O BAA do NOAA é um índice operacional de satélite em grade de 5 km; não é medição de campo in situ nem equivale à mortalidade direta de corais. Ao alterar os controles da bancada, o Kirimurê calcula o estresse experimental sem sobrescrever o registro de satélite.
+                    </p>
                   </div>
                 </>
               ) : (
@@ -947,50 +1027,97 @@ export function SciencePanel({
               )}
             </article>
 
-            {/* Open-Meteo Marine Card */}
+            {/* Categoria 2: PRODUTO DE MODELO NUMÉRICO - Open-Meteo Marine */}
             <article className="compare-card" style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Open-Meteo Marine (Previsão Costeira)</h3>
+                <h3 style={{ margin: 0 }}>2. Produto de Modelo Numérico: Open-Meteo Marine</h3>
                 <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
               </div>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
-                Barra / Canal de Salvador (-12.97°, -38.50°) · Grade nominal 8 km (Copernicus/ECMWF)
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 8px' }}>
+                Canal de Entrada da BTS (-12.97°, -38.50°) · Grade nominal 8 km (Copernicus / ECMWF)
               </p>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <span style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: oceanData?.meteoStatus.state === 'success' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                  color: oceanData?.meteoStatus.state === 'success' ? '#4ade80' : '#fbbf24',
+                }}>
+                  {oceanData?.meteoStatus.state === 'success' ? '● Modelo Global em Tempo Real' : '● Snapshot de Contingência'}
+                </span>
+              </div>
 
               {oceanData?.latestMeteo ? (
-                <ul>
-                  <li>
-                    <span>Altura Significativa de Ondas (Hs)</span>
-                    <strong>{oceanData.latestMeteo.waveHeightM !== null ? `${oceanData.latestMeteo.waveHeightM.toFixed(1)} m` : 'Dado não disponível'}</strong>
-                  </li>
-                  <li>
-                    <span>Velocidade da Corrente Marinha</span>
-                    <strong>{oceanData.latestMeteo.currentVelocityMs !== null ? `${oceanData.latestMeteo.currentVelocityMs.toFixed(2)} m/s` : 'Dado não disponível'}</strong>
-                  </li>
-                  {oceanData.latestMeteo.currentDirectionDeg !== null && (
+                <>
+                  <ul>
                     <li>
-                      <span>Direção da Corrente</span>
-                      <span>{oceanData.latestMeteo.currentDirectionDeg}° (azimute náutico)</span>
+                      <span>Altura Significativa de Ondas (Hs)</span>
+                      <strong>{oceanData.latestMeteo.waveHeightM !== null ? `${oceanData.latestMeteo.waveHeightM.toFixed(1)} m` : 'Dado não disponível'}</strong>
                     </li>
-                  )}
-                  <li>
-                    <span>Nível do Mar Modelado (MSL)</span>
-                    <strong>{oceanData.latestMeteo.seaLevelHeightM !== null ? `${oceanData.latestMeteo.seaLevelHeightM.toFixed(2)} m` : 'Dado não disponível'}</strong>
-                  </li>
-                  <li>
-                    <span>Temperatura de Superfície (Meteo)</span>
-                    <strong>{oceanData.latestMeteo.seaSurfaceTemperatureDegC !== null ? `${oceanData.latestMeteo.seaSurfaceTemperatureDegC.toFixed(1)} °C` : 'Dado não disponível'}</strong>
-                  </li>
-                </ul>
+                    <li>
+                      <span>Velocidade da Corrente Marinha</span>
+                      <strong>{oceanData.latestMeteo.currentVelocityMs !== null ? `${oceanData.latestMeteo.currentVelocityMs.toFixed(2)} m/s` : 'Dado não disponível'}</strong>
+                    </li>
+                    {oceanData.latestMeteo.currentDirectionDeg !== null && (
+                      <li>
+                        <span>Direção da Corrente</span>
+                        <span>{oceanData.latestMeteo.currentDirectionDeg}° (azimute náutico)</span>
+                      </li>
+                    )}
+                    <li>
+                      <span>Nível do Mar Médio (MSL)</span>
+                      <strong>{oceanData.latestMeteo.seaLevelHeightM !== null ? `${oceanData.latestMeteo.seaLevelHeightM.toFixed(2)} m` : 'Dado não disponível'}</strong>
+                    </li>
+                    <li>
+                      <span>Temperatura de Superfície (Meteo)</span>
+                      <strong>{oceanData.latestMeteo.seaSurfaceTemperatureDegC !== null ? `${oceanData.latestMeteo.seaSurfaceTemperatureDegC.toFixed(1)} °C` : 'Dado não disponível'}</strong>
+                    </li>
+                  </ul>
+                  <p style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.5)', marginTop: '8px', lineHeight: 1.4 }}>
+                    Ressalva Hidrodinâmica: O modelo oceânico global (~8 km) provê forçantes de contorno costeiras. O transporte de poluentes por canais internos rasos exige modelagem hidrodinâmica estuarina de alta resolução com validação local.
+                  </p>
+                </>
               ) : (
                 <p>Nenhum dado meteorológico disponível no momento.</p>
               )}
             </article>
 
-            {/* Microplásticos In Situ na BTS */}
+            {/* Categoria 3: ESTIMATIVAS DA SIMULAÇÃO (BALANÇO CINÉTICO ACOPLADO) */}
+            <article className="compare-card" style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>3. Estimativas da Simulação: Balanços Físico-Químicos</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Padrão Operacional</span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
+                Balanços de massa acoplados resolvidos deterministicamente para o setor {sector.label}
+              </p>
+              <ul>
+                <li>
+                  <span>Solubilidade Termodinâmica Ar-Mar (Weiss, 1970)</span>
+                  <strong>{(6.55).toFixed(2)} mg O₂/L (a 26,8 °C e 35 PSU)</strong>
+                </li>
+                <li>
+                  <span>Oxigênio Dissolvido Cinético Atual</span>
+                  <strong className={state.dissolvedOxygen < 2.0 ? 'critical' : state.dissolvedOxygen < 5.0 ? 'watch' : 'healthy'}>
+                    {state.dissolvedOxygen.toFixed(2)} mg/L
+                  </strong>
+                </li>
+                <li>
+                  <span>Regime de Lançamento de DBO</span>
+                  <span>{state.sewageDischargeMode === 'pulse' ? 'Pulso Único (Massa Total)' : 'Carga Contínua (kg DBO₅/dia)'}</span>
+                </li>
+                <li>
+                  <span>Saturação de Aragonita Local (Ωarag)</span>
+                  <span>{carbonate.omegaAragonite.toFixed(2)} ({carbonate.calcificationStatus})</span>
+                </li>
+              </ul>
+            </article>
+
+            {/* Categoria 4: OBSERVAÇÕES EMPÍRICAS DE CAMPO - Microplásticos In Situ na BTS */}
             <article className="compare-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Microplásticos nos Estuários da BTS</h3>
+                <h3 style={{ margin: 0 }}>4. Observação de Campo: Microplásticos nos Estuários da BTS</h3>
                 <span className="epistemological-badge" style={{ fontSize: '10px' }}>Dado Local BTS</span>
               </div>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
@@ -1010,7 +1137,7 @@ export function SciencePanel({
                 ))}
               </ul>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
-                Aporte fluvial anual estimado em 3,88 trilhões de partículas. Valores mantidos em itens/m³ para evitar falsa equivalência de biomassa/massa sem granulometria e densidade polimérica.
+                Aporte fluvial anual estimado em 3,88 trilhões de partículas. Valores expressos em itens/m³ para evitar falsa equivalência de biomassa/massa sem distribuição granulométrica e densidade polimérica.
               </p>
             </article>
           </section>

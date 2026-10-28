@@ -34,6 +34,14 @@ describe('módulo do sistema carbonato marinho e saturação de aragonita', () =
     expect(brackishCa).toBeCloseTo(0.00514, 4);
   });
 
+  it('responde à salinidade do compartimento: estuário do Paraguaçu (22 PSU) vs canal da Barra (36,5 PSU)', () => {
+    const paraguacu = calculateCarbonateSystem(8.10, 2350 * (22 / 35), 27.2, 22.0);
+    const barra = calculateCarbonateSystem(8.10, 2350 * (36.5 / 35), 26.4, 36.5);
+
+    // No estuário, a diluição de cálcio livre e alcalinidade deprime omega de aragonita
+    expect(paraguacu.omegaAragonite).toBeLessThan(barra.omegaAragonite);
+  });
+
   it('conecta respiração de DBO com liberação estequiométrica de CO2 e redução de pH', () => {
     const result = calculateRespirationPhImpact(8.10, 5.0, 2350, 26.8, 35.0);
     expect(result.effectivePh).toBeLessThanOrEqual(8.10);

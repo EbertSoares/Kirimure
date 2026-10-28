@@ -15,19 +15,21 @@ export interface DatasetProvenance {
   responseHash?: string;
   isCachedFallback: boolean;
   fallbackNote?: string;
+  fetchStatus?: 'online_valid' | 'fallback_cached' | 'network_error' | 'invalid_response';
 }
 
 export interface ThermalForcingPoint {
   timestampUtc: string;
   seaSurfaceTemperatureDegC: number;
-  sstAnomalyDegC: number;
-  hotSpotDegC: number;
-  degreeHeatingWeeks: number;
+  sstAnomalyDegC: number | null;
+  hotSpotDegC: number | null;
+  degreeHeatingWeeks: number | null;
   /** Nível ordinal de estresse térmico NOAA (0 = Nenhum, 1 = Atenção/Watch, 2 = Aviso/Warning, 3 = Alerta 1, 4 = Alerta 2). */
-  bleachingAlertLevel: number;
+  bleachingAlertLevel: number | null;
   /** Campo mantido para retrocompatibilidade semântica. */
-  bleachingAlertArea?: number;
-  bleachingAlertMax7d?: number;
+  bleachingAlertArea?: number | null;
+  bleachingAlertMax7d?: number | null;
+  gridCell?: { latitude: number; longitude: number };
   provenance: DatasetProvenance;
 }
 

@@ -6,9 +6,10 @@ import { IndicatorModal, type IndicatorDetailId } from './components/IndicatorMo
 import { SciencePanel, type PanelTab } from './components/SciencePanel';
 import { TimelineBar } from './components/TimelineBar';
 import { useOceanData } from './hooks/useOceanData';
-import { BASELINE, FACTOR_ORDER, isMassLoadId, ITEM_DEFINITIONS } from './simulation/config';
+import { BASELINE, BTS_SECTORS, FACTOR_ORDER, isMassLoadId, ITEM_DEFINITIONS } from './simulation/config';
 import { CHALLENGES, evaluateChallenge } from './simulation/challenges';
 import { MISSION_01_OXYGEN } from './simulation/missions';
+import { calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL } from './simulation/oxygen';
 import {
   buildTargets,
   createInitialState,
@@ -21,7 +22,7 @@ import {
 } from './simulation/model';
 import { evaluateMessages, getMessage } from './simulation/messages';
 import { formatSimulatedTime } from './simulation/time';
-import type { Environment, ItemId, MissionState, MissionStepId, SimulationSpeed } from './simulation/types';
+import type { BtsSectorId, Environment, ItemId, MissionState, MissionStepId, SimulationSpeed } from './simulation/types';
 
 type AppScreen = 'map' | 'simulation';
 
@@ -94,14 +95,22 @@ interface FactorControlProps {
   active: boolean;
   value: number;
   onChange: (value: number) => void;
+  sewageDischargeMode?: 'continuous' | 'pulse';
 }
 
-function FactorControl({ id, active, value, onChange }: FactorControlProps) {
+function FactorControl({ id, active, value, onChange, sewageDischargeMode = 'continuous' }: FactorControlProps) {
   const item = ITEM_DEFINITIONS[id];
   const massLoad = isMassLoadId(id);
   const massOptions = item.massOptionsKg;
+  const qualifier = id === 'sewage'
+    ? (sewageDischargeMode === 'pulse' ? 'pulso' : 'DBO₅/d')
+    : item.massQualifier;
+  const shortLabel = id === 'sewage'
+    ? (sewageDischargeMode === 'pulse' ? 'Pulso DBO₅' : 'Aporte DBO₅/dia')
+    : item.shortLabel;
+
   const displayed = massLoad
-    ? formatMassParts(value, item.massQualifier)
+    ? formatMassParts(value, qualifier)
     : { value: formatValue(id, value), unit: item.unit };
   const sliderValue = massOptions ? Math.max(0, massOptions.indexOf(value)) : value;
   const sliderMin = massOptions ? 0 : item.min;
@@ -120,7 +129,7 @@ function FactorControl({ id, active, value, onChange }: FactorControlProps) {
     >
       <header className="factor-head">
         <span className="factor-icon"><Icon name={item.icon as 'bottle'} /></span>
-        <label className="factor-name" htmlFor={`factor-${id}`}>{item.shortLabel}</label>
+        <label className="factor-name" htmlFor={`factor-${id}`}>{shortLabel}</label>
         <output className="factor-value" htmlFor={`factor-${id}`}>
           <strong>{displayed.value}</strong>
           {displayed.unit && <small>{displayed.unit}</small>}
@@ -150,7 +159,7 @@ function FactorControl({ id, active, value, onChange }: FactorControlProps) {
       <footer className={`factor-meta ${massLoad ? 'mass-meta' : ''}`}>
         {massLoad ? (
           <small title="Faixa sazonal estimada, não medição de campo">
-            Recebido · 30 d: {formatReceivedRange(value, item.massQualifier)}
+            Recebido · 30 d: {formatReceivedRange(value, qualifier)}
           </small>
         ) : (
           <>
@@ -169,6 +178,8 @@ interface TeachingConsoleProps {
   onControlsChange: (controls: Environment) => void;
   onApply: (controls: Environment) => void;
   missionFocusFactor?: ItemId | null;
+  sewageDischargeMode?: 'continuous' | 'pulse';
+  onSewageDischargeModeChange?: (mode: 'continuous' | 'pulse') => void;
 }
 
 /**
@@ -185,6 +196,8 @@ function TeachingConsole({
   onControlsChange,
   onApply,
   missionFocusFactor,
+  sewageDischargeMode = 'continuous',
+  onSewageDischargeModeChange,
 }: TeachingConsoleProps) {
   const [controls, setControls] = useState<Environment>(() => ({ ...initialControls }));
   // O que já está valendo na simulação: serve para saber se há mudança pendente.
@@ -260,6 +273,44 @@ function TeachingConsole({
         </button>
       </header>
 
+      <div className="console-regime-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '11px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.65)' }}>Regime de Lançamento de Esgoto:</span>
+        <button
+          type="button"
+          onClick={() => onSewageDischargeModeChange?.('continuous')}
+          style={{
+            background: sewageDischargeMode === 'continuous' ? '#0284c7' : 'rgba(255,255,255,0.06)',
+            color: '#fff',
+            border: '1px solid ' + (sewageDischargeMode === 'continuous' ? '#38bdf8' : 'rgba(255,255,255,0.15)'),
+            borderRadius: '4px',
+            padding: '2px 8px',
+            fontSize: '11px',
+            cursor: 'pointer',
+            fontWeight: sewageDischargeMode === 'continuous' ? 700 : 500,
+          }}
+          title="Aporte diário constante de DBO5 diluído no volume de mistura da enseada"
+        >
+          Carga Contínua (kg/dia)
+        </button>
+        <button
+          type="button"
+          onClick={() => onSewageDischargeModeChange?.('pulse')}
+          style={{
+            background: sewageDischargeMode === 'pulse' ? '#0284c7' : 'rgba(255,255,255,0.06)',
+            color: '#fff',
+            border: '1px solid ' + (sewageDischargeMode === 'pulse' ? '#38bdf8' : 'rgba(255,255,255,0.15)'),
+            borderRadius: '4px',
+            padding: '2px 8px',
+            fontSize: '11px',
+            cursor: 'pointer',
+            fontWeight: sewageDischargeMode === 'pulse' ? 700 : 500,
+          }}
+          title="Despejo pontual único em massa total (kg), sem reposição contínua"
+        >
+          Pulso Único (kg)
+        </button>
+      </div>
+
       <div className="console-body">
         {displayedFactors.map((id) => (
           <FactorControl
@@ -267,6 +318,7 @@ function TeachingConsole({
             id={id}
             active={isFactorActive(id, controls[id])}
             value={controls[id]}
+            sewageDischargeMode={sewageDischargeMode}
             onChange={(value) => setControls((current) => ({ ...current, [id]: value }))}
           />
         ))}
@@ -297,7 +349,7 @@ export function App() {
   const [resetToken, setResetToken] = useState(0);
   const [simulation, setSimulation] = useState(createInitialState);
   const [panelTab, setPanelTab] = useState<PanelTab>('now');
-  const oceanData = useOceanData();
+  const oceanData = useOceanData(simulation.sector);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [criticalDays, setCriticalDays] = useState<number | null | undefined>(undefined);
   const [missionState, setMissionState] = useState<MissionState | null>(null);
@@ -397,10 +449,21 @@ export function App() {
 
   const applyChanges = (controls: Environment) => {
     const targets = buildTargets(controls, simulation.sector);
+    let nextBod = simulation.biochemicalOxygenDemand ?? 0;
+
+    if (simulation.sewageDischargeMode === 'pulse' && controls.sewage > 0) {
+      const sectorDef = BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0];
+      const deltaBod = convertBOD5ToPulseDeltaMgL(controls.sewage, sectorDef.mixingVolumeM3);
+      nextBod += deltaBod;
+      // No modo de pulso único, o efluente não é uma taxa contínua diária
+      targets.sewage = 0;
+    }
+
     setSimulation((current) => ({
       ...current,
       controls: { ...controls },
       targets,
+      biochemicalOxygenDemand: nextBod,
       paused: false,
       // Primeiro marco aparece logo depois de aplicar.
       messageCooldown: 0,
@@ -409,6 +472,40 @@ export function App() {
     if (!missionState) {
       setPanelTab('now');
     }
+  };
+
+  const handleSectorChange = (sectorId: BtsSectorId) => {
+    const sectorDef = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+    const newSat = calculateWeissOxygenSaturation(simulation.env.temperature, sectorDef.baselineSalinity);
+    setSimulation((curr) => {
+      const nextTargets = buildTargets(curr.controls, sectorId);
+      return {
+        ...curr,
+        sector: sectorId,
+        targets: nextTargets,
+        dissolvedOxygen: Math.min(newSat * 1.25, Math.max(0.05, curr.dissolvedOxygen)),
+      };
+    });
+  };
+
+  const handleApplySatelliteConditions = (sst: number) => {
+    const updated = {
+      ...controlsRef.current,
+      temperature: parseFloat(sst.toFixed(1)),
+    };
+    controlsRef.current = updated;
+    applyChanges(updated);
+    setSimulation((current) => ({
+      ...current,
+      initialConditionSource: 'NOAA_CRW_OBSERVED',
+    }));
+  };
+
+  const handleSewageDischargeModeChange = (mode: 'continuous' | 'pulse') => {
+    setSimulation((curr) => ({
+      ...curr,
+      sewageDischargeMode: mode,
+    }));
   };
 
   const setSpeed = (speed: SimulationSpeed) => setSimulation((current) => ({ ...current, speed }));
@@ -493,6 +590,22 @@ export function App() {
           <button type="button" className="map-back-button" onClick={handleBackToMap}>
             ← <span>Mapa</span>
           </button>
+          <div className="topbar-sector-container">
+            <label htmlFor="topbar-sector-select" className="sr-only">Compartimento da BTS</label>
+            <select
+              id="topbar-sector-select"
+              value={simulation.sector}
+              onChange={(e) => handleSectorChange(e.target.value as BtsSectorId)}
+              className="topbar-sector-select"
+              title="Selecione o compartimento oceanográfico da Baía de Todos-os-Santos"
+            >
+              {BTS_SECTORS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label} ({s.baselineSalinity} PSU)
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="topbar-center brand compact">
@@ -648,6 +761,7 @@ export function App() {
           tab={panelTab}
           onTabChange={setPanelTab}
           oceanData={oceanData}
+          onApplySatelliteConditions={handleApplySatelliteConditions}
           missionState={missionState}
           onStartMission={startMission}
           onMissionStepChange={handleMissionStepChange}
@@ -662,6 +776,8 @@ export function App() {
           onControlsChange={(next) => { controlsRef.current = next; }}
           onApply={applyChanges}
           missionFocusFactor={missionState ? MISSION_01_OXYGEN.focusFactor : null}
+          sewageDischargeMode={simulation.sewageDischargeMode}
+          onSewageDischargeModeChange={handleSewageDischargeModeChange}
         />
       </main>
 
