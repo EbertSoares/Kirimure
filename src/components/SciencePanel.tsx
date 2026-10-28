@@ -960,18 +960,19 @@ export function SciencePanel({
                       <span className="metric-label">Alerta de Branqueamento</span>
                       {(() => {
                         const baa = oceanData.latestCrw.bleachingAlertLevel;
-                        const baaDisplay = baa === 4
-                          ? 'Nível 2 (Severo)'
-                          : baa === 3
-                            ? 'Nível 1 (Risco)'
-                            : baa === 2
-                              ? 'Aviso (Warning)'
-                              : baa === 1
-                                ? 'Vigilância (Watch)'
-                                : baa === 0
-                                  ? 'Sem Alerta (Nível 0)'
-                                  : 'Sem dado / Indisponível';
-                        const baaTone = baa === null || baa === undefined
+                        const isValidBaa = baa !== null && baa !== undefined && baa >= 0 && baa <= 4;
+                        const baaDisplay = !isValidBaa
+                          ? 'Sem dado / Indisponível'
+                          : baa === 4
+                            ? 'Nível 2 (Severo)'
+                            : baa === 3
+                              ? 'Nível 1 (Risco)'
+                              : baa === 2
+                                ? 'Aviso (Warning)'
+                                : baa === 1
+                                  ? 'Vigilância (Watch)'
+                                  : 'Sem Alerta (Nível 0)';
+                        const baaTone = !isValidBaa
                           ? ''
                           : baa >= 3
                             ? 'critical'
@@ -979,7 +980,13 @@ export function SciencePanel({
                               ? 'watch'
                               : 'healthy';
                         return (
-                          <strong className={`metric-value ${baaTone}`} style={{ fontSize: '13px' }}>
+                          <strong
+                            className={`metric-value ${baaTone}`}
+                            style={{
+                              fontSize: '13px',
+                              color: !isValidBaa ? 'rgba(255, 255, 255, 0.7)' : undefined,
+                            }}
+                          >
                             {baaDisplay}
                           </strong>
                         );
@@ -1050,10 +1057,13 @@ export function SciencePanel({
                     </div>
                   </details>
                 </>
-              ) : sector.id === 'paraguacu' ? (
+              ) : oceanData?.noaaStatus?.state === 'no_coverage' || sector.id === 'paraguacu' ? (
                 <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.85)' }}>
-                  <p style={{ margin: '0 0 8px' }}>
-                    <strong>Setor Estuarino do Paraguaçu:</strong> Canais interiores estreitos sofrem mascaramento de terra na grade oceânica de 5 km da NOAA (a célula é classificada como continente).
+                  <p style={{ margin: '0 0 6px', fontWeight: 600 }}>
+                    Sem Cobertura Satelital (Canal Estuarino Interno)
+                  </p>
+                  <p style={{ margin: '0 0 8px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.75)', lineHeight: 1.4 }}>
+                    O produto NOAA CRW de 5 km não fornece dados válidos para representar este canal interno devido ao mascaramento de terra (a célula é classificada como continente). Para preservar o rigor geográfico, o Kirimurê não atribui pixels de mar aberto externo ao interior estuarino.
                   </p>
                   {oceanData?.loadHistoricalCrwSnapshot && (
                     <button
@@ -1081,13 +1091,13 @@ export function SciencePanel({
                   </p>
                   <p style={{ margin: '0 0 8px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.4 }}>
                     {oceanData.noaaStatus.errorKind === 'timeout'
-                      ? `Tempo limite excedido: o servidor NOAA não concluiu a transferência em ${oceanData.noaaStatus.errorElapsedMs ? Math.round(oceanData.noaaStatus.errorElapsedMs / 1000) + 's' : '10s'}.`
+                      ? `Tempo limite excedido: nenhuma fonte de estresse térmico respondeu dentro do orçamento (${oceanData.noaaStatus.errorElapsedMs ? Math.round(oceanData.noaaStatus.errorElapsedMs / 1000) + 's' : '16s'}).`
                       : oceanData.noaaStatus.errorKind === 'http'
-                        ? `Erro HTTP ${oceanData.noaaStatus.errorStatus ?? ''} do servidor ERDDAP${oceanData.noaaStatus.serverMessage ? `: ${oceanData.noaaStatus.serverMessage}` : ''}.`
+                        ? `Erro HTTP ${oceanData.noaaStatus.errorStatus ?? ''} do servidor${oceanData.noaaStatus.serverMessage ? `: ${oceanData.noaaStatus.serverMessage}` : ''}.`
                         : oceanData.noaaStatus.errorKind === 'no_data'
                           ? `Sem dados válidos: ${oceanData.noaaStatus.serverMessage || oceanData.noaaStatus.error}.`
                           : oceanData.noaaStatus.errorKind === 'network'
-                            ? `Falha de rede/conexão: ${oceanData.noaaStatus.error}`
+                            ? `Falha de rede/conexão remota: ${oceanData.noaaStatus.error}`
                             : (oceanData.noaaStatus.error || 'Falha ao consultar satélite NOAA.')}
                   </p>
                   <p style={{ margin: '0 0 10px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)' }}>
@@ -1110,7 +1120,7 @@ export function SciencePanel({
                           fontWeight: 600,
                         }}
                       >
-                        {oceanData.loading ? 'Reconectando...' : 'Tentar reconectar NOAA'}
+                        {oceanData.loading ? 'Reconectando...' : 'Tentar reconectar fontes'}
                       </button>
                     )}
                     {oceanData?.loadHistoricalCrwSnapshot && (
@@ -1135,7 +1145,7 @@ export function SciencePanel({
                 </div>
               ) : oceanData?.loading ? (
                 <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                  Consultando satélite NOAA CoastWatch ERDDAP (timeout de 12s)...
+                  Consultando estresse térmico NOAA CRW (Coral Watch / PacIOOS ERDDAP, orçamento 16s)...
                 </div>
               ) : (
                 <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
@@ -1307,7 +1317,7 @@ export function SciencePanel({
                 </div>
               ) : oceanData?.loading ? (
                 <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                  Consultando modelo costeiro Open-Meteo Marine (timeout 8s)...
+                  Consultando previsão marinha costeira (Open-Meteo Marine)...
                 </div>
               ) : (
                 <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '11.5px', color: 'rgba(255,255,255,0.7)' }}>

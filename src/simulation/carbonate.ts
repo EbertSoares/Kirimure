@@ -186,7 +186,7 @@ export function calculateRespirationPhImpact(
 
   const finalSystem = calculateCarbonateSystem(estimatedPh, totalAlkalinity, temperature, salinity);
   return {
-    effectivePh: parseFloat(estimatedPh.toFixed(2)),
+    effectivePh: estimatedPh, // Mantém precisão interna contínua; o arredondamento é feito apenas na exibição visual
     carbonateSystem: finalSystem,
   };
 }
@@ -200,7 +200,7 @@ export function getCarbonateMetadata(system: CarbonateSystemState): ScientificMe
     unit: 'adimensional (escala de saturação)',
     quantityKind: 'model_product',
     epistemicClass: 'Produto de Modelo',
-    source: 'Equilíbrio Termodinâmico Lueker et al. (2000) / Mucci (1983) / CO2SYS',
+    source: 'Estimativa simplificada do sistema carbonato baseada em formulações publicadas (Lueker et al., 2000; Mucci, 1983; Dickson et al., 2007)',
     sourceUrl: 'doi:10.1016/S0304-4203(00)00022-0',
     method: 'Resolução das espécies DIC a partir de TA, pH e constantes térmicas',
     uncertainty: `pCO₂: ${system.pCO2Uatm} µatm; CO₃²⁻: ${system.carbonateIonUmolKg} µmol/kg`,

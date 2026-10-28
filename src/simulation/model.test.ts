@@ -21,6 +21,7 @@ import {
 import { formatSimulatedTime } from './time';
 import { evaluateMessages } from './messages';
 import { convertBOD5ToPulseDeltaMgL, integrateOxygenKinetics } from './oxygen';
+import { calculateOilFateBudget } from './contaminants';
 import type { SimulationState } from './types';
 
 /** Roda a simulação por um número de dias simulados, em passos de `stepSeconds`. */
@@ -196,6 +197,29 @@ describe('modelo de simulação', () => {
       oil: PARAMETERS.receivedLoads.oil.maximumKg,
       microplastics: PARAMETERS.receivedLoads.microplastics.maximumKg,
     })).toBe(BASELINE.ph);
+  });
+
+  it('mantém consistência dimensional e comparabilidade entre rota auxiliar de effectivePh e simulação dinâmica', () => {
+    // Na rota auxiliar (estática), a taxa de DBO contínua (kg/dia) produz concentração B_ss e consumo diário
+    const staticPh = effectivePh({ ...BASELINE, sewage: 20000 });
+    expect(staticPh).toBeLessThan(BASELINE.ph);
+    expect(staticPh).toBeGreaterThan(BASELINE.ph - 0.08);
+
+    // Na simulação dinâmica, o estado acumula respiratoryDicUmolKg via balanço ODE
+    const state = createInitialState('frades');
+    state.paused = false;
+    state.targets.sewage = 20000;
+    const simulated = run(state, 5);
+    expect(simulated.respiratoryDicUmolKg).toBeGreaterThan(0);
+    const dynamicPh = effectivePh(simulated.env, simulated.biochemicalOxygenDemand, simulated.sector, simulated.respiratoryDicUmolKg);
+    expect(Math.abs(dynamicPh - staticPh)).toBeLessThan(0.06);
+  });
+
+  it('evita dupla atenuação temporal de exportação no balanço de óleo quando isAlreadyRetained é verdadeiro', () => {
+    const rawBudget = calculateOilFateBudget(10000, 'frades', 10, false);
+    const retainedBudget = calculateOilFateBudget(10000, 'frades', 10, true);
+    expect(rawBudget.exportedKg).toBeGreaterThan(0);
+    expect(retainedBudget.exportedKg).toBe(0);
   });
 
   it('acumula DHW em 12 semanas e começa a aliviar após o resfriamento', () => {

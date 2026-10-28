@@ -6,7 +6,7 @@ import type { MarineMeteoPoint, ThermalForcingPoint } from '../services/types';
 import type { BtsSectorId } from '../simulation/types';
 
 export interface DataSourceStatus {
-  state: 'idle' | 'loading' | 'success' | 'fallback' | 'error';
+  state: 'idle' | 'loading' | 'success' | 'fallback' | 'no_coverage' | 'error';
   lastAttemptUtc: string | null;
   lastSuccessUtc: string | null;
   error: string | null;
@@ -68,19 +68,14 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
     setNoaaStatus((prev) => ({ ...prev, state: 'loading', lastAttemptUtc: nowUtc }));
     setMeteoStatus((prev) => ({ ...prev, state: 'loading', lastAttemptUtc: nowUtc }));
 
-    try {
-      const [thermalResults, meteoResults] = await Promise.allSettled([
-        fetchBtsThermalForcing(requestSector),
-        fetchBtsMarineMeteo(requestSector),
-      ]);
+    // Executa as consultas de forma desacoplada e independente:
+    // O resultado mais rápido (ex: Open-Meteo em ~800ms) atualiza a interface imediatamente,
+    // sem ficar bloqueado aguardando o término da consulta de estresse térmico NOAA.
+    const runNoaa = async () => {
+      try {
+        const points = await fetchBtsThermalForcing(requestSector);
+        if (activeSectorRef.current !== requestSector) return;
 
-      // Proteção contra concorrência: descarta resposta se o setor mudou durante o fetch
-      if (activeSectorRef.current !== requestSector) {
-        return;
-      }
-
-      if (thermalResults.status === 'fulfilled') {
-        const points = thermalResults.value;
         const isFallback = points.length > 0 && Boolean(points[0]?.provenance.isCachedFallback);
         setCrwData(points);
         setNoaaStatus({
@@ -90,27 +85,42 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
           error: null,
           isFallback,
         });
-      } else {
-        const reason = thermalResults.reason;
-        const remoteErr = reason instanceof RemoteDataError ? reason : undefined;
-        const errMessage = reason instanceof Error ? reason.message : 'Falha na consulta remota ao NOAA CRW';
+      } catch (err) {
+        if (activeSectorRef.current !== requestSector) return;
+        const remoteErr = err instanceof RemoteDataError ? err : undefined;
         setCrwData([]);
-        setNoaaStatus({
-          state: 'error',
-          lastAttemptUtc: nowUtc,
-          lastSuccessUtc: null,
-          error: errMessage,
-          errorKind: remoteErr?.kind ?? 'network',
-          errorStatus: remoteErr?.status,
-          errorUrl: remoteErr?.url,
-          errorElapsedMs: remoteErr?.elapsedMs,
-          serverMessage: remoteErr?.serverMessage,
-          isFallback: false,
-        });
-      }
 
-      if (meteoResults.status === 'fulfilled') {
-        const points = meteoResults.value;
+        if (remoteErr?.kind === 'no_coverage') {
+          setNoaaStatus({
+            state: 'no_coverage',
+            lastAttemptUtc: nowUtc,
+            lastSuccessUtc: null,
+            error: remoteErr.message,
+            errorKind: 'no_coverage',
+            isFallback: false,
+          });
+        } else {
+          setNoaaStatus({
+            state: 'error',
+            lastAttemptUtc: nowUtc,
+            lastSuccessUtc: null,
+            error: err instanceof Error ? err.message : 'Falha na consulta remota ao NOAA CRW',
+            errorKind: remoteErr?.kind ?? 'network',
+            errorStatus: remoteErr?.status,
+            errorUrl: remoteErr?.url,
+            errorElapsedMs: remoteErr?.elapsedMs,
+            serverMessage: remoteErr?.serverMessage,
+            isFallback: false,
+          });
+        }
+      }
+    };
+
+    const runMeteo = async () => {
+      try {
+        const points = await fetchBtsMarineMeteo(requestSector);
+        if (activeSectorRef.current !== requestSector) return;
+
         const isFallback = points.length > 0 && Boolean(points[0]?.provenance.isCachedFallback);
         setMeteoData(points);
         setMeteoStatus({
@@ -120,16 +130,15 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
           error: null,
           isFallback,
         });
-      } else {
-        const reason = meteoResults.reason;
-        const remoteErr = reason instanceof RemoteDataError ? reason : undefined;
-        const errMessage = reason instanceof Error ? reason.message : 'Falha na consulta ao Open-Meteo Marine';
+      } catch (err) {
+        if (activeSectorRef.current !== requestSector) return;
+        const remoteErr = err instanceof RemoteDataError ? err : undefined;
         setMeteoData([]);
         setMeteoStatus({
           state: 'error',
           lastAttemptUtc: nowUtc,
           lastSuccessUtc: null,
-          error: errMessage,
+          error: err instanceof Error ? err.message : 'Falha na consulta ao Open-Meteo Marine',
           errorKind: remoteErr?.kind ?? 'network',
           errorStatus: remoteErr?.status,
           errorUrl: remoteErr?.url,
@@ -138,12 +147,19 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
           isFallback: false,
         });
       }
+    };
 
-      setLastUpdated(new Date());
+    try {
+      await Promise.allSettled([runNoaa(), runMeteo()]);
+      if (activeSectorRef.current === requestSector) {
+        setLastUpdated(new Date());
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao consultar dados oceanográficos externos');
     } finally {
-      setLoading(false);
+      if (activeSectorRef.current === requestSector) {
+        setLoading(false);
+      }
     }
   }, [enabled]);
 

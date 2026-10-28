@@ -12,6 +12,7 @@ export type RemoteErrorKind =
   | 'network' // falha de conexão / DNS / bloqueio do navegador (inclui possíveis bloqueios CORS)
   | 'http' // o servidor respondeu com status de erro
   | 'no_data' // o servidor respondeu, mas não há valor válido para o pixel/período
+  | 'no_coverage' // região sem cobertura direta no produto de satélite (e.g. canal estuarino mascarado como continente)
   | 'parse'; // a resposta chegou, mas em formato inesperado
 
 export class RemoteDataError extends Error {

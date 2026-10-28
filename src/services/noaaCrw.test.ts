@@ -162,6 +162,18 @@ describe('serviço NOAA Coral Reef Watch (ERDDAP)', () => {
       .toThrow(/sem SST válida/);
   });
 
+  it('converte valor de preenchimento (_FillValue = 251) de CRW_BAA estritamente para null', () => {
+    const fillValueCsv = [
+      'time,latitude,longitude,CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA,CRW_BAA_7D_MAX',
+      'UTC,degrees_north,degrees_east,degree_C,degree_C,degree_C,degC_weeks,1,1',
+      '2026-10-20T12:00:00Z,-12.875,-38.525,27.8,0.5,0.0,0.0,251,251',
+    ].join('\n');
+
+    const rows = parseErddapCrwCsv(fillValueCsv);
+    expect(rows[0].baa).toBeNull();
+    expect(rows[0].baa7d).toBeNull();
+  });
+
   it('retorna snapshot histórico de contingência explicitamente sob demanda via getBtsCrwHistoricalSnapshot', () => {
     const fradesSnapshot = getBtsCrwHistoricalSnapshot('frades');
     expect(fradesSnapshot).toEqual(BTS_CRW_FALLBACK_SNAPSHOT);
@@ -171,10 +183,9 @@ describe('serviço NOAA Coral Reef Watch (ERDDAP)', () => {
     expect(barraSnapshot).toEqual(BTS_CRW_BARRA_FALLBACK_SNAPSHOT);
   });
 
-  it('retorna array vazio para o Paraguaçu sem requisição de rede devido a mascaramento de terra na grade de 5 km', async () => {
+  it('rejeita com RemoteDataError("no_coverage") para o Paraguaçu sem requisição de rede devido a mascaramento de terra na grade de 5 km', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    const points = await fetchBtsThermalForcing('paraguacu');
-    expect(points).toEqual([]);
+    await expect(fetchBtsThermalForcing('paraguacu')).rejects.toThrow(/não fornece dados válidos para representar este canal interno/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

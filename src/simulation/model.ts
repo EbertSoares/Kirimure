@@ -114,12 +114,19 @@ export function effectivePh(
     const consumedO2 = bodConcentrationMgL * (1 - Math.exp(-kd * tau));
     addedDic = (consumedO2 / 32) * 1000 * 0.98;
   } else if (env.sewage > 0) {
-    // Estimativa de aporte diário contínuo de DBO (kg DBO5/dia convertido para CBODu em mg/L):
+    // Via auxiliar de pH para aporte contínuo de DBO quando o DIC acumulado no estado não for fornecido.
+    // Taxa de entrada constante R em mg CBODu / L / dia:
     const kd = calculateDeoxygenationRate(env.temperature);
-    const continuousBodMgL = (convertBOD5ToUltimateBOD(env.sewage) * 1000) / sector.mixingVolumeM3;
-    const tau = Math.min(sector.dischargeDays, 5);
-    const consumedO2 = continuousBodMgL * (1 - Math.exp(-kd * tau));
-    addedDic = (consumedO2 / 32) * 1000 * 0.98;
+    const tau = Math.max(1, sector.dischargeDays);
+    const kFlush = 1 / tau;
+    const kEf = kd + kFlush; // Coeficiente efetivo de remoção (oxidação bacteriana + dispersão/lavagem por maré)
+    const cbodDailyKg = convertBOD5ToUltimateBOD(env.sewage);
+    const R = (cbodDailyKg * 1000) / sector.mixingVolumeM3; // mg/L/dia
+    const steadyStateBodMgL = R / kEf; // Concentração de estado estacionário B_ss em mg/L
+    // Taxa diária de consumo de O2 por oxidação da DBO (mg O2 / L / dia):
+    const dailyConsumedO2 = kd * steadyStateBodMgL;
+    // Acréscimo de DIC correspondente à respiração heterotrófica diária (limitado a 45 µmol/kg para respeitar sewageMaxDrop ~0.08):
+    addedDic = Math.min(45, (dailyConsumedO2 / 32) * 1000 * 0.98);
   }
 
   if (addedDic <= 0.01) {
@@ -157,7 +164,7 @@ export function calculatePressures(
 
   let oilPressure = normalizedReceivedLoad('oil', env.oil);
   if (env.oil > 0) {
-    const budget = calculateOilFateBudget(env.oil, sectorId, Math.max(0.1, elapsedDays));
+    const budget = calculateOilFateBudget(env.oil, sectorId, Math.max(0.1, elapsedDays), true);
     const ecotox = evaluateOilEcotoxicity(budget.dissolvedPahConcentrationUgL);
     const toxicResponse = clamp(ecotox.tissueRegenerationInhibitionPercent / 100);
     oilPressure = Math.max(oilPressure, toxicResponse);

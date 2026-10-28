@@ -64,10 +64,9 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
     expect(maxStress.provenance.fallbackNote).toContain('Snapshot histórico de contingência');
   });
 
-  it('não contamina setores estuarinos interiores com snapshots de mar aberto', async () => {
+  it('não contamina setores estuarinos interiores com snapshots de mar aberto e sinaliza no_coverage', async () => {
     // Paraguaçu não possui pixel de mar aberto na grade satelital de 5 km (mascaramento de terra)
-    const paraguacuPoints = await fetchBtsThermalForcing('paraguacu');
-    expect(paraguacuPoints).toHaveLength(0);
+    await expect(fetchBtsThermalForcing('paraguacu')).rejects.toThrow(/não fornece dados válidos para representar este canal interno/);
   });
 
   it('fornece dados hidrodinâmicos e de ondas da Open-Meteo Marine com resposta estruturada', async () => {

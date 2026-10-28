@@ -14,7 +14,11 @@ A aplicação permite modificar temperatura da água, pH, cargas de matéria org
 
 O Kirimurê distingue explicitamente quatro categorias de informação ambiental para manter total transparência epistemológica:
 
-1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico e Degree Heating Weeks (DHW) obtidos via ERDDAP da NOAA (grade 5 km), com arquitetura multi-distribuidor e failover automático (espelho PacIOOS ERDDAP primário de baixa latência e NOAA CoastWatch ERDDAP secundário), consulta otimizada da janela recente (`last-6:1:last`) e mapeamento georreferenciado preciso de pixels oceânicos válidos para os setores da BTS. Em caso de contingência, erros reais de protocolo (timeout integral, rede, HTTP e no-data) são apresentados sem mascaramento, com acesso a snapshots históricos calibrados (El Niño mar/abr 2024).
+1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico e Degree Heating Weeks (DHW) obtidos na grade operacional de 5 km, com arquitetura multi-fonte com failover ordenado e orçamento global de tempo (16s):
+   - **Fonte 1 (REST/JSON):** Coral Watch Virtual Station API (`api.coral.tsr.lol`, estação virtual `todos_os_santos` na plataforma externa da BTS);
+   - **Fonte 2 (ERDDAP CORS):** Espelho oficial PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu`, dataset `dhw_5km`);
+   - **Fonte 3 (Failover Secundário):** NOAA CoastWatch ERDDAP PFEG (`coastwatch.pfeg.noaa.gov`, dataset `NOAA_DHW`).
+   Pixels oceânicos calibrados para Frades e Barra; canais estuarinos interiores estreitos (Paraguaçu) são identificados explicitamente com estado de sem cobertura (`no_coverage`), sem emissão de requisições espúrias. Em contingência, erros reais de protocolo são apresentados sem mascaramento, com acesso a snapshots históricos calibrados (El Niño mar/abr 2024).
 2. **Produtos de Modelo Numérico Global (Open-Meteo Marine):** Séries horárias de altura de onda ($H_s$), correntes e nível do mar baseadas em modelos Copernicus/ECMWF para o canal da BTS, com normalização estrita de carimbos de data/hora em UTC.
 3. **Modelos Físico-Químicos Acoplados da Simulação:**
    - **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Cinética acoplada ar-mar baseada em Weiss (1970) para saturação termodinâmica, Streeter-Phelps para reaeração atmosférica e desoxigenação por DBO, demanda de oxigênio bentônica (SOD; Bowie et al., 1985) e fotossíntese/respiração líquida de algas e corais. Piso numérico de proteção termodinâmica a 0,05 mg/L.
@@ -97,7 +101,8 @@ src/
 ├── scene/                Cena 3D Babylon.js e animação procedural dos peixes
 ├── services/             Adaptadores de dados externos, tratamento e contingência
 │   ├── http.ts           Cliente HTTP resiliente com timeout total de leitura, retry e classificação de erros
-│   ├── noaaCrw.ts        Cliente ERDDAP multi-distribuidor (PacIOOS primário / CoastWatch secundário)
+│   ├── coralWatchApi.ts  Adaptador Coral Watch Virtual Station API (api.coral.tsr.lol)
+│   ├── noaaCrw.ts        Cliente NOAA CRW multi-fonte (Coral Watch / PacIOOS ERDDAP / CoastWatch PFEG)
 │   ├── noaaCrwSnapshots.ts Snapshots históricos calibrados (El Niño 2024) do NOAA CRW
 │   ├── openMeteo.ts      Cliente Copernicus/ECMWF Open-Meteo Marine com normalização UTC
 │   ├── openMeteoSnapshots.ts Snapshots históricos meteorológicos e hidrodinâmicos

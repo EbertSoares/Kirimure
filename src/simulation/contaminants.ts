@@ -104,6 +104,7 @@ export function calculateOilFateBudget(
   totalInputKg: number,
   sectorId: BtsSectorId = 'frades',
   elapsedDays = 1,
+  isAlreadyRetained = false,
 ): OilFateBudget {
   if (totalInputKg <= 0) {
     return {
@@ -130,8 +131,9 @@ export function calculateOilFateBudget(
   const evaporatedKg = totalInputKg * evapFraction;
 
   // 2. Exportação hidrodinâmica advectiva para o oceano externo via tempo de renovação (tau):
-  // Fração exportada proporcional ao tempo de troca hidráulica do setor
-  const exportFraction = 0.20 * (1 - Math.exp(-elapsedDays / sector.dischargeDays));
+  // Se a massa fornecida já representa a carga retida após a janela de transporte (isAlreadyRetained),
+  // não reaplica exportação advectiva para evitar dupla atenuação temporal.
+  const exportFraction = isAlreadyRetained ? 0 : 0.20 * (1 - Math.exp(-elapsedDays / sector.dischargeDays));
   const exportedKg = totalInputKg * exportFraction;
 
   // Massa disponível para partição nos reservatórios internos da baía

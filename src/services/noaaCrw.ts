@@ -1,7 +1,13 @@
 import { BTS_SECTORS } from '../simulation/config';
 import type { BtsSectorId } from '../simulation/types';
 import { RemoteDataError, fetchTextWithTimeout, withRetry } from './http';
-import { BTS_CRW_SECTOR_FALLBACKS, NOAA_CRW_PROVENANCE_BASE } from './noaaCrwSnapshots';
+import { fetchCoralWatchCurrent } from './coralWatchApi';
+import {
+  BTS_CRW_BARRA_FALLBACK_SNAPSHOT,
+  BTS_CRW_FALLBACK_SNAPSHOT,
+  BTS_CRW_SECTOR_FALLBACKS,
+  NOAA_CRW_PROVENANCE_BASE,
+} from './noaaCrwSnapshots';
 import type { ThermalForcingPoint } from './types';
 
 export {
@@ -11,19 +17,19 @@ export {
 } from './noaaCrwSnapshots';
 
 /**
- * Cliente do NOAA Coral Reef Watch (CRW v3.1, produto diário global de 5 km) via ERDDAP.
+ * Cliente de dados de estresse térmico da NOAA Coral Reef Watch (CRW) 5 km.
  *
- * Variáveis oficiais consultadas:
+ * Arquitetura multi-fonte com orçamento global de tempo e failover ordenado:
+ * 1. Coral Watch Virtual Station API (https://api.coral.tsr.lol) - JSON leve da estação virtual 'todos_os_santos'
+ * 2. PacIOOS ERDDAP (https://pae-paha.pacioos.hawaii.edu) - espelho oficial do dataset `dhw_5km` da NOAA com CORS liberado
+ * 3. NOAA CoastWatch ERDDAP PFEG (https://coastwatch.pfeg.noaa.gov) - dataset `NOAA_DHW` (failover secundário)
+ *
+ * Variáveis principais:
  * - CRW_SST: temperatura da superfície do mar (°C)
- * - CRW_SSTANOMALY: anomalia de SST contra a climatologia diária do pixel (°C)
- * - CRW_HOTSPOT: SST − MMM do pixel (°C); valores ≤ 0 indicam ausência de estresse térmico
+ * - CRW_SSTANOMALY: anomalia em relação à climatologia (°C)
+ * - CRW_HOTSPOT: HotSpot térmico relativo ao MMM (°C)
  * - CRW_DHW: Degree Heating Weeks oficial (°C-semana, janela de 84 dias)
- * - CRW_BAA / CRW_BAA_7D_MAX: nível de alerta de branqueamento (0 a 4)
- *
- * Diagnóstico realizado (out/2026): o servidor coastwatch.pfeg.noaa.gov estava inacessível já na
- * conexão TCP (inclusive na página leve /info), enquanto o mesmo produto NOAA CRW é redistribuído
- * pelo ERDDAP do PacIOOS (dataset `dhw_5km`, mesmas variáveis, CORS liberado). Por isso o cliente
- * consulta distribuidores em ordem e registra na proveniência qual deles serviu o dado.
+ * - CRW_BAA / CRW_BAA_7D_MAX: nível de alerta de branqueamento (estritamente 0 a 4)
  */
 
 export interface CrwDistributor {
@@ -53,30 +59,41 @@ const CRW_VARIABLES = ['CRW_SST', 'CRW_SSTANOMALY', 'CRW_HOTSPOT', 'CRW_DHW', 'C
 /** Número de dias recentes consultados para o indicador atual (o painel usa o dado mais recente). */
 export const CRW_RECENT_DAYS = 7;
 
-/** Timeout por distribuidor, cobrindo cabeçalhos e corpo. */
-export const CRW_TIMEOUT_MS = 10000;
+/** Orçamento total máximo para a operação de consulta (evita bloqueios prolongados da interface). */
+export const CRW_TOTAL_BUDGET_MS = 16000;
+
+/** Timeout por tentativa individual de consulta a distribuidor. */
+export const CRW_ATTEMPT_TIMEOUT_MS = 6000;
 
 /**
- * Pixels oceânicos válidos da grade NOAA de 5 km para cada setor.
- * As coordenadas nominais da Barra (-12.97, -38.50) caem sobre a península de Salvador e o canal do
- * Paraguaçu é mascarado como terra; nesses casos a consulta retornava apenas NaN. Os pixels abaixo
- * foram verificados com valores válidos de SST.
+ * Pixels oceânicos da grade NOAA de 5 km para cada setor da BTS.
+ *
+ * - Frades: pixel da Baía Central (-12.875, -38.525).
+ * - Barra: pixel adjacente oceânico na entrada da baía (-13.025, -38.525).
+ * - Paraguaçu: canal estuarino interior 100% mascarado como continente na grade de 5 km.
+ *   Não recebe consulta remota para não atribuir águas abertas ao manguezal interno.
  */
-export const NOAA_CRW_PIXELS: Record<BtsSectorId, { latitude: number; longitude: number; note: string }> = {
+export const NOAA_CRW_PIXELS: Record<
+  BtsSectorId,
+  { latitude: number; longitude: number; hasDirectCoverage: boolean; note: string }
+> = {
   frades: {
     latitude: -12.875,
     longitude: -38.525,
-    note: 'Pixel da Baía Central adjacente à Ilha dos Frades.',
+    hasDirectCoverage: true,
+    note: 'Pixel oceânico da Baía Central adjacente à Ilha dos Frades.',
   },
   barra: {
     latitude: -13.025,
     longitude: -38.525,
+    hasDirectCoverage: true,
     note: 'Pixel oceânico na entrada da baía (a coordenada nominal do setor cai sobre a península de Salvador, mascarada como terra).',
   },
   paraguacu: {
     latitude: -12.825,
     longitude: -38.775,
-    note: 'Pixel válido mais próximo na baía interior, a leste da foz do Paraguaçu. Não representa o canal estuarino, que é mascarado como terra na grade de 5 km.',
+    hasDirectCoverage: false,
+    note: 'Canal estuarino interior sem cobertura direta na grade de 5 km (mascarado como terra). O pixel externo na foz não é atribuído ao canal interno.',
   },
 };
 
@@ -105,6 +122,18 @@ function parseNumber(raw: string | undefined): number | null {
 }
 
 /**
+ * Valida o nível de alerta (BAA / Bleaching Alert Area) estritamente no domínio oficial [0, 4].
+ * Valores de preenchimento (_FillValue = 251 na NOAA/PacIOOS) ou inválidos tornam-se null.
+ */
+export function parseAlertLevel(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const value = Number(raw.trim());
+  if (!Number.isFinite(value) || !Number.isInteger(value)) return null;
+  if (value >= 0 && value <= 4) return value;
+  return null;
+}
+
+/**
  * Janela temporal explícita (usada para séries históricas sob demanda).
  * Recuo de 2 dias absorve a latência operacional do produto diário.
  */
@@ -123,20 +152,25 @@ export function splitTimeWindowIntoChunks(
 ): Array<{ startUtc: string; endUtc: string }> {
   const startMs = new Date(startUtc).getTime();
   const endMs = new Date(endUtc).getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || startMs > endMs) {
     return [{ startUtc, endUtc }];
   }
 
   const chunkMs = maxChunkDays * 24 * 3600 * 1000;
-  const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10) + 'T12:00:00Z';
   const chunks: Array<{ startUtc: string; endUtc: string }> = [];
-  for (let cursor = startMs; cursor < endMs; cursor += chunkMs) {
-    chunks.push({ startUtc: fmt(cursor), endUtc: fmt(Math.min(cursor + chunkMs, endMs)) });
+  let currentStart = startMs;
+
+  while (currentStart < endMs) {
+    const currentEnd = Math.min(currentStart + chunkMs, endMs);
+    chunks.push({
+      startUtc: new Date(currentStart).toISOString().replace('.000Z', 'Z'),
+      endUtc: new Date(currentEnd).toISOString().replace('.000Z', 'Z'),
+    });
+    currentStart = currentEnd;
   }
   return chunks;
 }
 
-/** Monta a URL griddap. `timeSelector` aceita `last-6:1:last` ou `(início):1:(fim)`. */
 export function buildCrwQueryUrl(
   distributor: CrwDistributor,
   pixel: { latitude: number; longitude: number },
@@ -196,7 +230,7 @@ export function parseErddapCrwCsv(csvText: string): ParsedCrwRow[] {
     const get = (index: number) => (index >= 0 ? parseNumber(parts[index]) : null);
     const timestampUtc = parts[idx.time]?.trim();
     if (!timestampUtc) continue;
-    const baa = get(idx.baa);
+    const baa = idx.baa >= 0 ? parseAlertLevel(parts[idx.baa]) : null;
     rows.push({
       timestampUtc,
       latitude: get(idx.latitude),
@@ -206,7 +240,7 @@ export function parseErddapCrwCsv(csvText: string): ParsedCrwRow[] {
       hotSpot: get(idx.hotSpot),
       dhw: get(idx.dhw),
       baa,
-      baa7d: idx.baa7d >= 0 ? get(idx.baa7d) : baa,
+      baa7d: idx.baa7d >= 0 ? parseAlertLevel(parts[idx.baa7d]) : baa,
     });
   }
   return rows;
@@ -217,14 +251,15 @@ async function querySingleDistributor(
   sectorId: BtsSectorId,
   timeSelector: string,
   window: { startUtc: string; endUtc: string } | null,
+  timeoutMs = CRW_ATTEMPT_TIMEOUT_MS,
 ): Promise<ThermalForcingPoint[]> {
   const pixel = getNoaaPixel(sectorId);
   const queryUrl = buildCrwQueryUrl(distributor, pixel, timeSelector);
   const source = distributor.label;
 
   const response = await withRetry(
-    () => fetchTextWithTimeout(queryUrl, { timeoutMs: CRW_TIMEOUT_MS, accept: 'text/csv', source }),
-    1,
+    () => fetchTextWithTimeout(queryUrl, { timeoutMs, accept: 'text/csv', source }),
+    0, // Retentativas orquestradas pelo orçamento em queryWithFailover
   ).catch((err: unknown) => {
     // ERDDAP responde HTTP 404 "Your query produced no matching results" quando não há dado no recorte.
     if (err instanceof RemoteDataError && err.kind === 'http' && err.status === 404
@@ -292,47 +327,92 @@ async function querySingleDistributor(
 }
 
 /**
- * Consulta distribuidores em ordem; devolve o primeiro resultado válido.
- * Se todos falharem, lança o erro do primeiro distribuidor com o resumo de todos.
+ * Consulta distribuidores em ordem; devolve o primeiro resultado válido dentro do orçamento.
+ * Ordem:
+ * 1. Coral Watch Virtual Station API (para dados recentes)
+ * 2. PacIOOS ERDDAP (dataset dhw_5km com CORS)
+ * 3. NOAA CoastWatch ERDDAP PFEG (dataset NOAA_DHW)
  */
 async function queryWithFailover(
   sectorId: BtsSectorId,
   timeSelector: string,
   window: { startUtc: string; endUtc: string } | null,
   distributors: readonly CrwDistributor[],
+  totalBudgetMs = CRW_TOTAL_BUDGET_MS,
 ): Promise<ThermalForcingPoint[]> {
+  const startTime = Date.now();
   const failures: RemoteDataError[] = [];
-  for (const distributor of distributors) {
-    try {
-      return await querySingleDistributor(distributor, sectorId, timeSelector, window);
-    } catch (err) {
-      failures.push(err instanceof RemoteDataError
-        ? err
-        : new RemoteDataError('parse', err instanceof Error ? err.message : String(err), { source: distributor.label }));
+
+  // 1. Tenta a Coral Watch Virtual Station API como primeira fonte para indicador recente
+  if (!window) {
+    const elapsed = Date.now() - startTime;
+    const remaining = totalBudgetMs - elapsed;
+    if (remaining > 1000) {
+      try {
+        const cwPoints = await fetchCoralWatchCurrent(sectorId, Math.min(CRW_ATTEMPT_TIMEOUT_MS, remaining));
+        if (cwPoints.length > 0) {
+          return cwPoints;
+        }
+      } catch (err) {
+        if (err instanceof RemoteDataError && err.kind === 'no_coverage') {
+          throw err;
+        }
+        failures.push(
+          err instanceof RemoteDataError
+            ? err
+            : new RemoteDataError('network', err instanceof Error ? err.message : String(err), {
+                source: 'Coral Watch API',
+              }),
+        );
+      }
     }
   }
 
-  // Prioriza a falha mais informativa: dado ausente > HTTP > parse > timeout > rede
-  const priority: Record<string, number> = { no_data: 0, http: 1, parse: 2, timeout: 3, network: 4 };
-  const primary = [...failures].sort((a, b) => priority[a.kind] - priority[b.kind])[0];
-  const summary = failures.map((f) => `• ${f.message}`).join('\n');
-  throw new RemoteDataError(primary.kind, summary, {
-    status: primary.status,
-    url: primary.url,
-    elapsedMs: primary.elapsedMs,
-    serverMessage: primary.serverMessage,
-    source: primary.source,
+  // 2. Failover para os distribuidores ERDDAP (PacIOOS e CoastWatch PFEG)
+  for (const distributor of distributors) {
+    const elapsed = Date.now() - startTime;
+    const remaining = totalBudgetMs - elapsed;
+    if (remaining <= 500) {
+      failures.push(
+        new RemoteDataError('timeout', `${distributor.label}: orçamento de tempo esgotado (${totalBudgetMs / 1000}s).`, {
+          source: distributor.label,
+          elapsedMs: elapsed,
+        }),
+      );
+      break;
+    }
+
+    const attemptTimeout = Math.min(CRW_ATTEMPT_TIMEOUT_MS, remaining);
+    try {
+      return await querySingleDistributor(distributor, sectorId, timeSelector, window, attemptTimeout);
+    } catch (err) {
+      failures.push(
+        err instanceof RemoteDataError
+          ? err
+          : new RemoteDataError('parse', err instanceof Error ? err.message : String(err), { source: distributor.label }),
+      );
+    }
+  }
+
+  // Prioriza a falha mais informativa: no_coverage > no_data > http > parse > timeout > rede
+  const priority: Record<string, number> = { no_coverage: 0, no_data: 1, http: 2, parse: 3, timeout: 4, network: 5 };
+  const primary = [...failures].sort((a, b) => (priority[a.kind] ?? 9) - (priority[b.kind] ?? 9))[0];
+  const summary = failures.map((f) => `• [${f.source ?? 'Fonte'}] ${f.message}`).join('\n');
+  throw new RemoteDataError(primary?.kind ?? 'network', summary || 'Todas as fontes remotas de estresse térmico falharam.', {
+    status: primary?.status,
+    url: primary?.url,
+    elapsedMs: Date.now() - startTime,
+    serverMessage: primary?.serverMessage,
+    source: primary?.source,
   });
 }
 
 /**
- * Indicador atual: consulta apenas os últimos CRW_RECENT_DAYS dias disponíveis no servidor
- * (seleção por índice `last`, que dispensa adivinhar a data da última atualização).
+ * Consulta de estresse térmico da Baía de Todos-os-Santos.
  *
- * Com `startUtc`/`endUtc` explícitos, consulta a série histórica em blocos de ≤ 15 dias em paralelo,
- * preservando os blocos bem-sucedidos mesmo que algum falhe.
- *
- * Nunca devolve lista vazia como sucesso: ausência de SST válida gera RemoteDataError('no_data').
+ * Em caso de Paraguaçu (canal estuarino interno mascarado como terra),
+ * lança RemoteDataError('no_coverage') para que o hook e o painel reflitam explicitamente
+ * a ausência de cobertura sem disparar chamadas de rede nem classificar como sucesso falso.
  */
 export async function fetchBtsThermalForcing(
   sectorId: BtsSectorId = 'frades',
@@ -342,7 +422,10 @@ export async function fetchBtsThermalForcing(
 ): Promise<ThermalForcingPoint[]> {
   // Setores estuarinos interiores estreitos (como o Paraguaçu) sofrem mascaramento de terra na grade de 5 km
   if (sectorId === 'paraguacu') {
-    return [];
+    throw new RemoteDataError(
+      'no_coverage',
+      'O produto de satélite NOAA CRW de 5 km não fornece dados válidos para representar este canal interno (mascaramento de terra).',
+    );
   }
 
   if (!startUtc || !endUtc) {
