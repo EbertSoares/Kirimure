@@ -77,16 +77,21 @@ describe('modelo de simulação', () => {
     expect(next.env.temperature).toBeLessThan(32);
   });
 
-  it('faz a velocidade alterar o relógio, não as regras', () => {
+  it('faz a velocidade alterar o relógio, não as regras (invariância numérica por sub-stepping)', () => {
     const normal = { ...createInitialState(), paused: false };
     normal.targets.temperature = 31;
+    normal.targets.sewage = 10000;
     const fast = { ...createInitialState(), speed: 10 as const, paused: false };
     fast.targets.temperature = 31;
+    fast.targets.sewage = 10000;
     const afterNormal = tickSimulation(normal, 1);
     const afterFast = tickSimulation(fast, 0.1);
     expect(afterNormal.elapsedDays).toBeCloseTo(PARAMETERS.daysPerRealSecond);
     expect(afterFast.elapsedDays).toBeCloseTo(PARAMETERS.daysPerRealSecond);
-    expect(afterFast.env.temperature).toBeCloseTo(afterNormal.env.temperature);
+    expect(afterFast.env.temperature).toBeCloseTo(afterNormal.env.temperature, 4);
+    expect(afterFast.dissolvedOxygen).toBeCloseTo(afterNormal.dissolvedOxygen, 3);
+    expect(afterFast.biochemicalOxygenDemand).toBeCloseTo(afterNormal.biochemicalOxygenDemand, 3);
+    expect(afterFast.overall).toBeCloseTo(afterNormal.overall, 3);
   });
 
   it('não avança enquanto a simulação está pausada', () => {

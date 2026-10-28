@@ -84,10 +84,10 @@ export function NormativeGaugeBar({ id, value, display, rawOxygen }: NormativeGa
       </div>
 
       <div className="gauge-labels-row">
-        <span className="gauge-tick-label">0% <small>(colapso)</small></span>
-        <span className="gauge-tick-label">33%</span>
-        <span className="gauge-tick-label">67% <small>(segurança)</small></span>
-        <span className="gauge-tick-label">100%</span>
+        <span className="gauge-tick-label">0 <small>(colapso)</small></span>
+        <span className="gauge-tick-label">33</span>
+        <span className="gauge-tick-label">67 <small>(segurança)</small></span>
+        <span className="gauge-tick-label">100</span>
       </div>
     </div>
   );

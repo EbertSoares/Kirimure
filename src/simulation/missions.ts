@@ -3,12 +3,12 @@ import { BASELINE } from './config';
 
 export const MISSION_01_OXYGEN: MissionDefinition = {
   id: 'missao-oxigenio',
-  title: 'Missão 01 — O Mistério do Oxigênio',
-  subtitle: 'Por que a carga orgânica pode asfixiar os peixes na baía?',
+  title: 'Investigação 1 · Oxigênio dissolvido',
+  subtitle: 'Como o aporte de matéria orgânica afeta o oxigênio e os peixes?',
   targetGrade: '6º ao 9º ano (11 a 14 anos)',
   estimatedMinutes: 45,
   question:
-    'Um novo canal começa a despejar continuamente efluente com matéria orgânica (esgoto doméstico) nesta enseada da Baía de Todos-os-Santos. O que acontecerá com o oxigênio e a respiração dos peixes nos próximos 15 dias?',
+    'Um canal passa a despejar efluente com matéria orgânica nesta enseada da Baía de Todos-os-Santos. Como esse aporte afeta a concentração de oxigênio dissolvido e a respiração dos peixes ao longo do tempo?',
   hypotheses: [
     {
       id: 'toxina',

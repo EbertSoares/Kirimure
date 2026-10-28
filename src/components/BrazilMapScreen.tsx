@@ -9,7 +9,7 @@ interface BrazilMapScreenProps {
 }
 
 const AVAILABLE_CODE = 'BA';
-const WARNING_DURATION = 3600;
+const WARNING_DURATION = 2500;
 
 // Faixa costeira do Brasil: os 17 estados que formam a fronteira da Amazônia
 // Azul, a área marítima sob jurisdição brasileira.
@@ -69,16 +69,16 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
 
         <ul className="map-legend" aria-label="Legenda do mapa">
           <li>
+            <span className="legend-swatch available" aria-hidden="true" />
+            Bahia
+          </li>
+          <li>
             <span className="legend-swatch coastal" aria-hidden="true" />
             Amazônia Azul
           </li>
           <li>
-            <span className="legend-swatch available" aria-hidden="true" />
-            Disponíveis
-          </li>
-          <li>
             <span className="legend-swatch other" aria-hidden="true" />
-            Demais regiões
+            Demais regiões (Em breve)
           </li>
         </ul>
 
@@ -140,10 +140,8 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
       </section>
 
       {unavailable && (
-        <div className="map-warning" role="alert" key={unavailable.at}>
-          <strong>{unavailable.name} ainda não está disponível</strong>
-          <p>Por enquanto, explore a Bahia — o cenário completo do recife.</p>
-          <button type="button" onClick={() => setUnavailable(null)}>Entendi</button>
+        <div className="map-discreet-toast" role="status" aria-live="polite" key={unavailable.at}>
+          <span><strong>{unavailable.name}:</strong> Cenário em desenvolvimento. Clique na Bahia para explorar o recife 3D da BTS.</span>
         </div>
       )}
     </main>

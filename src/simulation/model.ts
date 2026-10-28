@@ -391,10 +391,7 @@ function updateThermalDose(state: SimulationState, temperature: number, dtDays: 
   return { thermalDose: window, degreeHeatingWeeks };
 }
 
-export function tickSimulation(state: SimulationState, realDtSeconds: number): SimulationState {
-  if (state.paused || realDtSeconds <= 0) return state;
-
-  const dtDays = realDtSeconds * PARAMETERS.daysPerRealSecond * state.speed;
+function singleTickStep(state: SimulationState, dtDays: number): SimulationState {
   const env = { ...state.env };
 
   (Object.keys(env) as ItemId[]).forEach((id) => {
@@ -461,7 +458,7 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
   const overall = (health.coral + health.fish) / 2;
   const everDegraded = state.everDegraded || overall < 75;
 
-  return sampleHistory(state, {
+  return {
     ...state,
     env,
     degreeHeatingWeeks: thermal.degreeHeatingWeeks,
@@ -476,9 +473,30 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
     biochemicalOxygenDemand: bod,
     respiratoryDicUmolKg: nextRespiratoryDic,
     elapsedDays: state.elapsedDays + dtDays,
-    // A pausa entre marcos conta em segundos reais (ver messages.ts).
+  };
+}
+
+export function tickSimulation(state: SimulationState, realDtSeconds: number): SimulationState {
+  if (state.paused || realDtSeconds <= 0) return state;
+
+  const totalDtDays = realDtSeconds * PARAMETERS.daysPerRealSecond * state.speed;
+  // Sub-stepping numérico: passos de no máximo 0.05 dias (~1.2 horas simuladas)
+  // para garantir invariância numérica e estabilidade da integração de Euler independentemente da velocidade (1x a 10x).
+  const maxSubStepDays = 0.05;
+  const numSteps = Math.max(1, Math.ceil(totalDtDays / maxSubStepDays));
+  const subDtDays = totalDtDays / numSteps;
+
+  let current = state;
+  for (let step = 0; step < numSteps; step += 1) {
+    current = singleTickStep(current, subDtDays);
+  }
+
+  const updatedState = {
+    ...current,
     messageCooldown: Math.max(0, state.messageCooldown - realDtSeconds),
-  });
+  };
+
+  return sampleHistory(state, updatedState);
 }
 
 export interface EstimateCriticalDaysOptions {
@@ -617,9 +635,9 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
     {
       id: 'coral',
       label: 'Saúde dos corais',
-      display: `${Math.round(state.health.coral)}%`,
+      display: `${Math.round(state.health.coral)}/100`,
       value: state.health.coral,
-      unit: '%',
+      unit: '/100',
       tone: tone(state.health.coral),
       note: 'Índice didático relativo à baseline; não equivale a cobertura viva medida em campo.',
       badge: 'Regra do Modelo',
@@ -627,9 +645,9 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
     {
       id: 'algae',
       label: 'Pressão de algas',
-      display: `${Math.round(algae)}%`,
+      display: `${Math.round(algae)}/100`,
       value: algae,
-      unit: '%',
+      unit: '/100',
       tone: tone(algae, false),
       note: 'Índice derivado de nutrientes, raspagem de herbívoros e espaço livre.',
       badge: 'Regra do Modelo',
@@ -637,9 +655,9 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
     {
       id: 'fish',
       label: 'Saúde dos peixes',
-      display: `${Math.round(state.health.fish)}%`,
+      display: `${Math.round(state.health.fish)}/100`,
       value: state.health.fish,
-      unit: '%',
+      unit: '/100',
       tone: tone(state.health.fish),
       note: 'Índice composto das três espécies simuladas, sem equivalência demográfica direta.',
       badge: 'Regra do Modelo',
@@ -651,15 +669,15 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
       value: speciesScore,
       unit: '',
       tone: tone(speciesScore),
-      note: 'Espécies com índice individual acima de 60% no cenário.',
+      note: 'Espécies com índice individual acima de 60/100 no cenário.',
       badge: 'Regra do Modelo',
     },
     {
       id: 'trophic',
       label: 'Equilíbrio trófico',
-      display: `${Math.round(trophic)}%`,
+      display: `${Math.round(trophic)}/100`,
       value: trophic,
-      unit: '%',
+      unit: '/100',
       tone: tone(trophic),
       note: 'Razão entre herbivoria ativa e dominância de algas.',
       badge: 'Regra do Modelo',

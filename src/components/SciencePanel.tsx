@@ -5,14 +5,14 @@ import { EcosystemRadar } from './EcosystemRadar';
 import { NormativeGaugeBar } from './NormativeGaugeBar';
 import { TrophicPyramid } from './TrophicPyramid';
 import { NicheToleranceCurve } from './NicheToleranceCurve';
+import { IndicatorContextCard, type IndicatorDetailId } from './IndicatorModal';
 import { BTS_SECTORS, FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
-import { calculateAlgae, calculateFishPressures, calculateTrophicBalance } from '../simulation/model';
-import { calculateCarbonateSystem, calculateRespirationPhImpact } from '../simulation/carbonate';
+import { calculateAlgae, calculateFishPressures, calculateTrophicBalance, effectivePh } from '../simulation/model';
+import { calculateRespirationPhImpact } from '../simulation/carbonate';
 import { calculateOilFateBudget, evaluateOilEcotoxicity, BTS_MICROPLASTICS_SURVEY } from '../simulation/contaminants';
 import { evaluateChallenge, type ChallengeProgress } from '../simulation/challenges';
 import { getMessageById } from '../simulation/messages';
 import { MISSION_01_OXYGEN } from '../simulation/missions';
-import { formatSimulatedTime } from '../simulation/time';
 import type { OceanDataState } from '../hooks/useOceanData';
 import type {
   Challenge,
@@ -25,17 +25,15 @@ import type {
   SimulationState,
 } from '../simulation/types';
 
-export type PanelTab = 'now' | 'indicators' | 'species' | 'timeline' | 'challenges' | 'oceanData';
+export type PanelTab = 'summary' | 'results' | 'history' | 'activities' | 'data';
 
 const TABS: ReadonlyArray<{ id: PanelTab; label: string }> = [
-  { id: 'now', label: 'Agora' },
-  { id: 'indicators', label: 'Indicadores' },
-  { id: 'species', label: 'Espécies' },
-  { id: 'timeline', label: 'Histórico' },
-  { id: 'challenges', label: 'Desafios' },
-  { id: 'oceanData', label: 'Satélite & APIs' },
+  { id: 'summary', label: 'Resumo' },
+  { id: 'results', label: 'Resultados' },
+  { id: 'history', label: 'Evolução' },
+  { id: 'activities', label: 'Atividades' },
+  { id: 'data', label: 'Dados e Método' },
 ];
-
 
 const BINOMIAL_MAP: Record<FishSpeciesId, { binomial: string; family: string }> = {
   'blue-tang': { binomial: 'Acanthurus chirurgus / A. coeruleus', family: 'Acanthuridae · Herbívoro' },
@@ -78,6 +76,18 @@ function topPressures(state: SimulationState, id: FishSpeciesId | 'coral') {
     .slice(0, 3);
 }
 
+function mapToIndicatorDetailId(id: string): IndicatorDetailId | null {
+  if (id === 'oxygen' || id === 'dissolvedOxygen') return 'dissolvedOxygen';
+  if (id === 'coral') return 'coral';
+  if (id === 'fish') return 'fish';
+  if (id === 'temperature') return 'temperature';
+  if (id === 'ph') return 'ph';
+  if (id === 'dhw') return 'dhw';
+  if (id === 'overall') return 'overall';
+  if (id === 'time') return 'time';
+  return null;
+}
+
 interface SciencePanelProps {
   state: SimulationState;
   message: EducationalMessage;
@@ -96,6 +106,9 @@ interface SciencePanelProps {
   onSelectHypothesis?: (id: string, text?: string) => void;
   onApplyMissionSolution?: () => void;
   onExitMission?: () => void;
+  selectedIndicator?: IndicatorDetailId | null;
+  onSelectIndicator?: (id: IndicatorDetailId | null) => void;
+  getIndicatorValue?: (id: IndicatorDetailId) => string;
 }
 
 export function SciencePanel({
@@ -116,6 +129,9 @@ export function SciencePanel({
   onSelectHypothesis,
   onApplyMissionSolution,
   onExitMission,
+  selectedIndicator,
+  onSelectIndicator,
+  getIndicatorValue,
 }: SciencePanelProps) {
   const algae = calculateAlgae(state.env, state.health);
   const trophic = calculateTrophicBalance(state.species, algae);
@@ -145,6 +161,8 @@ export function SciencePanel({
       ? 'Recuperação'
       : 'Ponto de partida';
 
+  const currentPh = effectivePh(state.env, state.biochemicalOxygenDemand, state.sector, state.respiratoryDicUmolKg);
+
   return (
     <aside className="science-panel" aria-label="Painel científico">
       <nav className="panel-tabs" role="tablist">
@@ -163,8 +181,9 @@ export function SciencePanel({
       </nav>
 
       <div className="panel-body">
-        {tab === 'now' && (
-          <section className="panel-section" aria-label="O que está acontecendo">
+        {/* 1. ABA RESUMO */}
+        {tab === 'summary' && (
+          <section className="panel-section" aria-label="Resumo do cenário e leitura atual">
             <article className={`message-card tone-${message.tone}`}>
               <header className="message-heading">
                 <span className="message-icon"><Icon name={message.tone === 'positive' ? 'check' : 'info'} /></span>
@@ -196,16 +215,150 @@ export function SciencePanel({
                 </dl>
               )}
               <aside className="message-ask">
-                <span className="ask-label"><Icon name="target" /> Pergunta</span>
+                <span className="ask-label"><Icon name="target" /> Pergunta de Investigação</span>
                 <p>{message.ask}</p>
               </aside>
             </article>
 
+            <article className="summary-variables-card">
+              <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '13px', color: '#e2e8f0' }}>Variáveis-Chave do Cenário</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Leitura Rápida</span>
+              </header>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 10px' }}>
+                Selecione uma variável para abrir interpretação, equações e limites normativos na aba Resultados:
+              </p>
+              <div className="summary-grid">
+                <button
+                  type="button"
+                  className="summary-metric-btn"
+                  onClick={() => {
+                    onSelectIndicator?.('dissolvedOxygen');
+                    onTabChange('results');
+                  }}
+                  title="Ver método e limites CONAMA de Oxigênio Dissolvido"
+                >
+                  <span className="metric-label">Oxigênio (OD)</span>
+                  <strong className={`metric-val ${state.dissolvedOxygen < 2 ? 'critical' : state.dissolvedOxygen < 5 ? 'watch' : 'healthy'}`}>
+                    {state.dissolvedOxygen.toFixed(1).replace('.', ',')} mg/L
+                  </strong>
+                </button>
+
+                <button
+                  type="button"
+                  className="summary-metric-btn"
+                  onClick={() => {
+                    onSelectIndicator?.('temperature');
+                    onTabChange('results');
+                  }}
+                  title="Ver método e limiares térmicos"
+                >
+                  <span className="metric-label">Temperatura</span>
+                  <strong className={`metric-val ${state.env.temperature >= 29 ? 'critical' : state.env.temperature >= 28 ? 'watch' : 'healthy'}`}>
+                    {state.env.temperature.toFixed(1).replace('.', ',')} °C
+                  </strong>
+                </button>
+
+                <button
+                  type="button"
+                  className="summary-metric-btn"
+                  onClick={() => {
+                    onSelectIndicator?.('ph');
+                    onTabChange('results');
+                  }}
+                  title="Ver método e sistema carbonato de pH"
+                >
+                  <span className="metric-label">pH da Água</span>
+                  <strong className={`metric-val ${currentPh < 7.9 ? 'critical' : currentPh < 8.1 ? 'watch' : 'healthy'}`}>
+                    {currentPh.toFixed(2).replace('.', ',')}
+                  </strong>
+                </button>
+
+                <button
+                  type="button"
+                  className="summary-metric-btn"
+                  onClick={() => {
+                    onSelectIndicator?.('overall');
+                    onTabChange('results');
+                  }}
+                  title="Ver índice sintético de resiliência geral"
+                >
+                  <span className="metric-label">Resiliência Geral</span>
+                  <strong className={`metric-val ${levelTone(state.overall)}`}>
+                    {Math.round(state.overall)}/100
+                  </strong>
+                </button>
+
+                <button
+                  type="button"
+                  className="summary-metric-btn"
+                  onClick={() => {
+                    onSelectIndicator?.('dhw');
+                    onTabChange('results');
+                  }}
+                  title="Ver estresse térmico acumulado Degree Heating Weeks"
+                >
+                  <span className="metric-label">DHW (12 sem)</span>
+                  <strong className={`metric-val ${state.degreeHeatingWeeks >= 4 ? 'critical' : state.degreeHeatingWeeks > 0 ? 'watch' : 'healthy'}`}>
+                    {state.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem
+                  </strong>
+                </button>
+
+                <button
+                  type="button"
+                  className="summary-metric-btn"
+                  onClick={() => {
+                    onSelectIndicator?.('coral');
+                    onTabChange('results');
+                  }}
+                  title="Ver resiliência relativa dos corais construtores"
+                >
+                  <span className="metric-label">Corais / Fauna</span>
+                  <strong className="metric-val">
+                    {Math.round(state.health.coral)}/100 · {Math.round(state.health.fish)}/100
+                  </strong>
+                </button>
+              </div>
+            </article>
+
+            <article className="events-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ margin: 0 }}>Marcos Recentes</h3>
+                <button
+                  type="button"
+                  onClick={() => onTabChange('history')}
+                  style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '11px', cursor: 'pointer', padding: 0 }}
+                >
+                  Ver histórico completo →
+                </button>
+              </div>
+              {eventLog.length === 0 ? (
+                <p className="events-empty">Nenhum marco ainda. Avance os dias na barra temporal para observar os efeitos.</p>
+              ) : (
+                <ul>
+                  {eventLog.slice(0, 4).map((event, index) => (
+                    <li key={`${event.id}-${event.day}-${index}`}>
+                      <span className="event-day">dia {event.day}</span>
+                      <span className="event-title">{getMessageById(event.id).title}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
           </section>
         )}
 
-        {tab === 'indicators' && (
-          <section className="panel-section" aria-label="Indicadores do recife">
+        {/* 2. ABA RESULTADOS */}
+        {tab === 'results' && (
+          <section className="panel-section" aria-label="Resultados e diagnóstico ecológico">
+            {selectedIndicator && (
+              <IndicatorContextCard
+                indicatorId={selectedIndicator}
+                onClose={() => onSelectIndicator?.(null)}
+                currentValue={getIndicatorValue ? getIndicatorValue(selectedIndicator) : undefined}
+              />
+            )}
+
             <EcosystemRadar state={state} trophic={trophic} />
 
             <ul className="indicator-list">
@@ -218,9 +371,18 @@ export function SciencePanel({
                   if (item.id === 'trophic') return (h.coral + h.fish) / 2;
                   return item.value;
                 });
+                const detailId = mapToIndicatorDetailId(item.id);
 
                 return (
-                  <li key={item.id} className={`indicator tone-${item.tone}`}>
+                  <li
+                    key={item.id}
+                    className={`indicator tone-${item.tone} ${selectedIndicator === detailId ? 'selected-indicator' : ''}`}
+                    onClick={() => {
+                      if (detailId) onSelectIndicator?.(detailId);
+                    }}
+                    style={{ cursor: detailId ? 'pointer' : 'default' }}
+                    title={detailId ? 'Clique para inspecionar interpretação, metodologia e limites normativos' : undefined}
+                  >
                     <div className="indicator-head">
                       <span>
                         {item.label}
@@ -229,7 +391,7 @@ export function SciencePanel({
                       <div className="indicator-value-group">
                         <Sparkline
                           data={historyData}
-                          min={item.id === 'oxygen' ? 0 : 0}
+                          min={0}
                           max={item.id === 'oxygen' ? 8 : 100}
                           label={item.label}
                           stroke={item.tone === 'healthy' ? '#00e5ff' : item.tone === 'watch' ? '#ffd052' : '#ff5a5a'}
@@ -257,105 +419,6 @@ export function SciencePanel({
               })}
             </ul>
 
-            <article className="compare-card" style={{ marginTop: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Sistema Carbonato & Aragonita</h3>
-                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
-              </div>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 10px' }}>
-                Setor: <strong>{sector.label}</strong> · Salinidade Local: <strong>{sectorSalinity} PSU</strong> · TA: <strong>{carbonate.totalAlkalinityUmolKg.toFixed(0)} µmol/kg</strong>
-              </p>
-              <ul style={{ marginTop: '8px' }}>
-                <li>
-                  <span>Saturação de Aragonita (Ωarag)</span>
-                  <strong className={carbonate.omegaAragonite >= 3.0 ? 'healthy' : carbonate.omegaAragonite >= 2.0 ? 'watch' : 'critical'}>
-                    {carbonate.omegaAragonite.toFixed(2)}
-                  </strong>
-                </li>
-                <li>
-                  <span>Pressão parcial de CO₂ (pCO₂)</span>
-                  <span>{carbonate.pCO2Uatm} µatm</span>
-                </li>
-                <li>
-                  <span>Carbono Inorgânico Total (DIC)</span>
-                  <span>{carbonate.dissolvedInorganicCarbonUmolKg} µmol/kg</span>
-                </li>
-                {state.biochemicalOxygenDemand > 0 && (
-                  <li>
-                    <span>Acréscimo de DIC por Respiração (DBO)</span>
-                    <span style={{ color: '#ffd052' }}>+{((state.biochemicalOxygenDemand / 32) * 1000 * 0.98).toFixed(1)} µmol/kg</span>
-                  </li>
-                )}
-                <li>
-                  <span>Condição de Calcificação</span>
-                  <em className={carbonate.omegaAragonite >= 3.0 ? 'up' : 'down'}>
-                    {carbonate.calcificationStatus === 'optimum'
-                      ? 'Ótima (calcificação plena)'
-                      : carbonate.calcificationStatus === 'adequate'
-                        ? 'Adequada para recifes'
-                        : carbonate.calcificationStatus === 'marginal'
-                          ? 'Marginal (estresse moderado)'
-                          : 'Severo / Risco de corrosão'}
-                  </em>
-                </li>
-              </ul>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
-                Equilíbrio termodinâmico (Lueker et al., 2000 / Mucci, 1983; compatível com formulações CO2SYS/PyCO2SYS). Acoplado à salinidade do setor e ao consumo de oxigênio por respiração microbiana.
-              </p>
-            </article>
-
-            {oilBudget && (
-              <article className="compare-card" style={{ marginTop: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ margin: 0 }}>Destino do Óleo (4 Reservatórios)</h3>
-                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Cenário Didático / Modelo de Caixa</span>
-                </div>
-                <ul style={{ marginTop: '12px' }}>
-                  <li>
-                    <span>1. Filme Superficial (bloqueio de luz)</span>
-                    <strong>{oilBudget.surfaceFilmKg.toLocaleString('pt-BR')} kg ({oilBudget.surfaceFilmThicknessUm} µm)</strong>
-                  </li>
-                  <li>
-                    <span>2. Coluna d'Água (gotículas dispersas)</span>
-                    <strong>{oilBudget.waterColumnDispersedKg.toLocaleString('pt-BR')} kg</strong>
-                  </li>
-                  <li>
-                    <span>3. HPAs Dissolvidos (tPAH50 biodisponível)</span>
-                    <strong className={oilBudget.dissolvedPahConcentrationUgL >= 10 ? 'critical' : oilBudget.dissolvedPahConcentrationUgL >= 3 ? 'watch' : 'healthy'}>
-                      {oilBudget.dissolvedPahConcentrationUgL.toFixed(3)} µg/L
-                    </strong>
-                  </li>
-                  {oilEcotox && (
-                    <li>
-                      <span>Inibição Subletal de Regeneração (May et al., 2020)</span>
-                      <strong className={oilEcotox.tissueRegenerationInhibitionPercent >= 50 ? 'critical' : oilEcotox.tissueRegenerationInhibitionPercent >= 20 ? 'watch' : 'healthy'}>
-                        {oilEcotox.tissueRegenerationInhibitionPercent}% (Risco pólipos: {oilEcotox.polypRetractionRisk})
-                      </strong>
-                    </li>
-                  )}
-                  <li>
-                    <span>4. Óleo Sedimentado no Fundo</span>
-                    <strong>{oilBudget.sedimentedKg.toLocaleString('pt-BR')} kg</strong>
-                  </li>
-                  <li>
-                    <span>Evaporação Atmosférica</span>
-                    <span>{oilBudget.evaporatedKg.toLocaleString('pt-BR')} kg</span>
-                  </li>
-                  <li>
-                    <span>Exportação Hidrodinâmica Oceânica</span>
-                    <span>{oilBudget.exportedKg.toLocaleString('pt-BR')} kg</span>
-                  </li>
-                </ul>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
-                  Balanço em 4 reservatórios (superfície, dispersão, dissolução e sedimento) com taxas de perda advectiva e atmosférica (resíduo de balanço de massa &lt; 0,1% como verificação de consistência aritmética). A concentração de HPAs (tPAH50) é uma estimativa diagnóstica exploratória baseada na fração aromática solúvel (~1,5%) com EC50 de 10 µg/L para regeneração tecidual (May et al., 2020). No modelo geral da simulação, a pressão de óleo atua como estressor subletal composto e atenuação luminosa, e não como curva aguda letal de campo descalibrada.
-                </p>
-              </article>
-            )}
-          </section>
-        )}
-
-        {tab === 'species' && (
-          <section className="panel-section" aria-label="Espécies e teia alimentar">
             <TrophicPyramid
               coralHealth={state.health.coral}
               fishHealth={state.health.fish}
@@ -379,11 +442,11 @@ export function SciencePanel({
                     label="Corais"
                     stroke={levelTone(state.health.coral) === 'healthy' ? '#00e5ff' : '#ffd052'}
                   />
-                  <strong className={levelTone(state.health.coral)}>{Math.round(state.health.coral)}%</strong>
+                  <strong className={levelTone(state.health.coral)}>{Math.round(state.health.coral)}/100</strong>
                 </div>
               </header>
 
-              <NormativeGaugeBar id="coral" value={state.health.coral} display={`${Math.round(state.health.coral)}%`} />
+              <NormativeGaugeBar id="coral" value={state.health.coral} display={`${Math.round(state.health.coral)}/100`} />
 
               <NicheToleranceCurve
                 speciesLabel="Corais Construtores"
@@ -423,11 +486,11 @@ export function SciencePanel({
                         label={species.label}
                         stroke={levelTone(health) === 'healthy' ? '#00e5ff' : levelTone(health) === 'watch' ? '#ffd052' : '#ff5a5a'}
                       />
-                      <strong className={levelTone(health)}>{Math.round(health)}%</strong>
+                      <strong className={levelTone(health)}>{Math.round(health)}/100</strong>
                     </div>
                   </header>
 
-                  <NormativeGaugeBar id={`species-${species.id}`} value={health} display={`${Math.round(health)}%`} />
+                  <NormativeGaugeBar id={`species-${species.id}`} value={health} display={`${Math.round(health)}/100`} />
 
                   <NicheToleranceCurve
                     speciesLabel={species.label}
@@ -452,19 +515,19 @@ export function SciencePanel({
               <div className="web-nodes">
                 <div className={`web-node tone-${levelTone(algae, false)}`}>
                   <small>Algas</small>
-                  <strong>{Math.round(algae)}%</strong>
+                  <strong>{Math.round(algae)}/100</strong>
                 </div>
                 <div className={`web-node tone-${levelTone(herbivores)}`}>
                   <small>Herbívoros</small>
-                  <strong>{Math.round(herbivores)}%</strong>
+                  <strong>{Math.round(herbivores)}/100</strong>
                 </div>
                 <div className={`web-node tone-${levelTone(state.health.coral)}`}>
                   <small>Corais</small>
-                  <strong>{Math.round(state.health.coral)}%</strong>
+                  <strong>{Math.round(state.health.coral)}/100</strong>
                 </div>
               </div>
               <p className="web-balance">
-                Equilíbrio da teia: <strong className={levelTone(trophic)}>{Math.round(trophic)}%</strong>
+                Equilíbrio da teia: <strong className={levelTone(trophic)}>{Math.round(trophic)}/100</strong>
               </p>
               <p className="web-note">
                 Herbívoros raspam as algas e abrem espaço para o coral recrutar. Quando as algas
@@ -475,8 +538,9 @@ export function SciencePanel({
           </section>
         )}
 
-        {tab === 'timeline' && (
-          <section className="panel-section" aria-label="Linha do tempo">
+        {/* 3. ABA EVOLUÇÃO (TIMELINE & HISTÓRICO) */}
+        {tab === 'history' && (
+          <section className="panel-section" aria-label="Evolução temporal e histórico">
             <OxygenTrendChart
               history={state.history}
               currentOxygen={state.dissolvedOxygen}
@@ -497,7 +561,7 @@ export function SciencePanel({
                   return (
                     <li key={label}>
                       <span>{label}</span>
-                      <span className="compare-values">{Math.round(past)}% → <strong>{Math.round(current)}%</strong></span>
+                      <span className="compare-values">{Math.round(past)}/100 → <strong>{Math.round(current)}/100</strong></span>
                       <em className={delta >= 0 ? 'up' : 'down'}>
                         {delta >= 0 ? '+' : ''}{Math.round(delta)}
                         {delta >= 0 ? ' ↑' : ' ↓'}
@@ -526,12 +590,13 @@ export function SciencePanel({
           </section>
         )}
 
-        {tab === 'challenges' && (
-          <section className="panel-section" aria-label="Desafios e Missões">
+        {/* 4. ABA ATIVIDADES (MISSÃO E DESAFIOS) */}
+        {tab === 'activities' && (
+          <section className="panel-section" aria-label="Desafios e Missões Guiadas">
             {missionState ? (
               <div className="mission-active-panel">
                 <header className="mission-header-bar">
-                  <span className="mission-badge">Missão 01 · 6º ao 9º ano</span>
+                  <span className="mission-badge">Investigação 1 · 6º ao 9º ano</span>
                   <button type="button" className="mission-exit-btn" onClick={onExitMission}>
                     Sair da Missão (Modo Livre)
                   </button>
@@ -554,11 +619,11 @@ export function SciencePanel({
                     </div>
                     <div className="mission-live-metric">
                       <span>Oxigênio de Partida:</span>
-                      <strong style={{ color: 'var(--healthy)' }}>{state.dissolvedOxygen.toFixed(1)} mg/L (Bom)</strong>
+                      <strong style={{ color: 'var(--healthy)' }}>{state.dissolvedOxygen.toFixed(1).replace('.', ',')} mg/L (Adequado)</strong>
                     </div>
                     <p className="mission-desc">
-                      Nesta aula de 45 minutos, você vai investigar o que acontece na água quando o esgoto é lançado,
-                      formular uma previsão e testar uma solução real.
+                      Nesta aula guiada, você vai investigar o que acontece na água quando o efluente orgânico é despejado,
+                      formular uma hipótese científica e verificar uma intervenção de saneamento.
                     </p>
                     <div className="mission-step-nav">
                       <button
@@ -566,7 +631,7 @@ export function SciencePanel({
                         className="mission-next-btn"
                         onClick={() => onMissionStepChange?.('hypothesis')}
                       >
-                        Formular Previsão →
+                        Formular Hipótese →
                       </button>
                     </div>
                   </article>
@@ -575,9 +640,9 @@ export function SciencePanel({
                 {missionState.step === 'hypothesis' && (
                   <article className="mission-step-card">
                     <span className="mission-step-kicker">Etapa 2 de 5 · Faça uma Previsão</span>
-                    <h3 className="mission-title">O que você acha que vai acontecer?</h3>
+                    <h3 className="mission-title">O que você prevê que vai acontecer?</h3>
                     <p className="mission-desc">
-                      Escolha uma das hipóteses abaixo para registrar o que você imagina antes de rodar o laboratório:
+                      Selecione uma das hipóteses abaixo para registrar o que você espera observar antes do experimento:
                     </p>
                     <div className="mission-hypothesis-options">
                       {MISSION_01_OXYGEN.hypotheses.map((h) => {
@@ -612,11 +677,11 @@ export function SciencePanel({
                     <span className="mission-step-kicker">Etapa 3 de 5 · Teste e Observe</span>
                     <h3 className="mission-title">Laboratório em Ação</h3>
                     <div className="mission-question-box">
-                      <strong>Instruções para o experimento:</strong>
+                      <strong>Instruções do experimento:</strong>
                       <ol style={{ margin: '6px 0 0', paddingLeft: '18px' }}>
-                        <li>Na bancada abaixo, ajuste a barra de <strong>Carga Orgânica (DBO)</strong> para 5.000 kg (ou mais) e clique no botão verde <strong>Iniciar Experimento</strong>.</li>
-                        <li>Acima da cena marinha, use a velocidade <strong>2× ou 5×</strong> para avançar os dias.</li>
-                        <li>Observe o gráfico temporal abaixo e o comportamento dos peixes na cena.</li>
+                        <li>Na bancada inferior, ajuste a <strong>Carga Orgânica (DBO)</strong> para 5.000 kg (ou mais) e clique no botão verde <strong>Iniciar Experimento</strong>.</li>
+                        <li>Acima da cena 3D, selecione velocidade <strong>2× ou 5×</strong> para avançar os dias.</li>
+                        <li>Acompanhe a curva de oxigênio abaixo e a resposta dos peixes na cena marinha.</li>
                       </ol>
                     </div>
 
@@ -631,13 +696,13 @@ export function SciencePanel({
                       <div className="mission-conclusion-card" style={{ borderColor: 'var(--watch)' }}>
                         <strong>Queda de oxigênio confirmada!</strong>
                         <p style={{ margin: 0 }}>
-                          As bactérias decompositoras estão oxidando a matéria orgânica e esgotando o oxigênio da enseada,
-                          causando estresse respiratório nos peixes.
+                          As bactérias heterotróficas estão decompondo a matéria orgânica e esgotando o oxigênio da enseada,
+                          causando estresse respiratório e evasão dos peixes.
                         </p>
                       </div>
                     ) : (
                       <p className="mission-desc" style={{ fontStyle: 'italic' }}>
-                        Aguardando a aplicação da carga e o avanço dos dias simulados no relógio...
+                        Aguardando a aplicação da carga orgânica e o avanço dos dias simulados no relógio...
                       </p>
                     )}
 
@@ -659,13 +724,13 @@ export function SciencePanel({
                     <span className="mission-step-kicker">Etapa 4 de 5 · Investigue a Solução</span>
                     <h3 className="mission-title">O que podemos fazer?</h3>
                     <p className="mission-desc">
-                      O oxigênio caiu para níveis perigosos. Como recuperar a enseada sem fórmulas mágicas?
+                      O oxigênio caiu para níveis perigosos. Como recuperar a enseada sem medidas mágicas?
                     </p>
 
                     <div className="mission-solution-box">
-                      <strong>Estação de Tratamento de Esgoto (ETE)</strong>
+                      <strong>Estação de Tratamento de Esgoto (ETE) · Cenário de Intervenção</strong>
                       <p>
-                        A ETE trata o efluente antes de chegar ao mar, retendo 98% da carga orgânica diretamente na fonte.
+                        A ETE intercepta o efluente e retém 98% da carga orgânica na fonte (hipótese didática de projeto).
                       </p>
                       <button
                         type="button"
@@ -686,10 +751,10 @@ export function SciencePanel({
 
                     {missionState.solutionApplied && (
                       <div className="mission-conclusion-card">
-                        <strong>Inércia Hidrodinâmica da Baía:</strong>
+                        <strong>Recuperação Gradual por Balanço de Massa:</strong>
                         <p style={{ margin: 0 }}>
-                          Observe o relógio: o oxigênio não sobe no mesmo segundo. O tempo de renovação das águas pelas marés
-                          leva dias para lavar o efluente residual e restabelecer a oxigenação normal da fauna.
+                          Observe o relógio: o oxigênio não sobe instantaneamente. A recuperação depende do tempo de renovação hidrodinâmica
+                          das marés, da taxa de reaeração atmosférica e da oxidação do efluente residual remanescente na baía.
                         </p>
                       </div>
                     )}
@@ -800,9 +865,9 @@ export function SciencePanel({
                     <span className="mission-badge">Aula Guiada · 45 min</span>
                     <span className="epistemological-badge">Cenário Didático</span>
                   </header>
-                  <h3 className="mission-title">Missão 01 — O Mistério do Oxigênio</h3>
+                  <h3 className="mission-title">Investigação 1 · Oxigênio dissolvido</h3>
                   <p className="mission-desc">
-                    Investigação científica passo a passo: descubra por que a carga de matéria orgânica afeta a respiração e a vida dos peixes na baía.
+                    Investigação científica passo a passo: descubra por que a carga de matéria orgânica afeta a respiração e a sobrevivência dos peixes na baía.
                   </p>
                   <button
                     type="button"
@@ -816,8 +881,7 @@ export function SciencePanel({
                 <div className="challenges-divider">Ou pratique os desafios livres</div>
 
                 <p className="panel-intro">
-                  Escolha um objetivo para investigar no modo livre. A barra mostra quantos dias seguidos a condição já se
-                  manteve.
+                  Escolha um objetivo para investigar no modo livre. A barra indica quantos dias seguidos a condição foi sustentada.
                 </p>
 
                 <ul className="challenge-list">
@@ -861,8 +925,9 @@ export function SciencePanel({
           </section>
         )}
 
-        {tab === 'oceanData' && (
-          <section className="panel-section" aria-label="Dados Oceanográficos Externos e Satélite">
+        {/* 5. ABA DADOS E MÉTODO (NOAA, OPEN-METEO, CARBONATO, ÓLEO E MICROPLÁSTICOS) */}
+        {tab === 'data' && (
+          <section className="panel-section" aria-label="Dados Oceanográficos Externos e Metodologia Científica">
             <header style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="epistemological-badge">Modo de Referência Ambiental</span>
@@ -886,7 +951,7 @@ export function SciencePanel({
                 )}
               </div>
               <h2 style={{ fontSize: '18px', margin: '8px 0 4px', color: '#fff' }}>
-                Monitoramento Satelital & Previsão da BTS
+                Monitoramento Satelital & Metodologia da BTS
               </h2>
               <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', margin: 0 }}>
                 Dados observados e produtos de modelo em grade regional da Baía de Todos-os-Santos.
@@ -908,17 +973,17 @@ export function SciencePanel({
               }}>
                 <strong>Modo Offline / Snapshot de Contingência Histórico:</strong>
                 <p style={{ margin: '4px 0 0' }}>
-                  A rede remota externa está inacessível ou simulada. O laboratório exibe os snapshots históricos calibrados
-                  do evento de branqueamento El Niño de março/abril de 2024 para fins de estudo comparativo.
+                  A rede externa está inacessível. O laboratório exibe os snapshots históricos calibrados
+                  do evento El Niño de março/abril de 2024 para fins de estudo comparativo.
                 </p>
               </div>
             )}
 
-            {/* Categoria 1: PRODUTO DE SATÉLITE - NOAA Coral Reef Watch */}
+            {/* 1. PRODUTO DE SATÉLITE - NOAA Coral Reef Watch */}
             <article className="compare-card" style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0 }}>1. Produto de Satélite: NOAA Coral Reef Watch</h3>
-                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Satélite Operacional</span>
               </div>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 8px' }}>
                 Posição Solicitada: {sector.coordinates.latitude.toFixed(2)}°, {sector.coordinates.longitude.toFixed(2)}° ({sector.label})
@@ -958,7 +1023,7 @@ export function SciencePanel({
                       </strong>
                     </li>
                     <li>
-                      <span>HotSpot Térmico Oficial (CRW_HOTSPOT vs. Climatologia Local)</span>
+                      <span>HotSpot Térmico Oficial (CRW_HOTSPOT)</span>
                       <strong>{oceanData.latestCrw.hotSpotDegC !== null ? `${oceanData.latestCrw.hotSpotDegC.toFixed(1)} °C` : 'Ausente'}</strong>
                     </li>
                     <li>
@@ -971,7 +1036,7 @@ export function SciencePanel({
                       <span>Nível Operacional de Alerta (BAA)</span>
                       <em>
                         {oceanData.latestCrw.bleachingAlertLevel === 4
-                          ? 'Alerta 2 (Mortalidade de espécies vulneráveis provável)'
+                          ? 'Alerta 2 (Mortalidade severa provável)'
                           : oceanData.latestCrw.bleachingAlertLevel === 3
                             ? 'Alerta 1 (Risco significativo de branqueamento)'
                             : oceanData.latestCrw.bleachingAlertLevel === 2
@@ -980,7 +1045,7 @@ export function SciencePanel({
                                 ? 'Vigilância (Watch)'
                                 : oceanData.latestCrw.bleachingAlertLevel === 0
                                   ? 'Sem Estresse Térmico (Nível 0)'
-                                  : 'Dado Ausente / Não Informado pelo Satélite'}
+                                  : 'Dado Ausente'}
                       </em>
                     </li>
                   </ul>
@@ -1009,13 +1074,12 @@ export function SciencePanel({
                       <Icon name="check" />
                       <span>
                         {oceanData.noaaStatus.state === 'success'
-                          ? `Usar SST do produto NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
-                          : `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial de contingência`}
+                          ? `Usar SST do satélite NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
+                          : `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`}
                       </span>
                     </button>
                   )}
 
-                  {/* Comparativo Didático vs Real */}
                   <div style={{ marginTop: '12px', background: 'rgba(0,0,0,0.25)', padding: '10px', borderRadius: '6px', fontSize: '11px', lineHeight: 1.5 }}>
                     <strong style={{ color: '#38bdf8' }}>Comparação de Governança Epistemológica:</strong>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
@@ -1024,12 +1088,12 @@ export function SciencePanel({
                         SST: {oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C · DHW: {oceanData.latestCrw.degreeHeatingWeeks !== null ? `${oceanData.latestCrw.degreeHeatingWeeks.toFixed(1)} °C-sem` : '—'}
                       </div>
                       <div style={{ borderLeft: '2px solid #a855f7', paddingLeft: '8px' }}>
-                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>Cenário Simulado Experimental:</span><br />
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>Cenário Simulado Didático:</span><br />
                         SST: {state.env.temperature.toFixed(1)} °C · DHW: {state.degreeHeatingWeeks.toFixed(1)} °C-sem
                       </div>
                     </div>
                     <p style={{ margin: '8px 0 0', color: 'rgba(255,255,255,0.5)', fontSize: '10.5px' }}>
-                      Nota: O BAA e o HotSpot do NOAA são calculados sobre a climatologia do pixel (MMM de satélite em grade de 5 km), enquanto o estresse didático no Kirimurê utiliza a linha base pedagógica configurada. Ao alterar os controles da bancada, o Kirimurê calcula o estresse experimental sem sobrescrever o registro de satélite.
+                      Nota: O BAA e o HotSpot da NOAA são calculados sobre a climatologia do pixel (MMM de satélite em grade de 5 km), enquanto o estresse didático no Kirimurê utiliza a linha de base configurada para o setor.
                     </p>
                   </div>
                 </>
@@ -1045,11 +1109,11 @@ export function SciencePanel({
               )}
             </article>
 
-            {/* Categoria 2: PRODUTO DE MODELO NUMÉRICO - Open-Meteo Marine */}
+            {/* 2. PRODUTO DE MODELO NUMÉRICO - Open-Meteo Marine */}
             <article className="compare-card" style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>2. Produto de Modelo Numérico: Open-Meteo Marine</h3>
-                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
+                <h3 style={{ margin: 0 }}>2. Modelo Numérico Costeiro: Open-Meteo Marine</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Modelo Global ECMWF</span>
               </div>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 8px' }}>
                 Canal de Entrada da BTS (-12.97°, -38.50°) · Grade nominal 8 km (Copernicus / ECMWF)
@@ -1065,7 +1129,7 @@ export function SciencePanel({
                   background: oceanData?.meteoStatus.state === 'success' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
                   color: oceanData?.meteoStatus.state === 'success' ? '#4ade80' : '#fbbf24',
                 }}>
-                  {oceanData?.meteoStatus.state === 'success' ? '● Modelo Global em Tempo Real' : '● Snapshot de Contingência'}
+                  {oceanData?.meteoStatus.state === 'success' ? '● Modelo Costeiro em Tempo Real' : '● Snapshot de Contingência'}
                 </span>
               </div>
 
@@ -1096,57 +1160,123 @@ export function SciencePanel({
                     </li>
                   </ul>
                   <p style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.5)', marginTop: '8px', lineHeight: 1.4 }}>
-                    Ressalva Hidrodinâmica: O modelo oceânico global (~8 km) provê forçantes de contorno costeiras. O transporte de poluentes por canais internos rasos exige modelagem hidrodinâmica estuarina de alta resolução com validação local.
+                    Ressalva Hidrodinâmica: O modelo oceânico global (~8 km) provê condições de contorno oceânicas. A circulação interna nos canais rasos da BTS é dominada pela maré semidiurna e aportes fluviais.
                   </p>
                 </>
               ) : (
                 <div style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
                   <p style={{ margin: 0 }}>
-                    <strong>Nenhum dado meteorológico/ondas disponível para {sector.label}:</strong>
+                    <strong>Nenhum dado oceanográfico disponível para {sector.label}:</strong>
                   </p>
                   <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.5)' }}>
-                    O modelo numérico oceânico global (~8 km) não resolve a hidrodinâmica em canais interiores rasos e estuários. A simulação aplica os parâmetros hidrodinâmicos específicos do compartimento.
+                    O modelo numérico oceânico global (~8 km) não resolve a hidrodinâmica em canais interiores rasos e estuários. A simulação aplica os parâmetros hidrodinâmicos calibrados do compartimento.
                   </p>
                 </div>
               )}
             </article>
 
-            {/* Categoria 3: ESTIMATIVAS DA SIMULAÇÃO (BALANÇO CINÉTICO ACOPLADO) */}
+            {/* 3. SISTEMA CARBONATO & ARAGONITA */}
             <article className="compare-card" style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>3. Estimativas da Simulação: Balanços Físico-Químicos</h3>
-                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Padrão Operacional</span>
+                <h3 style={{ margin: 0 }}>3. Sistema Carbonato & Calcificação (Ωarag)</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Termodinâmica Aquática</span>
               </div>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
-                Balanços de massa acoplados resolvidos deterministicamente para o setor {sector.label}
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 10px' }}>
+                Setor: <strong>{sector.label}</strong> · Salinidade Local: <strong>{sectorSalinity} PSU</strong> · TA: <strong>{carbonate.totalAlkalinityUmolKg.toFixed(0)} µmol/kg</strong>
               </p>
               <ul>
                 <li>
-                  <span>Solubilidade Termodinâmica Ar-Mar (Weiss, 1970)</span>
-                  <strong>{(6.55).toFixed(2)} mg O₂/L (a 26,8 °C e 35 PSU)</strong>
-                </li>
-                <li>
-                  <span>Oxigênio Dissolvido Cinético Atual</span>
-                  <strong className={state.dissolvedOxygen < 2.0 ? 'critical' : state.dissolvedOxygen < 5.0 ? 'watch' : 'healthy'}>
-                    {state.dissolvedOxygen.toFixed(2)} mg/L
+                  <span>Saturação de Aragonita (Ωarag)</span>
+                  <strong className={carbonate.omegaAragonite >= 3.0 ? 'healthy' : carbonate.omegaAragonite >= 2.0 ? 'watch' : 'critical'}>
+                    {carbonate.omegaAragonite.toFixed(2)}
                   </strong>
                 </li>
                 <li>
-                  <span>Regime de Lançamento de DBO</span>
-                  <span>{state.sewageDischargeMode === 'pulse' ? 'Pulso Único (Massa Total)' : 'Carga Contínua (kg DBO₅/dia)'}</span>
+                  <span>Pressão parcial de CO₂ (pCO₂)</span>
+                  <span>{carbonate.pCO2Uatm} µatm</span>
                 </li>
                 <li>
-                  <span>Saturação de Aragonita Local (Ωarag)</span>
-                  <span>{carbonate.omegaAragonite.toFixed(2)} ({carbonate.calcificationStatus})</span>
+                  <span>Carbono Inorgânico Total (DIC)</span>
+                  <span>{carbonate.dissolvedInorganicCarbonUmolKg} µmol/kg</span>
+                </li>
+                {state.biochemicalOxygenDemand > 0 && (
+                  <li>
+                    <span>Acréscimo de DIC por Respiração (DBO)</span>
+                    <span style={{ color: '#ffd052' }}>+{((state.biochemicalOxygenDemand / 32) * 1000 * 0.98).toFixed(1)} µmol/kg</span>
+                  </li>
+                )}
+                <li>
+                  <span>Condição de Calcificação</span>
+                  <em className={carbonate.omegaAragonite >= 3.0 ? 'up' : 'down'}>
+                    {carbonate.calcificationStatus === 'optimum'
+                      ? 'Ótima (calcificação plena)'
+                      : carbonate.calcificationStatus === 'adequate'
+                        ? 'Adequada para recifes'
+                        : carbonate.calcificationStatus === 'marginal'
+                          ? 'Marginal (estresse moderado)'
+                          : 'Severo / Risco de dissolução'}
+                  </em>
                 </li>
               </ul>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
+                Equilíbrio químico fundamentado em Lueker et al. (2000) e Mucci (1983), validado contra formulações CO2SYS / Dickson & Goyet (1994). O consumo de oxigênio pela respiração microbiana eleva o DIC estequiometricamente (1 mol O₂ liberando 0,98 mol CO₂), acidificando a enseada em conjunto com o pH da água.
+              </p>
             </article>
 
-            {/* Categoria 4: OBSERVAÇÕES EMPÍRICAS DE CAMPO - Microplásticos In Situ na BTS */}
+            {/* 4. BALANÇO DE DESTINO DO ÓLEO */}
+            {oilBudget && (
+              <article className="compare-card" style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>4. Destino de Hidrocarbonetos de Petróleo (Balanço em 4 Caixas)</h3>
+                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Balanço de Massa</span>
+                </div>
+                <ul style={{ marginTop: '12px' }}>
+                  <li>
+                    <span>1. Filme Superficial (bloqueio de luz)</span>
+                    <strong>{oilBudget.surfaceFilmKg.toLocaleString('pt-BR')} kg ({oilBudget.surfaceFilmThicknessUm} µm)</strong>
+                  </li>
+                  <li>
+                    <span>2. Coluna d'Água (gotículas dispersas)</span>
+                    <strong>{oilBudget.waterColumnDispersedKg.toLocaleString('pt-BR')} kg</strong>
+                  </li>
+                  <li>
+                    <span>3. HPAs Dissolvidos (tPAH50 biodisponível)</span>
+                    <strong className={oilBudget.dissolvedPahConcentrationUgL >= 10 ? 'critical' : oilBudget.dissolvedPahConcentrationUgL >= 3 ? 'watch' : 'healthy'}>
+                      {oilBudget.dissolvedPahConcentrationUgL.toFixed(3)} µg/L
+                    </strong>
+                  </li>
+                  {oilEcotox && (
+                    <li>
+                      <span>Inibição Subletal de Regeneração (May et al., 2020)</span>
+                      <strong className={oilEcotox.tissueRegenerationInhibitionPercent >= 50 ? 'critical' : oilEcotox.tissueRegenerationInhibitionPercent >= 20 ? 'watch' : 'healthy'}>
+                        {oilEcotox.tissueRegenerationInhibitionPercent}% (Risco pólipos: {oilEcotox.polypRetractionRisk})
+                      </strong>
+                    </li>
+                  )}
+                  <li>
+                    <span>4. Óleo Sedimentado no Fundo</span>
+                    <strong>{oilBudget.sedimentedKg.toLocaleString('pt-BR')} kg</strong>
+                  </li>
+                  <li>
+                    <span>Evaporação Atmosférica</span>
+                    <span>{oilBudget.evaporatedKg.toLocaleString('pt-BR')} kg</span>
+                  </li>
+                  <li>
+                    <span>Exportação Hidrodinâmica Oceânica</span>
+                    <span>{oilBudget.exportedKg.toLocaleString('pt-BR')} kg</span>
+                  </li>
+                </ul>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
+                  Modelo de 4 reservatórios acoplados com perdas advectivas e atmosféricas (resíduo numérico de conservação de massa &lt; 0,1%). A ecotoxicidade de HPAs baseia-se na concentração de tPAH50 com EC50 de 10 µg/L para inibição de regeneração tecidual em corais recifais (May et al., 2020).
+                </p>
+              </article>
+            )}
+
+            {/* 5. MICROPLÁSTICOS BTS */}
             <article className="compare-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>4. Observação de Campo: Microplásticos nos Estuários da BTS</h3>
-                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Dado Local BTS</span>
+                <h3 style={{ margin: 0 }}>5. Observação de Campo: Microplásticos nos Estuários da BTS</h3>
+                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Dado Empírico Local</span>
               </div>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 12px' }}>
                 Campanhas empíricas publicadas por Trindade et al. (2023 / UFRB / Environmental Pollution)
@@ -1165,7 +1295,7 @@ export function SciencePanel({
                 ))}
               </ul>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '8px', lineHeight: 1.4 }}>
-                Aporte fluvial anual estimado em 3,88 trilhões de partículas. Valores expressos em itens/m³ para evitar falsa equivalência de biomassa/massa sem distribuição granulométrica e densidade polimérica.
+                Aporte fluvial anual estimado em 3,88 trilhões de partículas. Valores reportados em itens/m³ conforme medição in situ de arrasto com rede de plâncton, mantendo fidelidade aos dados empíricos observados.
               </p>
             </article>
           </section>

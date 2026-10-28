@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSPropertie
 import { BrandLogo } from './components/BrandLogo';
 import { BrazilMapScreen } from './components/BrazilMapScreen';
 import { Icon } from './components/Icons';
-import { IndicatorModal, type IndicatorDetailId } from './components/IndicatorModal';
+import type { IndicatorDetailId } from './components/IndicatorModal';
 import { SciencePanel, type PanelTab } from './components/SciencePanel';
 import { TimelineBar } from './components/TimelineBar';
 import { useOceanData } from './hooks/useOceanData';
@@ -366,15 +366,21 @@ export function App() {
   const controlsRef = useRef<Environment>({ ...BASELINE });
   const [resetToken, setResetToken] = useState(0);
   const [simulation, setSimulation] = useState(createInitialState);
-  const [panelTab, setPanelTab] = useState<PanelTab>('now');
+  const [panelTab, setPanelTab] = useState<PanelTab>('summary');
   const oceanData = useOceanData(simulation.sector, screen === 'simulation');
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [criticalDays, setCriticalDays] = useState<number | null | undefined>(undefined);
   const [missionState, setMissionState] = useState<MissionState | null>(null);
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorDetailId | null>(null);
 
-  const getIndicatorCurrentValue = (id: IndicatorDetailId | null) => {
-    if (!id) return '';
+  const handleSelectIndicator = (id: IndicatorDetailId | null) => {
+    setSelectedIndicator(id);
+    if (id) {
+      setPanelTab('results');
+    }
+  };
+
+  const getIndicatorCurrentValue = (id: IndicatorDetailId) => {
     switch (id) {
       case 'temperature':
         return `${simulation.env.temperature.toFixed(1).replace('.', ',')} °C`;
@@ -387,11 +393,11 @@ export function App() {
       case 'time':
         return `${formatSimulatedTime(simulation.elapsedDays)} (Dia ${Math.floor(simulation.elapsedDays)})`;
       case 'overall':
-        return `${Math.round(simulation.overall)}%`;
+        return `${Math.round(simulation.overall)}/100`;
       case 'coral':
-        return `${Math.round(simulation.health.coral)}%`;
+        return `${Math.round(simulation.health.coral)}/100`;
       case 'fish':
-        return `${Math.round(simulation.health.fish)}%`;
+        return `${Math.round(simulation.health.fish)}/100`;
       default:
         return '';
     }
@@ -404,7 +410,7 @@ export function App() {
       selectedHypothesisId: null,
     });
     setChallengeId(null);
-    setPanelTab('challenges');
+    setPanelTab('activities');
   };
 
   const handleMissionStepChange = (step: MissionStepId) => {
@@ -496,7 +502,7 @@ export function App() {
       }),
     );
     if (!missionState) {
-      setPanelTab('now');
+      setPanelTab('summary');
     }
   };
 
@@ -558,7 +564,7 @@ export function App() {
     setSimulation(createInitialState());
     setChallengeId(null);
     setCriticalDays(undefined);
-    setPanelTab('now');
+    setPanelTab('summary');
     setMissionState(null);
     setSelectedIndicator(null);
   };
@@ -684,8 +690,8 @@ export function App() {
               <button
                 type="button"
                 className="readout-item-btn"
-                onClick={() => setSelectedIndicator('temperature')}
-                title="Temperatura da água da superfície [Clique para detalhes pedagógicos]"
+                onClick={() => handleSelectIndicator('temperature')}
+                title="Temperatura da água da superfície"
               >
                 <small>TEMP.</small>
                 <strong>{simulation.env.temperature.toFixed(1).replace('.0', '').replace('.', ',')}°C</strong>
@@ -694,8 +700,8 @@ export function App() {
               <button
                 type="button"
                 className="readout-item-btn"
-                onClick={() => setSelectedIndicator('ph')}
-                title="pH da água [Clique para detalhes pedagógicos]"
+                onClick={() => handleSelectIndicator('ph')}
+                title="pH da água"
               >
                 <small>pH</small>
                 <strong>{effectivePh(simulation.env, simulation.biochemicalOxygenDemand, simulation.sector, simulation.respiratoryDicUmolKg).toFixed(2).replace('.', ',')}</strong>
@@ -705,8 +711,8 @@ export function App() {
                 <button
                   type="button"
                   className="readout-item-btn"
-                  onClick={() => setSelectedIndicator('dhw')}
-                  title="Calor acumulado nas últimas 12 semanas (DHW) [Clique para detalhes pedagógicos]"
+                  onClick={() => handleSelectIndicator('dhw')}
+                  title="Calor acumulado nas últimas 12 semanas (DHW)"
                 >
                   <small>DHW · 12 SEM.</small>
                   <strong>{simulation.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem.</strong>
@@ -716,8 +722,8 @@ export function App() {
               <button
                 type="button"
                 className={`readout-item-btn ${simulation.dissolvedOxygen < 2.0 ? 'critical-alert' : simulation.dissolvedOxygen < 3.5 ? 'watch-alert' : ''}`}
-                onClick={() => setSelectedIndicator('dissolvedOxygen')}
-                title="Oxigênio dissolvido na água (OD) [Clique para detalhes pedagógicos]"
+                onClick={() => handleSelectIndicator('dissolvedOxygen')}
+                title="Oxigênio dissolvido na água (OD)"
               >
                 <small>OXIGÊNIO (OD)</small>
                 <strong>{simulation.dissolvedOxygen.toFixed(1).replace('.', ',')} <span className="readout-unit">mg/L</span></strong>
@@ -726,8 +732,8 @@ export function App() {
               <button
                 type="button"
                 className="readout-item-btn"
-                onClick={() => setSelectedIndicator('time')}
-                title="Tempo decorrido no cenário [Clique para detalhes pedagógicos]"
+                onClick={() => handleSelectIndicator('time')}
+                title="Tempo decorrido no cenário"
               >
                 <small>TEMPO SIMULADO</small>
                 <strong>{formatSimulatedTime(simulation.elapsedDays)}</strong>
@@ -743,11 +749,11 @@ export function App() {
               <button
                 type="button"
                 className="health-item-btn"
-                onClick={() => setSelectedIndicator('overall')}
-                title="Índice didático de resiliência geral [Clique para detalhes pedagógicos]"
+                onClick={() => handleSelectIndicator('overall')}
+                title="Índice didático de resiliência geral"
               >
                 <small>Geral</small>
-                <strong>{Math.round(simulation.overall)}%</strong>
+                <strong>{Math.round(simulation.overall)}/100</strong>
                 <div className="health-bar" aria-hidden="true">
                   <i
                     className={healthLevel(simulation.overall)}
@@ -759,11 +765,11 @@ export function App() {
               <button
                 type="button"
                 className="health-item-btn"
-                onClick={() => setSelectedIndicator('coral')}
-                title="Índice didático de resiliência dos corais [Clique para detalhes pedagógicos]"
+                onClick={() => handleSelectIndicator('coral')}
+                title="Índice didático de resiliência dos corais"
               >
                 <small>Corais</small>
-                <strong>{Math.round(simulation.health.coral)}%</strong>
+                <strong>{Math.round(simulation.health.coral)}/100</strong>
                 <div className="health-bar" aria-hidden="true">
                   <i
                     className={healthLevel(simulation.health.coral)}
@@ -775,11 +781,11 @@ export function App() {
               <button
                 type="button"
                 className="health-item-btn"
-                onClick={() => setSelectedIndicator('fish')}
-                title="Índice didático de resiliência da ictiofauna [Clique para detalhes pedagógicos]"
+                onClick={() => handleSelectIndicator('fish')}
+                title="Índice didático de resiliência da ictiofauna"
               >
                 <small>Fauna</small>
-                <strong>{Math.round(simulation.health.fish)}%</strong>
+                <strong>{Math.round(simulation.health.fish)}/100</strong>
                 <div className="health-bar" aria-hidden="true">
                   <i
                     className={healthLevel(simulation.health.fish)}
@@ -809,6 +815,9 @@ export function App() {
           onSelectHypothesis={handleSelectHypothesis}
           onApplyMissionSolution={handleApplyMissionSolution}
           onExitMission={handleExitMission}
+          selectedIndicator={selectedIndicator}
+          onSelectIndicator={handleSelectIndicator}
+          getIndicatorValue={getIndicatorCurrentValue}
         />
 
         <TeachingConsole
@@ -822,12 +831,6 @@ export function App() {
           sectorId={simulation.sector}
         />
       </main>
-
-      <IndicatorModal
-        indicatorId={selectedIndicator}
-        onClose={() => setSelectedIndicator(null)}
-        currentValue={getIndicatorCurrentValue(selectedIndicator)}
-      />
 
       <div
         className={`screen-transition-veil ${transitionDark ? 'active' : ''}`}
