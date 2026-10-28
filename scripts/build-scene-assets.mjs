@@ -13,13 +13,14 @@
  * muda de tamanho ou de data.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE_ROOT = join(root, 'src/assets/svg');
 const OUTPUT_ROOT = join(root, 'src/assets/scene');
+const MANIFEST_PATH = join(OUTPUT_ROOT, 'manifest.json');
 
 // Grupos de arte: pasta de origem e maior lado necessário na cena.
 // Peixes aparecem com 54–94 px; corais com 160–230 px; o banco de rochas é o
@@ -90,34 +91,49 @@ function main() {
 
   const todo = [...missing, ...pending];
 
-  if (!todo.length) {
-    return;
+  if (todo.length > 0) {
+    if (!hasSips) {
+      // Sem sips (Windows, Linux, CI): copia os arquivos pendentes e ausentes
+      // de forma portável via API nativa do Node (copyFileSync), sem depender de comandos shell como 'cp'.
+      todo.forEach(({ source, output }) => {
+        copyFileSync(source, output);
+      });
+      console.log(
+        `[artes] ${todo.length} arte(s) da cena atualizada(s)/copiada(s) via copyFileSync (sips indisponível nesta plataforma).`,
+      );
+    } else {
+      let bytesBefore = 0;
+      let bytesAfter = 0;
+
+      todo.forEach(({ source, output, maxSize }) => {
+        resizeWithSips(source, output, maxSize);
+        bytesBefore += statSync(source).size;
+        bytesAfter += statSync(output).size;
+      });
+
+      const mb = (value) => (value / 1024 / 1024).toFixed(1).replace('.', ',');
+      console.log(
+        `[artes] ${todo.length} arte(s) da cena atualizada(s): ` +
+          `${mb(bytesBefore)} MB → ${mb(bytesAfter)} MB.`,
+      );
+    }
   }
 
-  if (!hasSips) {
-    // Sem sips (Linux, CI), mantém os derivados já versionados e só cria o que
-    // estiver faltando, copiando o original para o build não quebrar.
-    missing.forEach(({ source, output }) => {
-      execFileSync('cp', [source, output]);
+  // Gera o manifesto de integridade dos assets derivados
+  const manifest = readdirSync(OUTPUT_ROOT)
+    .filter(isPng)
+    .sort()
+    .map((filename) => {
+      const filePath = join(OUTPUT_ROOT, filename);
+      const st = statSync(filePath);
+      return {
+        name: filename,
+        sizeBytes: st.size,
+        modifiedAt: new Date(st.mtimeMs).toISOString(),
+      };
     });
-    console.log(`[artes] ${missing.length} arte(s) copiada(s) sem redimensionar (sips indisponível).`);
-    return;
-  }
 
-  let bytesBefore = 0;
-  let bytesAfter = 0;
-
-  todo.forEach(({ source, output, maxSize }) => {
-    resizeWithSips(source, output, maxSize);
-    bytesBefore += statSync(source).size;
-    bytesAfter += statSync(output).size;
-  });
-
-  const mb = (value) => (value / 1024 / 1024).toFixed(1).replace('.', ',');
-  console.log(
-    `[artes] ${todo.length} arte(s) da cena atualizada(s): ` +
-      `${mb(bytesBefore)} MB → ${mb(bytesAfter)} MB.`,
-  );
+  writeFileSync(MANIFEST_PATH, JSON.stringify({ generatedAt: new Date().toISOString(), assets: manifest }, null, 2), 'utf8');
 }
 
 main();

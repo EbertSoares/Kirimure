@@ -26,6 +26,36 @@ import type { FishSpeciesId, SimulationState } from '../../simulation/types';
 import { MARINE_ASSET_URLS } from '../assets';
 import { updateFishState } from '../fishAppearance';
 import { createOceanEngine, type RendererBackend } from './engine';
+import { detectSceneQualityProfile, type SceneQualityProfile } from './quality';
+
+/**
+ * ============================================================================
+ * ARQUITETURA VISUAL DO KIRIMURÊ (CENA BABYLON.JS)
+ * ============================================================================
+ * A cena aquática utiliza uma arquitetura visual híbrida e estratificada:
+ *
+ * 1. Camada 1 — Cenário de Fundo (Backdrop 2.5D):
+ *    Plano perspectivo com a textura ocean-backdrop.png e cáusticas de areia.
+ *
+ * 2. Camada 2 — Ictiofauna Bentônica 2.5D (Planos Deformáveis Subdivididos):
+ *    Espécies recifais emblemáticas da BTS (Acanthurus chirurgus, Scarus trispinosus,
+ *    Abudefduf saxatilis) mapeadas em planos transparentes com 14x4 subdivisões.
+ *    A ondulação corporal propulsiva é gerada proceduralmente por deformação de vértices.
+ *    Não utiliza o SpriteManager nativo do Babylon.js para permitir deformação contínua.
+ *
+ * 3. Camada 3 — Modelos Tridimensionais Poligonais (glTF / GLB):
+ *    - Tubarão (shark.glb): malha 3D única com ondulação corporal procedural e patrulha predadora.
+ *    - Cardume 3D (pale-bleak/scene.gltf): modelo riggado com esqueleto de 43 ossos e animação
+ *      esqueletal. Utilizado com rigor metodológico como representação didática de cardume
+ *      pelágico 3D e evasão predatória, com política de qualidade adaptativa ao dispositivo.
+ *
+ * 4. Camada 4 — Efeitos Físico-Químicos e Contaminantes Procedurais:
+ *    - Pluma de esgoto (véu subaquático e plumas volumétricas).
+ *    - Mancha de óleo (faixas superficiais de slick com atenuação luminosa e sombra cáustica).
+ *    - Microplásticos (partículas com advecção via Curl Noise 3D e tombamento especular).
+ *    - Bolhas de aeração e ressuspensão.
+ * ============================================================================
+ */
 
 const CAMERA_FOV = 0.80;
 const TAN_HALF_FOV = Math.tan(CAMERA_FOV * 0.5);
@@ -190,6 +220,7 @@ interface FishSwimmer {
   deadElapsed: number;
   stageElapsed: number;
   verticalVelocity: number;
+  isDeformedDead?: boolean;
 }
 
 /**
@@ -619,6 +650,7 @@ function evaluateCoralPixelMask(u: number, v: number, r: number, g: number, b: n
 function createCoralBleachingLayer(
   scene: Scene,
   camera: FreeCamera,
+  quality: SceneQualityProfile = detectSceneQualityProfile(),
 ): { mesh: Mesh; material: StandardMaterial } {
   const rawConfig = createRawImageProcessing();
 
@@ -636,8 +668,8 @@ function createCoralBleachingLayer(
   coralPlane.isPickable = false;
   coralPlane.visibility = 0;
 
-  const texW = 1024;
-  const texH = 576;
+  const texW = quality.coralTextureWidth;
+  const texH = quality.coralTextureHeight;
 
   const coralTex = new DynamicTexture('corais-branqueamento-tex', { width: texW, height: texH }, scene, true);
   coralTex.hasAlpha = true;
@@ -653,29 +685,39 @@ function createCoralBleachingLayer(
     cCtx.drawImage(img, 0, 0, texW, texH);
     const coralFrame = cCtx.getImageData(0, 0, texW, texH);
     const cData = coralFrame.data;
+    const data32 = new Uint32Array(cData.buffer);
 
-    for (let y = 0; y < texH; y += 1) {
+    const yStart = Math.max(0, Math.floor(0.52 * texH));
+    const yEnd = Math.min(texH, Math.ceil(0.885 * texH));
+
+    // Zera os pixels fora da faixa vertical de corais com fill() rápido nativo
+    data32.subarray(0, yStart * texW).fill(0);
+    data32.subarray(yEnd * texW).fill(0);
+
+    for (let y = yStart; y < yEnd; y += 1) {
       const v = y / texH;
+      const rowOffset = y * texW;
       for (let x = 0; x < texW; x += 1) {
         const u = x / texW;
-        const idx = (y * texW + x) * 4;
+        const idx = (rowOffset + x) * 4;
         const r = cData[idx];
         const g = cData[idx + 1];
         const b = cData[idx + 2];
 
         const coralMask = evaluateCoralPixelMask(u, v, r, g, b);
         if (coralMask <= 0.01) {
-          cData[idx + 3] = 0;
+          data32[rowOffset + x] = 0;
         } else {
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
           const peak = Math.max(r, g, b);
           const structure = 0.62 * peak + 0.38 * lum;
           const bone = clamp((132 + structure * 0.64) / 255, 0.50, 0.99) * 255;
 
-          cData[idx] = Math.round(bone);
-          cData[idx + 1] = Math.round(bone * 0.985);
-          cData[idx + 2] = Math.round(bone * 0.955);
-          cData[idx + 3] = Math.round(clamp(coralMask * 1.35) * 255);
+          const outR = Math.round(bone);
+          const outG = Math.round(bone * 0.985);
+          const outB = Math.round(bone * 0.955);
+          const outA = Math.round(clamp(coralMask * 1.35) * 255);
+          data32[rowOffset + x] = (outA << 24) | (outB << 16) | (outG << 8) | outR;
         }
       }
     }
@@ -2315,15 +2357,24 @@ function generateNext3DFishWaypoint(
 }
 
 /**
- * Carrega o modelo 3D riggado `cc0____pale_bleak_z` (/models/pale-bleak/scene.gltf),
- * que possui 43 ossos e a animação esqueletal 'Animation' de 5.625s,
- * formando um cardume 3D que nada para os lados, cima/baixo, diagonais e também
- * RETO para a frente (sentido da câmera) e RETO para trás (sentido do fundo),
- * fugindo quando o tubarão se aproxima e depois se reagrupando.
+ * Rigor Biológico e Metodológico do Modelo 3D Riggado:
+ * O modelo 'cc0____pale_bleak_z' (Alburnus albidus / ciprinídeo) é utilizado didaticamente
+ * como demonstração de cardume 3D com evasão dinâmica de predador (tubarão).
+ * Não representa peixe recifal autóctone da Baía de Todos-os-Santos (cujas espécies locais —
+ * Acanthurus chirurgus, Scarus trispinosus e Abudefduf saxatilis — são representadas pelos
+ * modelos calibrados em 2.5D na zona bentônica).
+ *
+ * O número de instâncias esqueléticas ativas é configurado dinamicamente pelo perfil
+ * de qualidade do dispositivo (maxCount).
  */
-async function loadRiggedPaleBleakFishes(scene: Scene, schools: FishSchool3D[]): Promise<RiggedFish3D[]> {
+async function loadRiggedPaleBleakFishes(
+  scene: Scene,
+  schools: FishSchool3D[],
+  maxCount = 10,
+): Promise<RiggedFish3D[]> {
+  let container: Awaited<ReturnType<typeof LoadAssetContainerAsync>> | null = null;
   try {
-    const container = await LoadAssetContainerAsync('scene.gltf', scene, {
+    container = await LoadAssetContainerAsync('scene.gltf', scene, {
       rootUrl: '/models/pale-bleak/',
     });
     if (scene.isDisposed) {
@@ -2346,7 +2397,7 @@ async function loadRiggedPaleBleakFishes(scene: Scene, schools: FishSchool3D[]):
     cleanTex.hasAlpha = true;
 
     const school = schools[4] ?? schools[0];
-    const count = 10;
+    const count = Math.max(1, Math.min(maxCount, 10));
     const items: RiggedFish3D[] = [];
 
     for (let i = 0; i < count; i += 1) {
@@ -2398,9 +2449,9 @@ async function loadRiggedPaleBleakFishes(scene: Scene, schools: FishSchool3D[]):
       const offsetV = (row - 1) * 0.024 + (col % 2) * 0.009;
       const offsetDepth = ((i % 4) - 1.5) * 0.06;
 
-      // Os últimos 4 peixes 3D são "depth runners" dedicados a nadar reto para a frente (sentido câmera)
+      // Os últimos peixes 3D são "depth runners" dedicados a nadar reto para a frente (sentido câmera)
       // e reto para trás (sentido fundo do mar), além de diagonais 3D
-      const isDepthRunner = i >= 6;
+      const isDepthRunner = count > 6 && i >= 6;
       const runnerU = 0.24 + (i - 6) * 0.17;
       const runnerV = 0.46 + ((i % 2) * 0.11);
       const runnerStartDepth = i % 2 === 0 ? 0.14 : 0.88;
@@ -2481,6 +2532,9 @@ async function loadRiggedPaleBleakFishes(scene: Scene, schools: FishSchool3D[]):
     return items;
   } catch (err) {
     console.warn('Falha ao carregar modelo 3D pale-bleak:', err);
+    if (container) {
+      container.dispose();
+    }
     return [];
   }
 }
@@ -2501,8 +2555,9 @@ function sampleSharkCooldownSeconds(isInitial = false): number {
  * 2. Cruzar bem colado na câmera de surpresa (camera_flyby).
  */
 async function load3DSharks(scene: Scene): Promise<SharkSwimmer3D[]> {
+  let container: Awaited<ReturnType<typeof LoadAssetContainerAsync>> | null = null;
   try {
-    const container = await LoadAssetContainerAsync('shark.glb', scene, {
+    container = await LoadAssetContainerAsync('shark.glb', scene, {
       rootUrl: '/models/shark/',
     });
     if (scene.isDisposed) {
@@ -2512,13 +2567,19 @@ async function load3DSharks(scene: Scene): Promise<SharkSwimmer3D[]> {
     const srcMesh = container.meshes.find(
       (m): m is Mesh => m instanceof Mesh && m.getTotalVertices() > 0,
     );
-    if (!srcMesh) return [];
+    if (!srcMesh) {
+      container.dispose();
+      return [];
+    }
 
     const rawPos = srcMesh.getVerticesData(VertexBuffer.PositionKind);
     const rawNorm = srcMesh.getVerticesData(VertexBuffer.NormalKind);
     const rawCol = srcMesh.getVerticesData(VertexBuffer.ColorKind);
     const rawIdx = srcMesh.getIndices();
-    if (!rawPos || !rawNorm || !rawIdx) return [];
+    if (!rawPos || !rawNorm || !rawIdx) {
+      container.dispose();
+      return [];
+    }
 
     // Normaliza as coordenadas extraídas para x ∈ [-0.5 (focinho), +0.5 (cauda)]
     const normPositions = new Float32Array(rawPos.length);
@@ -2576,6 +2637,10 @@ async function load3DSharks(scene: Scene): Promise<SharkSwimmer3D[]> {
     mat.imageProcessingConfiguration = rawConfig;
     mesh.material = mat;
 
+    // Descarte com segurança do container glTF original: os buffers já foram clonados para vData/mesh,
+    // liberando a malha crua e materiais residuais da memória GPU/RAM
+    container.dispose();
+
     // Começa oculto em cooldown para só aparecer de surpresa após o intervalo inicial
     mesh.setEnabled(false);
 
@@ -2613,6 +2678,9 @@ async function load3DSharks(scene: Scene): Promise<SharkSwimmer3D[]> {
     ];
   } catch (err) {
     console.warn('Falha ao carregar modelo 3D do tubarão:', err);
+    if (container) {
+      container.dispose();
+    }
     return [];
   }
 }
@@ -2669,7 +2737,7 @@ function createBubbleTexture(scene: Scene): DynamicTexture {
   return tex;
 }
 
-function createAirBubbles(scene: Scene): AirBubble[] {
+function createAirBubbles(scene: Scene, maxBubbles = 82): AirBubble[] {
   const bubbleTex = createBubbleTexture(scene);
 
   const mat = new StandardMaterial('bolha-ar-mat', scene);
@@ -2684,11 +2752,12 @@ function createAirBubbles(scene: Scene): AirBubble[] {
   mat.backFaceCulling = false;
   mat.imageProcessingConfiguration = createRawImageProcessing();
 
+  const countScale = Math.min(1.0, Math.max(0.35, maxBubbles / 82));
   const columns = [
-    { screenX: 0.125, maxScreenY: 0.56, minScreenY: 0.285, count: 22, scale: 1.25 },
-    { screenX: 0.372, maxScreenY: 0.64, minScreenY: 0.295, count: 18, scale: 0.92 },
-    { screenX: 0.478, maxScreenY: 0.66, minScreenY: 0.295, count: 20, scale: 0.96 },
-    { screenX: 0.838, maxScreenY: 0.58, minScreenY: 0.285, count: 22, scale: 1.28 },
+    { screenX: 0.125, maxScreenY: 0.56, minScreenY: 0.285, count: Math.round(22 * countScale), scale: 1.25 },
+    { screenX: 0.372, maxScreenY: 0.64, minScreenY: 0.295, count: Math.round(18 * countScale), scale: 0.92 },
+    { screenX: 0.478, maxScreenY: 0.66, minScreenY: 0.295, count: Math.round(20 * countScale), scale: 0.96 },
+    { screenX: 0.838, maxScreenY: 0.58, minScreenY: 0.285, count: Math.round(22 * countScale), scale: 1.28 },
   ];
 
   const bubbles: AirBubble[] = [];
@@ -2963,11 +3032,11 @@ function createDetailedMicroplasticTextures(scene: Scene): Array<{
  * Cria o sistema de partículas de microplásticos em 3 camadas de profundidade
  * (fundo em suspensão fina, meia-água detalhada com rotação 3D e primeiro plano com paralaxe).
  */
-function createMicroplastics(scene: Scene): MicroplasticParticle[] {
+function createMicroplastics(scene: Scene, maxParticles = 195): MicroplasticParticle[] {
   const rawConfig = createRawImageProcessing();
   const variants = createDetailedMicroplasticTextures(scene);
   const items: MicroplasticParticle[] = [];
-  const totalParticles = 195;
+  const totalParticles = Math.max(20, Math.min(maxParticles, 195));
 
   for (let i = 0; i < totalParticles; i += 1) {
     const variant = variants[i % variants.length];
@@ -3040,6 +3109,7 @@ function createMicroplastics(scene: Scene): MicroplasticParticle[] {
 
 export class BabylonOceanRuntime {
   readonly backend: RendererBackend;
+  readonly quality: SceneQualityProfile;
   private readonly scene: Scene;
   private readonly camera: FreeCamera;
   private readonly backdrop: { mesh: Mesh; material: StandardMaterial };
@@ -3057,6 +3127,8 @@ export class BabylonOceanRuntime {
   private elapsed = 0;
   private aspect = REFERENCE_ASPECT;
   private disposed = false;
+  private pauseRenderDone = false;
+  private needsRender = true;
 
   /** Intensidades visuais suavizadas (respondem tanto à meta aplicada quanto ao ambiente) */
   private visualOil = 0;
@@ -3070,6 +3142,7 @@ export class BabylonOceanRuntime {
     state: SimulationState,
   ) {
     this.backend = backend;
+    this.quality = detectSceneQualityProfile();
     this.state = state;
     this.scene = new Scene(engine);
     this.scene.clearColor = new Color4(0.02, 0.25, 0.44, 1);
@@ -3089,14 +3162,14 @@ export class BabylonOceanRuntime {
     sun.intensity = 1.5;
 
     this.backdrop = createBackdrop(this.scene, this.camera);
-    this.coralBleachLayer = createCoralBleachingLayer(this.scene, this.camera);
+    this.coralBleachLayer = createCoralBleachingLayer(this.scene, this.camera, this.quality);
     this.sandCausticsSystem = createSandCausticsSystem(this.scene);
     this.oilSpillSystem = createOilSpillSystem(this.scene, this.camera);
     this.sewageSystem = createSewageSystem(this.scene, this.camera);
     this.schools = createFishSchools3D();
     this.fishes = createAllFishes(this.scene, this.schools);
-    this.bubbles = createAirBubbles(this.scene);
-    this.microplastics = createMicroplastics(this.scene);
+    this.bubbles = createAirBubbles(this.scene, this.quality.maxBubbles);
+    this.microplastics = createMicroplastics(this.scene, this.quality.maxMicroplastics);
 
     this.scene.skipPointerMovePicking = true;
     this.resize();
@@ -3107,15 +3180,16 @@ export class BabylonOceanRuntime {
     const runtime = new BabylonOceanRuntime(engine, backend, state);
     engine.runRenderLoop(() => runtime.render());
 
-    // Carregamento não-bloqueante em segundo plano para o oceano abrir instantaneamente (< 100ms) no celular
+    // Carregamento não-bloqueante em segundo plano com teto adaptativo de instâncias por perfil de dispositivo
     Promise.all([
-      loadRiggedPaleBleakFishes(runtime.scene, runtime.schools),
+      loadRiggedPaleBleakFishes(runtime.scene, runtime.schools, runtime.quality.maxRiggedFishes),
       load3DSharks(runtime.scene),
     ])
       .then(([riggedFishes, sharks]) => {
         if (!runtime.disposed) {
           runtime.riggedFishes3D = riggedFishes;
           runtime.sharks3D = sharks;
+          runtime.needsRender = true;
           if (runtime.state.paused) {
             for (const fish of riggedFishes) {
               fish.animGroup?.pause();
@@ -3134,6 +3208,7 @@ export class BabylonOceanRuntime {
     const prevDays = this.state.elapsedDays;
     const wasPaused = this.state.paused;
     this.state = state;
+    this.needsRender = true;
 
     if (state.paused !== wasPaused) {
       this.scene.animationsEnabled = !state.paused;
@@ -3159,6 +3234,7 @@ export class BabylonOceanRuntime {
    * - Garante que o mar nunca fique vazio após um reset ou mudança de compartimento
    */
   public resetReefLife() {
+    this.needsRender = true;
     this.schools = createFishSchools3D();
 
     for (const fish of this.fishes) {
@@ -3171,6 +3247,7 @@ export class BabylonOceanRuntime {
       fish.scatterVelU = 0;
       fish.scatterVelV = 0;
       fish.scaredTimer = 0;
+      fish.isDeformedDead = false;
 
       const school = this.schools[fish.schoolId] ?? this.schools[0];
       fish.currentScreenX = clamp(school.currentU + fish.formationOffsetU, 0.06, 0.94);
@@ -3258,6 +3335,7 @@ export class BabylonOceanRuntime {
   }
 
   resize() {
+    this.needsRender = true;
     this.engine.resize();
     const width = this.engine.getRenderWidth(true) || 1672;
     const height = this.engine.getRenderHeight(true) || 941;
@@ -3292,10 +3370,17 @@ export class BabylonOceanRuntime {
           fish.animGroup.pause();
         }
       }
-      // Renderiza o quadro estático congelado
-      this.scene.render();
+      // Renderiza 1 quadro estático congelado e suspende render contínuo para poupar GPU e bateria
+      if (!this.pauseRenderDone || this.needsRender) {
+        this.scene.render();
+        this.pauseRenderDone = true;
+        this.needsRender = false;
+      }
       return;
     }
+
+    this.pauseRenderDone = false;
+    this.needsRender = false;
 
     if (!this.scene.animationsEnabled) {
       this.scene.animationsEnabled = true;
@@ -3636,6 +3721,10 @@ export class BabylonOceanRuntime {
     const count = base.length / 3;
 
     if (isDead) {
+      if (fish.isDeformedDead) {
+        // Se a geometria rígida pós-morte já foi estabilizada, evita custo de re-upload na GPU todo quadro
+        return;
+      }
       for (let i = 0; i < count; i += 1) {
         out[i * 3] = base[i * 3];
         out[i * 3 + 1] = base[i * 3 + 1];
@@ -3644,8 +3733,11 @@ export class BabylonOceanRuntime {
       if (fish.dead.mesh.isEnabled()) {
         fish.dead.mesh.updateVerticesData(VertexBuffer.PositionKind, out, false, false);
       }
+      fish.isDeformedDead = true;
       return;
     }
+
+    fish.isDeformedDead = false;
 
     const stress = clamp((70 - health) / 70);
     const ampY = fish.width * (0.032 + stress * 0.010);
@@ -3672,7 +3764,7 @@ export class BabylonOceanRuntime {
     }
 
     for (const layer of [fish.healthy, fish.stressed, fish.dead]) {
-      if (layer.mesh.isEnabled()) {
+      if (layer.mesh.isEnabled() && layer.mesh.visibility > 0.01) {
         layer.mesh.updateVerticesData(VertexBuffer.PositionKind, out, false, false);
       }
     }

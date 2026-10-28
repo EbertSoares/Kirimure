@@ -1,0 +1,75 @@
+{
+  "generatedAt": "2026-10-28T19:23:58.972Z",
+  "assets": [
+    {
+      "name": "coral-brain-healthy.png",
+      "sizeBytes": 136897,
+      "modifiedAt": "2026-10-27T23:23:02.708Z"
+    },
+    {
+      "name": "coral-branching-bleached.png",
+      "sizeBytes": 129906,
+      "modifiedAt": "2026-10-27T23:23:02.719Z"
+    },
+    {
+      "name": "coral-branching-healthy.png",
+      "sizeBytes": 124533,
+      "modifiedAt": "2026-10-27T23:23:02.731Z"
+    },
+    {
+      "name": "coral-branching-pale-tips.png",
+      "sizeBytes": 130996,
+      "modifiedAt": "2026-10-27T23:23:02.741Z"
+    },
+    {
+      "name": "coral-branching-partially-bleached.png",
+      "sizeBytes": 133619,
+      "modifiedAt": "2026-10-27T23:23:02.754Z"
+    },
+    {
+      "name": "fish-blue-tang-healthy.png",
+      "sizeBytes": 80859,
+      "modifiedAt": "2026-10-27T23:23:02.760Z"
+    },
+    {
+      "name": "fish-blue-tang-stressed.png",
+      "sizeBytes": 79845,
+      "modifiedAt": "2026-10-27T23:23:02.768Z"
+    },
+    {
+      "name": "fish-parrotfish-healthy.png",
+      "sizeBytes": 64518,
+      "modifiedAt": "2026-10-27T23:23:02.784Z"
+    },
+    {
+      "name": "fish-parrotfish-stressed.png",
+      "sizeBytes": 59752,
+      "modifiedAt": "2026-10-27T23:23:02.795Z"
+    },
+    {
+      "name": "fish-sergeant-major-healthy.png",
+      "sizeBytes": 70626,
+      "modifiedAt": "2026-10-27T23:23:02.803Z"
+    },
+    {
+      "name": "fish-sergeant-major-stressed.png",
+      "sizeBytes": 65524,
+      "modifiedAt": "2026-10-27T23:23:02.816Z"
+    },
+    {
+      "name": "microplastics-mixed.png",
+      "sizeBytes": 10295,
+      "modifiedAt": "2026-10-27T23:23:02.826Z"
+    },
+    {
+      "name": "reef-rocks-sand.png",
+      "sizeBytes": 511943,
+      "modifiedAt": "2026-10-27T23:23:02.841Z"
+    },
+    {
+      "name": "seaweed-green.png",
+      "sizeBytes": 66437,
+      "modifiedAt": "2026-10-27T23:23:02.852Z"
+    }
+  ]
+}
