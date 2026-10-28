@@ -1,0 +1,213 @@
+import type { BtsSectorId, EpistemologicalBadge, ScientificMetadata } from './types';
+import { BTS_SECTORS } from './config';
+
+/**
+ * Módulo de Ecotoxicologia e Destino Físico de Contaminantes.
+ *
+ * 1. Óleo: Orçamento de massa particionado em 4 reservatórios físicos
+ *    (filme superficial, gotículas dispersas, HPAs dissolvidos e óleo sedimentado).
+ * 2. Microplásticos: Dados observacionais estuarinos da BTS em itens/m³
+ *    (Trindade et al., 2023), diferenciando contagem amostral de massa em kg.
+ */
+
+export interface OilFateBudget {
+  surfaceFilmKg: number;
+  waterColumnDispersedKg: number;
+  dissolvedPahKg: number;
+  sedimentedKg: number;
+  evaporatedExportedKg: number;
+  /** Concentração da fração dissolvida biodisponível (tPAH50) em µg/L. */
+  dissolvedPahConcentrationUgL: number;
+  /** Espessura nominal média do filme superficial em micrômetros (µm). */
+  surfaceFilmThicknessUm: number;
+  /** Atenuação relativa da radiação fotossinteticamente ativa (PAR) pela mancha (0 a 1). */
+  lightAttenuation: number;
+  /** Balanço de conservação de massa (diferença deve ser ~0). */
+  massBalanceResidualKg: number;
+}
+
+export interface MicroplasticSurveyPoint {
+  estuaryName: string;
+  riverName: string;
+  meanCountPerM3: number;
+  maxCountPerM3: number;
+  minCountPerM3: number;
+  particleSizeFractionUnder300Um: number; // percentual (ex: 94%)
+  badge: EpistemologicalBadge;
+  citation: string;
+}
+
+/**
+ * Dados empíricos publicados de microplásticos nos estuários da BTS
+ * (Trindade et al., 2023; Dissertação UFRB / Environmental Pollution).
+ */
+export const BTS_MICROPLASTICS_SURVEY: readonly MicroplasticSurveyPoint[] = [
+  {
+    estuaryName: 'Estuário do Rio Paraguaçu',
+    riverName: 'Rio Paraguaçu',
+    meanCountPerM3: 6840,
+    maxCountPerM3: 32784,
+    minCountPerM3: 1240,
+    particleSizeFractionUnder300Um: 94.2,
+    badge: 'Dado Local BTS',
+    citation: 'Trindade et al. (2023) / UFRB',
+  },
+  {
+    estuaryName: 'Estuário do Rio Jaguaripe',
+    riverName: 'Rio Jaguaripe',
+    meanCountPerM3: 4920,
+    maxCountPerM3: 18560,
+    minCountPerM3: 850,
+    particleSizeFractionUnder300Um: 93.8,
+    badge: 'Dado Local BTS',
+    citation: 'Trindade et al. (2023) / UFRB',
+  },
+  {
+    estuaryName: 'Estuário do Rio Subaé',
+    riverName: 'Rio Subaé',
+    meanCountPerM3: 5310,
+    maxCountPerM3: 24110,
+    minCountPerM3: 980,
+    particleSizeFractionUnder300Um: 95.1,
+    badge: 'Dado Local BTS',
+    citation: 'Trindade et al. (2023) / UFRB',
+  },
+  {
+    estuaryName: 'Estuário do Rio São Paulo',
+    riverName: 'Rio São Paulo',
+    meanCountPerM3: 3635,
+    maxCountPerM3: 14200,
+    minCountPerM3: 637,
+    particleSizeFractionUnder300Um: 92.6,
+    badge: 'Dado Local BTS',
+    citation: 'Trindade et al. (2023) / UFRB',
+  },
+] as const;
+
+/**
+ * Calcula a partição e destino do derramamento de óleo em 4 reservatórios
+ * físicos na caixa de mistura do compartimento da BTS.
+ *
+ * @param totalInputKg Massa total de óleo introduzida no cenário (kg).
+ * @param sectorId Compartimento ativo da Baía de Todos-os-Santos.
+ * @param elapsedDays Dias desde o início do evento.
+ */
+export function calculateOilFateBudget(
+  totalInputKg: number,
+  sectorId: BtsSectorId = 'frades',
+  elapsedDays = 1,
+): OilFateBudget {
+  if (totalInputKg <= 0) {
+    return {
+      surfaceFilmKg: 0,
+      waterColumnDispersedKg: 0,
+      dissolvedPahKg: 0,
+      sedimentedKg: 0,
+      evaporatedExportedKg: 0,
+      dissolvedPahConcentrationUgL: 0,
+      surfaceFilmThicknessUm: 0,
+      lightAttenuation: 0,
+      massBalanceResidualKg: 0,
+    };
+  }
+
+  const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+
+  // Cinética de intemperismo (evaporação rápida de voláteis + dispersão natural por ondas)
+  // Cerca de 25% a 40% de óleo cru evapora nas primeiras 48h (NOAA ADIOS)
+  const evapFraction = Math.min(0.40, 0.20 + (1 - Math.exp(-elapsedDays / 2.0)) * 0.20);
+  const evaporatedKg = totalInputKg * evapFraction;
+  const remainingKg = totalInputKg - evaporatedKg;
+
+  // Partição do óleo remanescente entre superfície, coluna d'água e sedimento
+  // Superfície: 55% decaindo por emulsão e espalhamento
+  const surfaceFraction = 0.55 * Math.exp(-elapsedDays / 5.0);
+  // Coluna d'água (gotículas em suspensão por turbulência): ~25%
+  const dispersedFraction = 0.25 * (1 - Math.exp(-elapsedDays / 1.5)) * Math.exp(-elapsedDays / 10.0);
+  // Sedimento: deposição bentônica por agregação com partículas minerais/orgânicas
+  const sedimentFraction = Math.min(0.20, 0.05 + (1 - Math.exp(-elapsedDays / 7.0)) * 0.15);
+
+  const surfaceFilmKg = remainingKg * surfaceFraction;
+  const waterColumnDispersedKg = remainingKg * dispersedFraction;
+  const sedimentedKg = remainingKg * sedimentFraction;
+
+  // Fração dissolvida solúvel (HPAs de 2 a 4 anéis, como naftalenos, fenantrenos: ~1% a 3% do óleo total)
+  const dissolvedPahKg = remainingKg * 0.018 * (1 - Math.exp(-elapsedDays / 3.0));
+
+  // Exportação hidrodinâmica para fora da baía
+  const accountedSoFar = surfaceFilmKg + waterColumnDispersedKg + sedimentedKg + dissolvedPahKg;
+  const exportedKg = Math.max(0, remainingKg - accountedSoFar);
+  const totalLostKg = evaporatedKg + exportedKg;
+
+  // Concentração de tPAH50 dissolvido na coluna d'água:
+  // kg * 1e9 ug / (volumeM3 * 1000 L) = ug/L
+  const dissolvedPahConcentrationUgL = (dissolvedPahKg * 1e9) / (sector.mixingVolumeM3 * 1000);
+
+  // Espessura estimada do filme superficial (assumindo área de espalhamento de ~500.000 m^2 na enseada)
+  const slickAreaM2 = Math.max(1e4, Math.min(2e6, surfaceFilmKg * 150));
+  // Volume m^3 = kg / densidade (880 kg/m^3); espessura m = volume / area; * 1e6 = um
+  const surfaceFilmThicknessUm = (surfaceFilmKg / 880 / slickAreaM2) * 1e6;
+  const lightAttenuation = Math.min(0.95, surfaceFilmThicknessUm > 0.1 ? 0.3 + Math.log10(1 + surfaceFilmThicknessUm) * 0.25 : 0);
+
+  const massBalanceResidualKg = Math.abs(
+    totalInputKg - (surfaceFilmKg + waterColumnDispersedKg + dissolvedPahKg + sedimentedKg + totalLostKg),
+  );
+
+  return {
+    surfaceFilmKg: parseFloat(surfaceFilmKg.toFixed(1)),
+    waterColumnDispersedKg: parseFloat(waterColumnDispersedKg.toFixed(1)),
+    dissolvedPahKg: parseFloat(dissolvedPahKg.toFixed(2)),
+    sedimentedKg: parseFloat(sedimentedKg.toFixed(1)),
+    evaporatedExportedKg: parseFloat(totalLostKg.toFixed(1)),
+    dissolvedPahConcentrationUgL: parseFloat(dissolvedPahConcentrationUgL.toFixed(3)),
+    surfaceFilmThicknessUm: parseFloat(surfaceFilmThicknessUm.toFixed(2)),
+    lightAttenuation: parseFloat(lightAttenuation.toFixed(2)),
+    massBalanceResidualKg: parseFloat(massBalanceResidualKg.toFixed(4)),
+  };
+}
+
+/**
+ * Avalia o risco ecotoxicológico subletal para corais recifais
+ * com base no limiar experimental de May et al. (2020) para Pocillopora/Siderastrea:
+ * - EC50 de regeneração tecidual: 10 µg/L tPAH50;
+ * - EC50 de comportamento de pólipos: 27 µg/L tPAH50.
+ */
+export function evaluateOilEcotoxicity(dissolvedPahConcentrationUgL: number): {
+  tissueRegenerationInhibitionPercent: number;
+  polypRetractionRisk: 'baixo' | 'moderado' | 'severo' | 'critico';
+  badge: EpistemologicalBadge;
+  note: string;
+} {
+  const c = dissolvedPahConcentrationUgL;
+  // Curva de Hill (n = 2): E = 100 * C^2 / (EC50^2 + C^2)
+  const tissueInhibition = (100 * Math.pow(c, 2)) / (Math.pow(10, 2) + Math.pow(c, 2));
+
+  let polypRisk: 'baixo' | 'moderado' | 'severo' | 'critico' = 'baixo';
+  if (c >= 27.0) polypRisk = 'critico';
+  else if (c >= 10.0) polypRisk = 'severo';
+  else if (c >= 3.0) polypRisk = 'moderado';
+
+  return {
+    tissueRegenerationInhibitionPercent: parseFloat(tissueInhibition.toFixed(1)),
+    polypRetractionRisk: polypRisk,
+    badge: 'Referência Laboratorial Externa',
+    note: 'Curva toxicocinética derivada de May et al. (2020) em bioensaio controlado de 96h com fração hidrossolúvel HEWAF. Não é dose letal instantânea de campo.',
+  };
+}
+
+export function getMicroplasticsSurveyMetadata(): ScientificMetadata {
+  return {
+    recordId: 'bts-estuarine-microplastics-trindade-2023',
+    variable: 'Abundância de Microplásticos em Estuários da BTS',
+    symbol: 'MP',
+    value: '5.176 a 32.784',
+    unit: 'itens/m³ de água superficial',
+    quantityKind: 'concentration',
+    epistemicClass: 'Dado Local BTS',
+    source: 'Trindade et al. (2023) / Environmental Pollution / UFRB',
+    sourceUrl: 'doi:10.1016/j.envpol.2023.121224',
+    method: 'Arrasto superficial com rede de plâncton (malha 64 µm); ~94% dos itens < 300 µm',
+    uncertainty: 'Aporte fluvial anual estimado em 3,88 trilhões de partículas',
+    notes: 'Amostragem empírica in situ restrita aos estuários dos rios Paraguaçu, Jaguaripe, Subaé e São Paulo. Não deve ser extrapolada como massa (kg) sem distribuição granulométrica e densidade polimérica.',
+  };
+}
