@@ -1,5 +1,8 @@
 # Laboratório Digital Marinho — Plano Técnico do Aplicativo Offline
 
+> [!NOTE]
+> **Documento Histórico de Planejamento Inicial (2024–2026):** Este documento registra as deliberações iniciais da arquitetura preliminar em 2D/2.5D. A arquitetura atual e definitiva do Kirimurê migrou para renderização 3D com **Babylon.js 9**, modelos acoplados biogeoquímicos (oxigênio, carbonato e contaminantes) e integração satelital via NOAA CRW / Open-Meteo com governança epistemológica estrita, conforme documentado no [README.md](./README.md).
+
 **Documento para alinhamento e apresentação ao time**  
 **Status:** implementação iniciada — acompanhar o quadro abaixo  
 **Versão:** 1.1  

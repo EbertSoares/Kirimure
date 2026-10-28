@@ -1,5 +1,8 @@
 # Laboratório Digital Marinho — Documento Técnico do MVP
 
+> [!NOTE]
+> **Documento Histórico de Concepção do MVP (Hackathon Cultura Oceânica):** Registra a concepção conceitual embrionária. A versão técnica definitiva, modelos biogeoquímicos implementados e a cena 3D com Babylon.js 9 estão consolidados e descritos no [README.md](./README.md).
+
 Hackathon Cultura Oceânica (Salvador/BA) · Frente 3: estudantes, professores e comunidades
 
 Status: rascunho para validação da equipe. Itens marcados com **[A CONFIRMAR]** dependem de decisão do time (seção 13).

@@ -1009,8 +1009,8 @@ export function SciencePanel({
                       <Icon name="check" />
                       <span>
                         {oceanData.noaaStatus.state === 'success'
-                          ? `Usar SST do produto NOAA em tempo real (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como ponto de partida`
-                          : `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como ponto de partida histórico`}
+                          ? `Usar SST do produto NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
+                          : `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial de contingência`}
                       </span>
                     </button>
                   )}

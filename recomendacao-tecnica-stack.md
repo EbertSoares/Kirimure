@@ -1,5 +1,8 @@
 # Laboratório Digital Marinho — Recomendação Técnica
 
+> [!NOTE]
+> **Documento Histórico de Arquitetura Inicial:** Recomendação preliminar prévia à transição para **Babylon.js 9** e simulação 3D imersiva. A pilha tecnológica em operação encontra-se detalhada no [README.md](./README.md).
+
 ## 1. Resumo da decisão
 
 O projeto está suficientemente detalhado para iniciar o desenvolvimento. Como os materiais visuais em SVG já estão prontos, a stack recomendada para o MVP é:
