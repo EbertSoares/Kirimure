@@ -924,14 +924,14 @@ export function SciencePanel({
                         : 'Dado obtido de servidor remoto'
                     }
                   >
-                    {oceanData?.loading
-                      ? 'Consultando satélite (timeout 12s)...'
+                    {oceanData?.noaaLoading
+                      ? 'Consultando satélite...'
                       : oceanData?.noaaStatus?.state === 'error'
                         ? 'Servidor offline / indisponível'
                         : oceanData?.latestCrw?.provenance?.isCachedFallback
                           ? 'Snapshot histórico (mar/2024)'
                           : oceanData?.latestCrw?.provenance?.fetchStatus === 'online_valid'
-                            ? `Modelo atualizado (${oceanData.latestCrw.timestampUtc ? oceanData.latestCrw.timestampUtc.substring(0, 10) : ''})`
+                            ? `Produto de satélite operacional (${oceanData.latestCrw.timestampUtc ? oceanData.latestCrw.timestampUtc.substring(0, 10) : ''})`
                             : 'Dados disponíveis'}
                   </span>
                 </div>
@@ -941,8 +941,20 @@ export function SciencePanel({
                 <>
                   <div className="progressive-metric-grid cols-4">
                     <div className="progressive-metric-box">
-                      <span className="metric-label">Temperatura SST</span>
+                      <span className="metric-label">
+                        {oceanData.latestCrw.isVirtualStation ? 'SST (Estação Virtual)' : 'Temperatura SST'}
+                      </span>
                       <strong className="metric-value">{oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C</strong>
+                      {oceanData.latestCrw.isVirtualStation && (
+                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '2px', display: 'block' }}>
+                          {oceanData.latestCrw.sst90thPercentileDegC !== null && oceanData.latestCrw.sst90thPercentileDegC !== undefined
+                            ? `P90: ${oceanData.latestCrw.sst90thPercentileDegC.toFixed(1)} °C`
+                            : ''}
+                          {oceanData.latestCrw.sstMinDegC !== null && oceanData.latestCrw.sstMaxDegC !== null && oceanData.latestCrw.sstMinDegC !== undefined && oceanData.latestCrw.sstMaxDegC !== undefined
+                            ? ` (${oceanData.latestCrw.sstMinDegC.toFixed(1)}–${oceanData.latestCrw.sstMaxDegC.toFixed(1)} °C)`
+                            : ''}
+                        </span>
+                      )}
                     </div>
                     <div className="progressive-metric-box">
                       <span className="metric-label">HotSpot Térmico</span>
@@ -960,18 +972,24 @@ export function SciencePanel({
                       <span className="metric-label">Alerta de Branqueamento</span>
                       {(() => {
                         const baa = oceanData.latestCrw.bleachingAlertLevel;
-                        const isValidBaa = baa !== null && baa !== undefined && baa >= 0 && baa <= 4;
+                        const isValidBaa = baa !== null && baa !== undefined && baa >= 0 && baa <= 7;
                         const baaDisplay = !isValidBaa
                           ? 'Sem dado / Indisponível'
-                          : baa === 4
-                            ? 'Nível 2 (Severo)'
-                            : baa === 3
-                              ? 'Nível 1 (Risco)'
-                              : baa === 2
-                                ? 'Aviso (Warning)'
-                                : baa === 1
-                                  ? 'Vigilância (Watch)'
-                                  : 'Sem Alerta (Nível 0)';
+                          : baa === 7
+                            ? 'Alerta 5 (Colapso Estrutural)'
+                            : baa === 6
+                              ? 'Alerta 4 (Catastrófico)'
+                              : baa === 5
+                                ? 'Alerta 3 (Mortalidade Extrema)'
+                                : baa === 4
+                                  ? 'Alerta 2 (Severo)'
+                                  : baa === 3
+                                    ? 'Alerta 1 (Risco)'
+                                    : baa === 2
+                                      ? 'Aviso (Warning)'
+                                      : baa === 1
+                                        ? 'Vigilância (Watch)'
+                                        : 'Sem Alerta (Nível 0)';
                         const baaTone = !isValidBaa
                           ? ''
                           : baa >= 3
@@ -983,7 +1001,7 @@ export function SciencePanel({
                           <strong
                             className={`metric-value ${baaTone}`}
                             style={{
-                              fontSize: '13px',
+                              fontSize: '12px',
                               color: !isValidBaa ? 'rgba(255, 255, 255, 0.7)' : undefined,
                             }}
                           >
@@ -1020,7 +1038,9 @@ export function SciencePanel({
                       <span style={{ lineHeight: 1.3 }}>
                         {oceanData.latestCrw.provenance.isCachedFallback
                           ? `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
-                          : `Usar SST do satélite NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`}
+                          : oceanData.latestCrw.isVirtualStation
+                            ? `Usar SST da estação virtual (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C${oceanData.latestCrw.sst90thPercentileDegC ? `; P90: ${oceanData.latestCrw.sst90thPercentileDegC.toFixed(1)} °C` : ''}) como condição inicial`
+                            : `Usar SST satelital (CRW_SST: ${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`}
                       </span>
                     </button>
                   )}
@@ -1030,10 +1050,18 @@ export function SciencePanel({
                     <div className="source-method-content">
                       <p style={{ margin: 0 }}>
                         <strong>Coordenadas Solicitadas:</strong> {sector.coordinates.latitude.toFixed(2)}°, {sector.coordinates.longitude.toFixed(2)}° ({sector.label})<br />
-                        {oceanData.latestCrw.gridCell && (
+                        {oceanData.latestCrw.isVirtualStation ? (
                           <>
-                            <strong>Célula de Grade NOAA:</strong> {oceanData.latestCrw.gridCell.latitude.toFixed(2)}°, {oceanData.latestCrw.gridCell.longitude.toFixed(2)}° ({oceanData.latestCrw.spatialResolution ?? '5 km'})<br />
+                            <strong>Estação Virtual Regional NOAA CRW:</strong> {oceanData.latestCrw.virtualStationName ?? 'Todos os Santos, Brazil'} ({oceanData.latestCrw.gridCell?.latitude.toFixed(3)}°, {oceanData.latestCrw.gridCell?.longitude.toFixed(3)}°)<br />
+                            <strong>SST Percentil 90 (HotSpot):</strong> {oceanData.latestCrw.sst90thPercentileDegC !== null && oceanData.latestCrw.sst90thPercentileDegC !== undefined ? `${oceanData.latestCrw.sst90thPercentileDegC.toFixed(2)} °C` : '—'}<br />
+                            <strong>Faixa SST Observada (Mín–Máx):</strong> {oceanData.latestCrw.sstMinDegC !== null && oceanData.latestCrw.sstMaxDegC !== null && oceanData.latestCrw.sstMinDegC !== undefined && oceanData.latestCrw.sstMaxDegC !== undefined ? `${oceanData.latestCrw.sstMinDegC.toFixed(2)} °C a ${oceanData.latestCrw.sstMaxDegC.toFixed(2)} °C` : '—'}<br />
                           </>
+                        ) : (
+                          oceanData.latestCrw.gridCell && (
+                            <>
+                              <strong>Célula de Grade NOAA:</strong> {oceanData.latestCrw.gridCell.latitude.toFixed(3)}°, {oceanData.latestCrw.gridCell.longitude.toFixed(3)}° ({oceanData.latestCrw.spatialResolution ?? '5 km'})<br />
+                            </>
+                          )
                         )}
                         <strong>Dataset:</strong> <code>{oceanData.latestCrw.provenance.datasetId}</code> ({oceanData.latestCrw.provenance.distributor ?? 'ERDDAP'})<br />
                         <strong>Anomalia Oficial (CRW_SSTANOMALY):</strong> {oceanData.latestCrw.sstAnomalyDegC !== null ? `${oceanData.latestCrw.sstAnomalyDegC > 0 ? '+' : ''}${oceanData.latestCrw.sstAnomalyDegC.toFixed(2)} °C` : 'Ausente'}<br />
@@ -1052,7 +1080,10 @@ export function SciencePanel({
                         )}
                       </p>
                       <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
-                        <strong>Diferenciação Metodológica:</strong> O <em>HotSpot Térmico</em> é uma grandeza biofísica oficial da NOAA correspondente à anomalia de temperatura acima da média máxima mensal (MMM) do pixel de satélite de 5 km. Já o <em>Snapshot de Contingência</em> é um registro arquivado local de eventos pretéritos (mar/2024), utilizado com integridade epistemológica quando o enlace de satélite estiver indisponível.
+                        <strong>Diferenciação Metodológica:</strong> {oceanData.latestCrw.isVirtualStation
+                          ? 'Esta estação virtual NOAA CRW representa uma referência regional da província recifal da Bahia (-13.375°, -38.375°), calculando HotSpot a partir do percentil 90 dos pixels do recife. Não constitui medição in situ local restrita ao canal interno.'
+                          : 'O HotSpot Térmico é uma grandeza biofísica oficial da NOAA correspondente à anomalia de temperatura acima da média máxima mensal (MMM) do pixel de satélite de 5 km.'}
+                        {' '}Já o <em>Snapshot de Contingência</em> é um registro arquivado local de eventos pretéritos (mar/2024), utilizado com integridade epistemológica quando o enlace de satélite estiver indisponível.
                       </p>
                     </div>
                   </details>
@@ -1104,11 +1135,11 @@ export function SciencePanel({
                     O Kirimurê não mascara quedas de rede forjando dados ao vivo. Você pode tentar reconectar ou carregar o exemplo histórico calibrado (mar/2024).
                   </p>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {oceanData?.refresh && (
+                    {oceanData?.refreshNoaa && (
                       <button
                         type="button"
-                        onClick={() => oceanData.refresh()}
-                        disabled={oceanData.loading}
+                        onClick={() => oceanData.refreshNoaa()}
+                        disabled={oceanData.noaaLoading}
                         style={{
                           background: 'rgba(56, 189, 248, 0.15)',
                           border: '1px solid rgba(56, 189, 248, 0.4)',
@@ -1120,7 +1151,7 @@ export function SciencePanel({
                           fontWeight: 600,
                         }}
                       >
-                        {oceanData.loading ? 'Reconectando...' : 'Tentar reconectar fontes'}
+                        {oceanData.noaaLoading ? 'Reconectando satélite...' : 'Tentar reconectar NOAA CRW'}
                       </button>
                     )}
                     {oceanData?.loadHistoricalCrwSnapshot && (
@@ -1143,9 +1174,9 @@ export function SciencePanel({
                     )}
                   </div>
                 </div>
-              ) : oceanData?.loading ? (
+              ) : oceanData?.noaaLoading ? (
                 <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                  Consultando estresse térmico NOAA CRW (Coral Watch / PacIOOS ERDDAP, orçamento 16s)...
+                  Consultando estresse térmico NOAA CRW (PacIOOS ERDDAP / CoastWatch)...
                 </div>
               ) : (
                 <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
@@ -1195,14 +1226,14 @@ export function SciencePanel({
                         : 'Previsão operacional atualizada'
                     }
                   >
-                    {oceanData?.loading
-                      ? 'Consultando modelo (timeout 8s)...'
+                    {oceanData?.meteoLoading
+                      ? 'Consultando previsão costeira...'
                       : oceanData?.meteoStatus?.state === 'error'
                         ? 'Servidor indisponível'
                         : oceanData?.latestMeteo?.provenance?.isCachedFallback
                           ? 'Snapshot de contingência (mar/2024)'
                           : oceanData?.latestMeteo?.provenance?.fetchStatus === 'online_valid'
-                            ? `Modelo atualizado (${oceanData.latestMeteo.timestampUtc ? oceanData.latestMeteo.timestampUtc.replace('T', ' ').substring(0, 16) + ' UTC' : ''})`
+                            ? `Previsão operacional atualizada (${oceanData.latestMeteo.timestampUtc ? oceanData.latestMeteo.timestampUtc.replace('T', ' ').substring(0, 16) + ' UTC' : ''})`
                             : 'Dados disponíveis'}
                   </span>
                 </div>
@@ -1267,7 +1298,7 @@ export function SciencePanel({
                   </p>
                   <p style={{ margin: '0 0 8px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.4 }}>
                     {oceanData.meteoStatus.errorKind === 'timeout'
-                      ? `Tempo limite excedido (${oceanData.meteoStatus.errorElapsedMs ? Math.round(oceanData.meteoStatus.errorElapsedMs / 1000) + 's' : '8s'}): o servidor não concluiu a transferência da previsão.`
+                      ? `Tempo limite excedido (${oceanData.meteoStatus.errorElapsedMs ? Math.round(oceanData.meteoStatus.errorElapsedMs / 1000) + 's' : 'orçamento esgotado'}): o servidor não concluiu a transferência da previsão.`
                       : oceanData.meteoStatus.errorKind === 'http'
                         ? `Erro HTTP ${oceanData.meteoStatus.errorStatus ?? ''} do serviço Open-Meteo.`
                         : (oceanData.meteoStatus.error || 'Falha na consulta ao modelo oceânico Open-Meteo.')}
@@ -1276,11 +1307,11 @@ export function SciencePanel({
                     O Kirimurê não mascara quedas de rede forjando dados. O exemplo de contingência só é ativado mediante solicitação manual.
                   </p>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {oceanData?.refresh && (
+                    {oceanData?.refreshMeteo && (
                       <button
                         type="button"
-                        onClick={() => oceanData.refresh()}
-                        disabled={oceanData.loading}
+                        onClick={() => oceanData.refreshMeteo()}
+                        disabled={oceanData.meteoLoading}
                         style={{
                           background: 'rgba(56, 189, 248, 0.15)',
                           border: '1px solid rgba(56, 189, 248, 0.4)',
@@ -1292,7 +1323,7 @@ export function SciencePanel({
                           fontWeight: 600,
                         }}
                       >
-                        {oceanData.loading ? 'Reconectando...' : 'Tentar reconectar Open-Meteo'}
+                        {oceanData.meteoLoading ? 'Reconectando Open-Meteo...' : 'Tentar reconectar Open-Meteo'}
                       </button>
                     )}
                     {oceanData?.loadHistoricalMeteoSnapshot && (
@@ -1315,7 +1346,7 @@ export function SciencePanel({
                     )}
                   </div>
                 </div>
-              ) : oceanData?.loading ? (
+              ) : oceanData?.meteoLoading ? (
                 <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
                   Consultando previsão marinha costeira (Open-Meteo Marine)...
                 </div>

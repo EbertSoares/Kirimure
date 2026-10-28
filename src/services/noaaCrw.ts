@@ -20,16 +20,16 @@ export {
  * Cliente de dados de estresse térmico da NOAA Coral Reef Watch (CRW) 5 km.
  *
  * Arquitetura multi-fonte com orçamento global de tempo e failover ordenado:
- * 1. Coral Watch Virtual Station API (https://api.coral.tsr.lol) - JSON leve da estação virtual 'todos_os_santos'
- * 2. PacIOOS ERDDAP (https://pae-paha.pacioos.hawaii.edu) - espelho oficial do dataset `dhw_5km` da NOAA com CORS liberado
- * 3. NOAA CoastWatch ERDDAP PFEG (https://coastwatch.pfeg.noaa.gov) - dataset `NOAA_DHW` (failover secundário)
+ * 1. PacIOOS ERDDAP (https://pae-paha.pacioos.hawaii.edu) - espelho oficial do dataset `dhw_5km` da NOAA com CORS liberado e pixel costeiro local
+ * 2. NOAA CoastWatch ERDDAP PFEG (https://coastwatch.pfeg.noaa.gov) - dataset `NOAA_DHW` (distribuidor ERDDAP de contingência)
+ * 3. Coral Watch Virtual Station API (https://api.coral.tsr.lol) - estação regional offshore 'todos_os_santos' (referência regional / contingência)
  *
  * Variáveis principais:
  * - CRW_SST: temperatura da superfície do mar (°C)
  * - CRW_SSTANOMALY: anomalia em relação à climatologia (°C)
  * - CRW_HOTSPOT: HotSpot térmico relativo ao MMM (°C)
  * - CRW_DHW: Degree Heating Weeks oficial (°C-semana, janela de 84 dias)
- * - CRW_BAA / CRW_BAA_7D_MAX: nível de alerta de branqueamento (estritamente 0 a 4)
+ * - CRW_BAA / CRW_BAA_7D_MAX: nível de alerta de branqueamento (escala estendida NOAA CRW de 0 a 7)
  */
 
 export interface CrwDistributor {
@@ -122,14 +122,22 @@ function parseNumber(raw: string | undefined): number | null {
 }
 
 /**
- * Valida o nível de alerta (BAA / Bleaching Alert Area) estritamente no domínio oficial [0, 4].
+ * Valida o nível de alerta (BAA / Bleaching Alert Area) no domínio oficial estendido da NOAA CRW [0 a 7].
+ * - 0: Sem Alerta
+ * - 1: Vigilância (Watch)
+ * - 2: Aviso (Warning)
+ * - 3: Alerta Nível 1
+ * - 4: Alerta Nível 2
+ * - 5: Alerta Nível 3 (Mortalidade Extrema)
+ * - 6: Alerta Nível 4 (Catastrófico)
+ * - 7: Alerta Nível 5 (Colapso Estrutural)
  * Valores de preenchimento (_FillValue = 251 na NOAA/PacIOOS) ou inválidos tornam-se null.
  */
 export function parseAlertLevel(raw: string | undefined): number | null {
   if (raw === undefined) return null;
   const value = Number(raw.trim());
   if (!Number.isFinite(value) || !Number.isInteger(value)) return null;
-  if (value >= 0 && value <= 4) return value;
+  if (value >= 0 && value <= 7) return value;
   return null;
 }
 
@@ -327,11 +335,11 @@ async function querySingleDistributor(
 }
 
 /**
- * Consulta distribuidores em ordem; devolve o primeiro resultado válido dentro do orçamento.
- * Ordem:
- * 1. Coral Watch Virtual Station API (para dados recentes)
- * 2. PacIOOS ERDDAP (dataset dhw_5km com CORS)
- * 3. NOAA CoastWatch ERDDAP PFEG (dataset NOAA_DHW)
+ * Consulta distribuidores em ordem operacional; devolve o primeiro resultado válido dentro do orçamento.
+ * Ordem no navegador:
+ * 1. PacIOOS ERDDAP (distribuição oficial NOAA CRW 5km com CORS '*' e pixel local exato)
+ * 2. NOAA CoastWatch ERDDAP PFEG (distribuidor ERDDAP de contingência)
+ * 3. Coral Watch Virtual Station API (estação regional offshore 'todos_os_santos', contingência para indicador recente)
  */
 async function queryWithFailover(
   sectorId: BtsSectorId,
@@ -343,32 +351,7 @@ async function queryWithFailover(
   const startTime = Date.now();
   const failures: RemoteDataError[] = [];
 
-  // 1. Tenta a Coral Watch Virtual Station API como primeira fonte para indicador recente
-  if (!window) {
-    const elapsed = Date.now() - startTime;
-    const remaining = totalBudgetMs - elapsed;
-    if (remaining > 1000) {
-      try {
-        const cwPoints = await fetchCoralWatchCurrent(sectorId, Math.min(CRW_ATTEMPT_TIMEOUT_MS, remaining));
-        if (cwPoints.length > 0) {
-          return cwPoints;
-        }
-      } catch (err) {
-        if (err instanceof RemoteDataError && err.kind === 'no_coverage') {
-          throw err;
-        }
-        failures.push(
-          err instanceof RemoteDataError
-            ? err
-            : new RemoteDataError('network', err instanceof Error ? err.message : String(err), {
-                source: 'Coral Watch API',
-              }),
-        );
-      }
-    }
-  }
-
-  // 2. Failover para os distribuidores ERDDAP (PacIOOS e CoastWatch PFEG)
+  // 1. Distribuidores ERDDAP operacionais (PacIOOS primeiro, CoastWatch PFEG como contingência)
   for (const distributor of distributors) {
     const elapsed = Date.now() - startTime;
     const remaining = totalBudgetMs - elapsed;
@@ -391,6 +374,31 @@ async function queryWithFailover(
           ? err
           : new RemoteDataError('parse', err instanceof Error ? err.message : String(err), { source: distributor.label }),
       );
+    }
+  }
+
+  // 2. Coral Watch Virtual Station API como contingência para dados recentes se os servidores ERDDAP falharem
+  if (!window) {
+    const elapsed = Date.now() - startTime;
+    const remaining = totalBudgetMs - elapsed;
+    if (remaining > 1000) {
+      try {
+        const cwPoints = await fetchCoralWatchCurrent(sectorId, Math.min(CRW_ATTEMPT_TIMEOUT_MS, remaining));
+        if (cwPoints.length > 0) {
+          return cwPoints;
+        }
+      } catch (err) {
+        if (err instanceof RemoteDataError && err.kind === 'no_coverage') {
+          throw err;
+        }
+        failures.push(
+          err instanceof RemoteDataError
+            ? err
+            : new RemoteDataError('network', err instanceof Error ? err.message : String(err), {
+                source: 'Coral Watch API',
+              }),
+        );
+      }
     }
   }
 

@@ -125,8 +125,14 @@ export function effectivePh(
     const steadyStateBodMgL = R / kEf; // Concentração de estado estacionário B_ss em mg/L
     // Taxa diária de consumo de O2 por oxidação da DBO (mg O2 / L / dia):
     const dailyConsumedO2 = kd * steadyStateBodMgL;
-    // Acréscimo de DIC correspondente à respiração heterotrófica diária (limitado a 45 µmol/kg para respeitar sewageMaxDrop ~0.08):
-    addedDic = Math.min(45, (dailyConsumedO2 / 32) * 1000 * 0.98);
+    // Horizonte temporal de referência Δt_ref = 1 dia:
+    // Em regime estacionário, a taxa diária de mineralização (mg O2 / L / dia) é convertida para o
+    // incremento diário de DIC gerado pela respiração microbiana:
+    // ΔDIC = (dailyConsumedO2 / 32) * 1000 * 0.98 * Δt_ref (com Δt_ref = 1 dia).
+    // Esse cálculo compatibiliza dimensionalmente taxa diária e acréscimo de concentração no volume de mistura,
+    // com teto pedagógico de 45 µmol/kg para respeitar o limite superior de sewageMaxDrop (~0.08 unidades de pH).
+    const deltaTRefDays = 1.0;
+    addedDic = Math.min(45, ((dailyConsumedO2 * deltaTRefDays) / 32) * 1000 * 0.98);
   }
 
   if (addedDic <= 0.01) {

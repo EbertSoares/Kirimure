@@ -55,14 +55,22 @@ export interface CoralWatchStationHistoryResponse extends CoralWatchStation {
 }
 
 /**
- * Valida o nível de alerta (BAA / Bleaching Alert Area) estritamente no domínio oficial [0, 4].
- * Valores fora da faixa (e.g. 251, 255, -999) são convertidos para null.
+ * Valida o nível de alerta (BAA / Bleaching Alert Area) no domínio estendido oficial da NOAA CRW [0 a 7].
+ * - 0: Nenhum estresse
+ * - 1: Vigilância (Watch)
+ * - 2: Aviso (Warning)
+ * - 3: Alerta Nível 1
+ * - 4: Alerta Nível 2
+ * - 5: Alerta Nível 3 (Mortalidade Extrema)
+ * - 6: Alerta Nível 4 (Catastrófico)
+ * - 7: Alerta Nível 5 (Colapso Estrutural)
+ * Valores de preenchimento (_FillValue = 251 na NOAA/PacIOOS) ou inválidos tornam-se null.
  */
 export function validateAlertLevel(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   const num = Number(raw);
   if (!Number.isFinite(num) || !Number.isInteger(num)) return null;
-  if (num >= 0 && num <= 4) return num;
+  if (num >= 0 && num <= 7) return num;
   return null;
 }
 
@@ -76,33 +84,34 @@ function computeSimpleHash(text: string): string {
 }
 
 /**
- * Mapeamento dos setores da BTS para estações da Coral Watch API.
- * Frades e Barra utilizam a estação virtual regional 'todos_os_santos'.
- * Paraguaçu é identificado como canal estuarino sem cobertura direta na grade de 5 km.
+ * Mapeamento dos setores da BTS para a estação virtual regional da Coral Watch API.
+ * Frades e Barra compartilham a mesma estação externa da província recifal da Bahia.
+ * Paraguaçu é identificado como canal estuarino interior sem cobertura na grade de 5 km.
  */
 export const SECTOR_CORAL_WATCH_STATIONS: Record<
   BtsSectorId,
-  { slug: string; isDirectCoverage: boolean; note: string }
+  { slug: string; isRegionalReference: boolean; note: string }
 > = {
   frades: {
     slug: 'todos_os_santos',
-    isDirectCoverage: true,
-    note: "Estação virtual NOAA CRW 5 km 'Todos os Santos, Brazil' (-13.375°, -38.375°), referência da província recifal da BTS.",
+    isRegionalReference: true,
+    note: "Estação virtual regional NOAA CRW 'Todos os Santos' (-13.375°, -38.375°) na plataforma oceânica sul. Referência regional externa representativa da província recifal da Bahia; não constitui medição local in-situ dentro da Ilha dos Frades.",
   },
   barra: {
     slug: 'todos_os_santos',
-    isDirectCoverage: true,
-    note: "Estação virtual NOAA CRW 5 km 'Todos os Santos, Brazil' na entrada oceânica da Baía.",
+    isRegionalReference: true,
+    note: "Estação virtual regional NOAA CRW 'Todos os Santos' (-13.375°, -38.375°) na plataforma oceânica sul. Referência regional externa; não equivale à célula costeira local da Boca da Barra.",
   },
   paraguacu: {
     slug: 'todos_os_santos',
-    isDirectCoverage: false,
-    note: 'Canal estuarino interior sem estação virtual direta na grade de 5 km da NOAA.',
+    isRegionalReference: false,
+    note: 'Canal estuarino interior sem estação virtual direta na grade de 5 km da NOAA (mascaramento de terra).',
   },
 };
 
 /**
  * Converte um registro da Coral Watch API no formato padrão ThermalForcingPoint.
+ * Preserva explicitamente a distinção entre SST média, percentil 90 (sst_90th_hs) e faixa min/max.
  */
 export function mapCoralWatchRecordToThermalPoint(
   record: CoralWatchCurrentRecord,
@@ -115,11 +124,19 @@ export function mapCoralWatchRecordToThermalPoint(
     note: string;
   },
 ): ThermalForcingPoint {
-  const baa = validateAlertLevel(record.stress_level ?? record.baa_7day_max);
   const baa7d = validateAlertLevel(record.baa_7day_max);
-  const sst = finiteOrNull(record.sst_90th_hs ?? record.sst_max ?? record.sst_min);
+  const stationStress = validateAlertLevel(record.stress_level);
+  const sst90th = finiteOrNull(record.sst_90th_hs);
+  const sstMin = finiteOrNull(record.sst_min);
+  const sstMax = finiteOrNull(record.sst_max);
 
-  if (sst === null) {
+  // Determina a melhor estimativa de SST da estação:
+  // Se houver min e max, usa a média do cluster da estação; caso contrário, recorre ao percentil 90 ou extremos.
+  const representativeSst = sstMin !== null && sstMax !== null
+    ? (sstMin + sstMax) / 2
+    : (sst90th ?? sstMax ?? sstMin);
+
+  if (representativeSst === null) {
     throw new RemoteDataError('no_data', `Coral Watch API: registro de ${record.date} sem SST válida.`);
   }
 
@@ -128,13 +145,19 @@ export function mapCoralWatchRecordToThermalPoint(
 
   return {
     timestampUtc,
-    seaSurfaceTemperatureDegC: sst,
+    seaSurfaceTemperatureDegC: representativeSst,
+    sst90thPercentileDegC: sst90th,
+    sstMinDegC: sstMin,
+    sstMaxDegC: sstMax,
     sstAnomalyDegC: finiteOrNull(record.ssta_90th_hs),
     hotSpotDegC: finiteOrNull(record.hs_90th),
     degreeHeatingWeeks: finiteOrNull(record.dhw),
-    bleachingAlertLevel: baa,
-    bleachingAlertArea: baa,
+    bleachingAlertLevel: stationStress ?? baa7d,
+    bleachingAlertArea: baa7d ?? stationStress,
     bleachingAlertMax7d: baa7d,
+    virtualStationStressLevel: stationStress,
+    isVirtualStation: true,
+    virtualStationName: station.name,
     gridCell: {
       latitude: station.latitude,
       longitude: station.longitude,
@@ -143,7 +166,7 @@ export function mapCoralWatchRecordToThermalPoint(
       latitude: station.latitude,
       longitude: station.longitude,
     },
-    spatialResolution: '5 km (Estação Virtual NOAA CRW)',
+    spatialResolution: '5 km (Estação Virtual Regional NOAA CRW)',
     provenance: {
       sourceName: 'Coral Watch Virtual Station API (NOAA CRW 5km)',
       sourceUrl: 'https://api.coral.tsr.lol',
@@ -177,7 +200,7 @@ export async function fetchCoralWatchCurrent(
   timeoutMs = 6000,
 ): Promise<ThermalForcingPoint[]> {
   const mapping = SECTOR_CORAL_WATCH_STATIONS[sectorId];
-  if (!mapping.isDirectCoverage) {
+  if (!mapping.isRegionalReference) {
     throw new RemoteDataError(
       'no_coverage',
       'O produto de satélite NOAA CRW de 5 km não fornece dados válidos para representar este canal interno (mascaramento de terra).',
