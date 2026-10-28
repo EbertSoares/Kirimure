@@ -46,7 +46,7 @@ export function TimelineBar({
           <span className="event-day">tolerância</span>
           <span
             className="event-title"
-            title="Limite de tolerância do cenário sob exposição constante Regra do Modelo:; não equivale a previsão de mortalidade em campo."
+            title="Projeção didática até cruzar o limiar crítico interno (índice ≤ 33 pontos). Regra do modelo pedagógico; não equivale a previsão de mortalidade ou colapso populacional em campo."
           >
             {criticalDays === null
               ? 'sem limite crítico em 10 anos'

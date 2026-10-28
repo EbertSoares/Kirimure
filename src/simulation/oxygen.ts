@@ -153,9 +153,9 @@ export function classifyDissolvedOxygen(dissolvedOxygen: number): OxygenStatus {
   }
   return {
     category: 'anoxia',
-    label: 'Anóxia',
+    label: 'Anóxia / Hipóxia Extrema',
     tone: 'critical',
-    description: 'Ausência de oxigênio dissolvido livre; colapso imediato da vida aeróbia.',
+    description: 'Hipóxia extrema ou condição próxima da anóxia (piso numérico de 0,05 mg/L para estabilidade termodinâmica diferencial; não representa ausência absoluta matemática de O₂ livre); colapso da respiração aeróbia.',
     badge: 'Produto de Modelo',
   };
 }
@@ -299,7 +299,7 @@ export function getOxygenMetadata(
     method: 'Balanço cinético de advecção-reaeração ar-mar e decomposição de CBODu',
     spatialResolution: 'Compartimento homogêneo de mistura (Caixa)',
     temporalResolution: '0,1 dia simulado',
-    uncertainty: `Saturação termodinâmica: ${saturation.toFixed(2)} mg/L (sensibilidade de taxas cinéticas ka e kd)`,
-    notes: status.description,
+    uncertainty: `Saturação termodinâmica: ${saturation.toFixed(2)} mg/L (sensibilidade de taxas cinéticas ka e kd; piso numérico de proteção a 0,05 mg/L)`,
+    notes: `${status.description} Piso computacional de 0,05 mg/L atua como salvaguarda numérica de saturação estequiométrica mínima sob desoxigenação severa.`,
   };
 }

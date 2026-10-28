@@ -8,7 +8,7 @@ A aplicação permite modificar temperatura da água, pH, cargas de matéria org
 
 - **Repositório oficial:** [github.com/EbertSoares/Kirimure](https://github.com/EbertSoares/Kirimure)
 - **Aplicação publicada:** [laboratorio-digital-marinho.neatowl9.chatgpt.site](https://laboratorio-digital-marinho.neatowl9.chatgpt.site)
-- **Aplicativo desktop:** gerado localmente com Tauri 2; funciona offline após instalado.
+- **Aplicação Web / PWA:** compatível com desktop e dispositivos móveis, com suporte offline via Service Worker e snapshots setoriais de contingência.
 
 ## Arquitetura Científica e Governança Epistemológica
 
@@ -17,23 +17,23 @@ O Kirimurê distingue explicitamente quatro categorias de informação ambiental
 1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico e Degree Heating Weeks (DHW) obtidos via ERDDAP da NOAA (grade 5 km), com snapshot histórico calibrado (El Niño mar/abr 2024) para contingência offline.
 2. **Produtos de Modelo Numérico Global (Open-Meteo Marine):** Séries horárias de altura de onda ($H_s$), correntes e nível do mar baseadas em modelos Copernicus/ECMWF para o canal da BTS.
 3. **Modelos Físico-Químicos Acoplados da Simulação:**
-   - **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Cinética acoplada ar-mar baseada em Weiss (1970) para saturação termodinâmica, Streeter-Phelps para reaeração atmosférica e desoxigenação por DBO, demanda de oxigênio bentônica (SOD; Bowie et al., 1985) e fotossíntese/respiração líquida de algas e corais.
+   - **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Cinética acoplada ar-mar baseada em Weiss (1970) para saturação termodinâmica, Streeter-Phelps para reaeração atmosférica e desoxigenação por DBO, demanda de oxigênio bentônica (SOD; Bowie et al., 1985) e fotossíntese/respiração líquida de algas e corais. Piso numérico de proteção termodinâmica a 0,05 mg/L.
    - **Sistema Carbonato Marinho (`carbonate.ts`):** Equilíbrio termodinâmico do $\text{CO}_2$ marinho ($K_1, K_2, K_w, K_B$ de Lueker et al., 2000 e Dickson, 1990; $K'_{sp}$ de Mucci, 1983) calculando pH efetivo, $p\text{CO}_2$, saturação de aragonita ($\Omega_{\text{arag}}$) e calcita ($\Omega_{\text{calc}}$), acoplado à produção respiratória de $\text{CO}_2$.
    - **Destino e Balanço de Óleo (`contaminants.ts`):** Balanço de massa em 4 compartimentos (filme superficial, dispersão em gotículas, dissolução de HPAs biodisponíveis e deposição em sedimento) com atenuação luminosa, perdas atmosféricas e exportação oceânica hidrodinâmica.
-   - **Ecotoxicologia Subletal de HPAs:** Curvas de inibição de regeneração tecidual em *Mussismilia* baseadas em May et al. (2020) com EC50 de 10 µg/L tPAH50.
-   - **Microplásticos nos Estuários:** Levantamento amostral regional dos dez principais rios afluentes da BTS baseado em Trindade et al. (2023).
+   - **Ecotoxicologia Subletal de HPAs:** Curvas de inibição de regeneração tecidual em corais recifais baseadas em May et al. (2020) com EC50 de 10 µg/L tPAH50.
+   - **Microplásticos nos Estuários:** Levantamento amostral regional representativo dos estuários da BTS baseado em Trindade et al. (2023, v. 323).
 4. **Cenário Experimental Interativo:** Bancada didática em que o usuário manipula forçantes e observa a resposta ecossistêmica sem sobrescrever os registros observacionais externos.
 
 ## Funcionalidades
 
 - **Cena marinha 3D em tempo real** renderizada via Babylon.js 9 com carregamento sob demanda (`React.lazy`/`Suspense`).
-- **Compartimentalização por Setores da BTS:** Ilha dos Frades, Boca da Barra, Canal de Itaparica e Baía de Aratu, com batimetrias, taxas de descarga hidrodinâmica e salinidades específicas.
+- **Compartimentalização por Setores da BTS:** Calibração central com foco no recife da Ilha dos Frades (Baía Central / Recifes de Franja; Cirano & Lessa, 2007), complementado pelo Estuário do Rio Paraguaçu (manguezais / fundo da baía) e Boca da Barra (acesso oceânico), com batimetrias, volumes de mistura, tempos de descarga hidrodinâmica e salinidades específicas.
 - **Regimes de Esgoto Selecionáveis:** Aporte contínuo diário ($\text{kg DBO}_5/\text{dia}$) ou pulso pontual instantâneo ($\Delta\text{DBO}$).
 - **Monitor de Sistema Carbonato:** Graus de saturação mineral ($\Omega_{\text{arag}}$, $\Omega_{\text{calc}}$) e $p\text{CO}_2$ com alertas de risco de corrosão do esqueleto coralino.
 - **Cinética de Desoxigenação:** Efeitos subletais e hipóxia severa influenciando a sobrevivência de peixes e corais.
 - **DHW em janela móvel de 12 semanas:** Cumprimento estrito da metodologia Coral Reef Watch para quantificação do estresse térmico acumulado.
 - **Painel de Ciência e Proveniência:** Inspeção de fórmulas, constantes, URLs de consulta externa e hashes de integridade.
-- **Controles de Tempo:** Velocidades 1×, 3×, 5× e 10× com integração física independente da taxa de quadros (FPS).
+- **Controles de Tempo:** Velocidades 1×, 3×, 5× e 10× com integração física invariante por sub-stepping numérico independente da velocidade.
 - **Desafios e Marcos Pedagógicos:** Diagnóstico e recuperação de recifes degradados.
 
 ## Tecnologias
@@ -43,7 +43,6 @@ O Kirimurê distingue explicitamente quatro categorias de informação ambiental
 - **TypeScript** (tipagem estrita em todo o motor de simulação e serviços).
 - **React 19** para arquitetura de componentes reativos e interface.
 - **Babylon.js 9** (`@babylonjs/core`, `@babylonjs/loaders`) para renderização 3D WebGL/WebGPU.
-- **Tauri 2** para empacotamento desktop nativo e operação offline.
 - **Vite 8** para empacotamento, compilação e tree-shaking otimizado.
 - **Vitest** para testes de unidade e integração contínua das rotinas científicas.
 
@@ -53,7 +52,6 @@ O Kirimurê distingue explicitamente quatro categorias de informação ambiental
 
 - Node.js 20 ou superior.
 - npm.
-- Rust e ferramentas Tauri (apenas caso deseje compilar o instalador desktop nativo).
 
 ### Instalação
 
@@ -112,7 +110,6 @@ src/
 └── main.tsx              Ponto de entrada da aplicação
 scripts/
 └── check-offline-runtime.mjs  Auditoria de desacoplamento de rede
-src-tauri/                Configuração do aplicativo desktop multiplataforma
 ```
 
 ## Referências Científicas Principais
@@ -122,5 +119,5 @@ src-tauri/                Configuração do aplicativo desktop multiplataforma
 - **Solubilidade de Aragonita e Calcita:** Mucci, A. (1983). *The solubility of calcite and aragonite in seawater at various salinities, temperatures, and one atmosphere total pressure*. American Journal of Science, 283(7), 780-799.
 - **Estresse Térmico em Corais:** NOAA Coral Reef Watch (CRW). *Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring*.
 - **Ecotoxicologia em Recifes:** May, L. A., et al. (2020). *Ecotoxicological effects of petroleum hydrocarbons on tropical reef-building corals*. Aquatic Toxicology, 226, 105454.
-- **Microplásticos na BTS:** Trindade, R. F., et al. (2023). *Microplastics in estuaries of Todos os Santos Bay, Bahia, Brazil*. Environmental Pollution, 321, 121224.
+- **Microplásticos na BTS:** Trindade, R. F., et al. (2023). *Microplastics in estuaries of Todos os Santos Bay, Bahia, Brazil*. Environmental Pollution, 323, 121224.
 - **Oceanografia da BTS:** Cirano, M., & Lessa, G. C. (2007). *Oceanographic characteristics of Baía de Todos os Santos, Brazil*. Revista Brasileira de Geofísica, 25(4), 363-387.

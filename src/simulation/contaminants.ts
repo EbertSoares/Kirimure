@@ -41,7 +41,8 @@ export interface MicroplasticSurveyPoint {
 
 /**
  * Dados empíricos publicados de microplásticos nos estuários da BTS
- * (Trindade et al., 2023; Dissertação UFRB / Environmental Pollution).
+ * (Trindade et al., 2023; Environmental Pollution, v. 323, 121224).
+ * Apresenta uma seleção representativa de 4 dos 10 ambientes estuarinos investigados no estudo.
  */
 export const BTS_MICROPLASTICS_SURVEY: readonly MicroplasticSurveyPoint[] = [
   {
@@ -52,7 +53,7 @@ export const BTS_MICROPLASTICS_SURVEY: readonly MicroplasticSurveyPoint[] = [
     minCountPerM3: 1240,
     particleSizeFractionUnder300Um: 94.2,
     badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023) / UFRB',
+    citation: 'Trindade et al. (2023, v. 323) / UFRB',
   },
   {
     estuaryName: 'Estuário do Rio Jaguaripe',
@@ -62,7 +63,7 @@ export const BTS_MICROPLASTICS_SURVEY: readonly MicroplasticSurveyPoint[] = [
     minCountPerM3: 850,
     particleSizeFractionUnder300Um: 93.8,
     badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023) / UFRB',
+    citation: 'Trindade et al. (2023, v. 323) / UFRB',
   },
   {
     estuaryName: 'Estuário do Rio Subaé',
@@ -72,7 +73,7 @@ export const BTS_MICROPLASTICS_SURVEY: readonly MicroplasticSurveyPoint[] = [
     minCountPerM3: 980,
     particleSizeFractionUnder300Um: 95.1,
     badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023) / UFRB',
+    citation: 'Trindade et al. (2023, v. 323) / UFRB',
   },
   {
     estuaryName: 'Estuário do Rio São Paulo',
@@ -82,9 +83,14 @@ export const BTS_MICROPLASTICS_SURVEY: readonly MicroplasticSurveyPoint[] = [
     minCountPerM3: 637,
     particleSizeFractionUnder300Um: 92.6,
     badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023) / UFRB',
+    citation: 'Trindade et al. (2023, v. 323) / UFRB',
   },
 ] as const;
+
+/** Média aritmética das médias dos 4 estuários selecionados (itens/m³). */
+export const BTS_MICROPLASTICS_SELECTION_MEAN_COUNT_PER_M3 = 5176;
+/** Média estuarina global reportada em Trindade et al. (2023) nos 10 ambientes (itens/m³). */
+export const BTS_MICROPLASTICS_STUDY_GLOBAL_MEAN_COUNT_PER_M3 = 5180;
 
 /**
  * Calcula a partição e destino do derramamento de óleo em 4 reservatórios
@@ -220,10 +226,10 @@ export function getMicroplasticsSurveyMetadata(): ScientificMetadata {
     unit: 'itens/m³ de água superficial',
     quantityKind: 'concentration',
     epistemicClass: 'Dado Local BTS',
-    source: 'Trindade et al. (2023) / Environmental Pollution / UFRB',
+    source: 'Trindade et al. (2023, v. 323, 121224) / Environmental Pollution / UFRB',
     sourceUrl: 'doi:10.1016/j.envpol.2023.121224',
-    method: 'Arrasto superficial com rede de plâncton (malha 64 µm); ~94% dos itens < 300 µm',
-    uncertainty: 'Aporte fluvial anual estimado em 3,88 trilhões de partículas',
-    notes: 'Amostragem empírica in situ restrita aos estuários dos rios Paraguaçu, Jaguaripe, Subaé e São Paulo. Não deve ser extrapolada como massa (kg) sem distribuição granulométrica e densidade polimérica.',
+    method: 'Arrasto superficial com rede de plâncton (malhas 64 µm e 300 µm); ~94% dos itens < 300 µm',
+    uncertainty: 'Aporte fluvial anual estimado em 3,88 trilhões de partículas (média global do estudo: ~5.180 itens/m³)',
+    notes: 'Amostragem empírica in situ representando seleção de 4 dos 10 ambientes estuarinos da BTS. Valores preservados estritamente em itens/m³ (sem conversão genérica para massa em kg).',
   };
 }

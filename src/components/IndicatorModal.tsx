@@ -30,7 +30,7 @@ export const INDICATOR_DETAILS: Record<IndicatorDetailId, IndicatorDetail> = {
     interpretation:
       'A temperatura influencia a solubilidade do oxigênio e o estresse térmico dos corais. O efeito depende da intensidade e da duração do aquecimento. Para avaliar o estresse térmico, consulte o HotSpot e o DHW associados à climatologia do produto NOAA.',
     howToInterpret:
-      'Na Baía de Todos-os-Santos, a média histórica oscila entre 25,0 °C e 28,0 °C. O aquecimento persistente acima da Máxima Mensal Média (MMM de 28,0 °C) deflagra estresse térmico cumulativo.',
+      'Referência térmica do cenário: 28,0 °C. Usada para calcular o estresse térmico didático do Kirimurê. Não substitui a climatologia do pixel utilizada pelo NOAA Coral Reef Watch.',
     methodAndLimitations:
       'O valor exibido pode ser a temperatura imposta pelo usuário no cenário didático, uma condição inicial derivada de satélite NOAA CRW ou uma estimativa de modelo. Não representa uma medição pontual in situ com termômetro físico de campo.',
   },

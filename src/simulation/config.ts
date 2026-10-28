@@ -167,13 +167,20 @@ export const PARAMETERS = {
     centralRetention: CENTRAL_RETENTION,
   },
   receivedLoads: {
-    // Escalas didáticas da massa retida na baía após 30 dias. A capacidade máxima de referência
-    // (100.000 kg × retenção central da baía) é mantida fixa para permitir a comparação intersetorial
-    // do efeito de descarga/renovação hidrodinâmica dos diferentes compartimentos da BTS.
-    // Não equivale diretamente à concentração local, que requer modelagem de pluma advectiva.
+    // Escalas didáticas da massa retida na baía após 30 dias para contaminantes cumulativos em massa (óleo e microplásticos).
+    // A capacidade de referência (100.000 kg × retenção central da baía) é mantida fixa para permitir a comparação
+    // intersetorial do efeito de retenção hidrodinâmica dos diferentes compartimentos da BTS.
     microplastics: { maximumKg: 100000 * CENTRAL_RETENTION },
     oil: { maximumKg: 100000 * CENTRAL_RETENTION },
     sewage: { maximumKg: 100000 * CENTRAL_RETENTION },
+  },
+  sewageLoads: {
+    // Escala máxima de taxa contínua de lançamento (kg DBO₅/dia)
+    continuousMaximumKgPerDay: 100000,
+    // Escala de massa total em pulso pontual retida na caixa de mistura (kg DBO₅)
+    pulseMaximumKg: 100000 * CENTRAL_RETENTION,
+    // Concentração didática de saturação de CBODu na água para efeitos de pressão trófica/nutrientes (mg O₂/L)
+    saturationBodConcentrationMgL: 5.0,
   },
   // Peso de cada poluente no estresse (0 a 1 na escala máxima do cenário).
   pollutantWeights: {

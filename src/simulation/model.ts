@@ -9,6 +9,7 @@ import {
   type MassLoadId,
 } from './config';
 import { calculateCarbonateSystem, calculateRespirationPhImpact } from './carbonate';
+import { calculateOilFateBudget, evaluateOilEcotoxicity } from './contaminants';
 import { calculateDeoxygenationRate, calculateEquilibriumOxygen, calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL, convertBOD5ToUltimateBOD, integrateOxygenKinetics } from './oxygen';
 import type {
   BtsSectorId,
@@ -62,6 +63,29 @@ export function receivedLoadRange(inputKg: number, sectorId: BtsSectorId = 'frad
 /** Normaliza a massa recebida para a escala educativa escolhida. */
 export function normalizedReceivedLoad(id: MassLoadId, valueKg: number) {
   return clamp(valueKg / PARAMETERS.receivedLoads[id].maximumKg);
+}
+
+/**
+ * Normaliza a pressão de efluentes (DBO / matéria orgânica e nutrientes) mantendo coerência de unidades físicas:
+ * - Modo contínuo: taxa diária de entrada (kg DBO₅/dia) comparada ao limite contínuo diário (kg/dia);
+ * - Modo pulso: massa instantânea injetada (kg) e concentração resultante de CBODu na água (mg O₂/L).
+ * Garante que taxas diárias e massas em pulso não sejam misturadas na mesma escala de carga retida.
+ */
+export function normalizedSewagePressure(
+  sewageValue: number,
+  mode: 'continuous' | 'pulse' = 'continuous',
+  bodConcentrationMgL = 0,
+): number {
+  if (mode === 'pulse') {
+    const fromConcentration = clamp(bodConcentrationMgL / PARAMETERS.sewageLoads.saturationBodConcentrationMgL);
+    const fromMass = clamp(sewageValue / PARAMETERS.sewageLoads.pulseMaximumKg);
+    return Math.max(fromConcentration, fromMass);
+  }
+  const fromRate = clamp(sewageValue / PARAMETERS.sewageLoads.continuousMaximumKgPerDay);
+  const fromConcentration = bodConcentrationMgL > 0
+    ? clamp(bodConcentrationMgL / PARAMETERS.sewageLoads.saturationBodConcentrationMgL)
+    : 0;
+  return Math.max(fromRate, fromConcentration);
 }
 
 /**
@@ -119,6 +143,7 @@ export function calculatePressures(
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
+  sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
 ): Pressures {
   const ph = effectivePh(env, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
   const currentHeat = stressAbove(
@@ -128,12 +153,20 @@ export function calculatePressures(
   ) * 0.25;
   const accumulatedHeat = clamp(dhw / PARAMETERS.temperature.severeDhw);
 
+  let oilPressure = normalizedReceivedLoad('oil', env.oil);
+  if (env.oil > 0) {
+    const budget = calculateOilFateBudget(env.oil, sectorId, 1);
+    const ecotox = evaluateOilEcotoxicity(budget.dissolvedPahConcentrationUgL);
+    const toxicResponse = clamp(ecotox.tissueRegenerationInhibitionPercent / 100);
+    oilPressure = Math.max(oilPressure, toxicResponse);
+  }
+
   return {
     thermal: combine([currentHeat, accumulatedHeat]),
     acidification: stressBelow(ph, PARAMETERS.ph.coralStart, PARAMETERS.ph.coralMax),
-    oil: normalizedReceivedLoad('oil', env.oil),
+    oil: oilPressure,
     microplastics: normalizedReceivedLoad('microplastics', env.microplastics),
-    sewage: normalizedReceivedLoad('sewage', env.sewage),
+    sewage: normalizedSewagePressure(env.sewage, sewageDischargeMode, bodConcentrationMgL),
     turbidity: clamp(env.turbidity / 100),
     fishing: clamp(env.fishing / 100),
   };
@@ -165,8 +198,16 @@ export function calculateFishPressures(
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
+  sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
 ): Pressures {
-  const base = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
+  const base = calculatePressures(
+    env,
+    dhw,
+    bodConcentrationMgL,
+    sectorId,
+    respiratoryDicUmolKg,
+    sewageDischargeMode,
+  );
   const hypoxia = hypoxiaStress(dissolvedOxygen);
   return {
     ...base,
@@ -206,9 +247,25 @@ export function calculateStress(
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
+  sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
 ) {
-  const pressures = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
-  const fishPressures = calculateFishPressures(env, dhw, dissolvedOxygen, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
+  const pressures = calculatePressures(
+    env,
+    dhw,
+    bodConcentrationMgL,
+    sectorId,
+    respiratoryDicUmolKg,
+    sewageDischargeMode,
+  );
+  const fishPressures = calculateFishPressures(
+    env,
+    dhw,
+    dissolvedOxygen,
+    bodConcentrationMgL,
+    sectorId,
+    respiratoryDicUmolKg,
+    sewageDischargeMode,
+  );
   const species = Object.fromEntries(
     FISH_SPECIES.map((item) => [item.id, speciesStress(fishPressures, item.id)]),
   ) as Record<FishSpeciesId, number>;
@@ -218,8 +275,13 @@ export function calculateStress(
 }
 
 /** Cobertura de algas (0 a 100): nutrientes, perda de herbívoros e espaço livre. */
-export function calculateAlgae(env: Environment, health: Health) {
-  const nutrients = normalizedReceivedLoad('sewage', env.sewage);
+export function calculateAlgae(
+  env: Environment,
+  health: Health,
+  sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
+  bodConcentrationMgL = 0,
+) {
+  const nutrients = normalizedSewagePressure(env.sewage, sewageDischargeMode, bodConcentrationMgL);
   const grazers = clamp(1 - health.fish / 100);
   const sediment = clamp(env.turbidity / 100) * 0.2;
   const freeSpace = clamp(1 - health.coral / 100) * 0.5;
@@ -399,9 +461,9 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
     env[id] += (state.targets[id] - env[id]) * factor;
   });
 
-  const algae = calculateAlgae(env, state.health);
   const currentBod = state.biochemicalOxygenDemand ?? 0;
   const currentDo = state.dissolvedOxygen ?? calculateWeissOxygenSaturation(env.temperature);
+  const algae = calculateAlgae(env, state.health, state.sewageDischargeMode, currentBod);
   const dischargeType = state.sewageDischargeMode === 'pulse' ? 'instant_pulse' : 'continuous_daily';
   const oxygenKinetics = integrateOxygenKinetics(
     currentDo,
@@ -425,7 +487,15 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
   );
 
   const thermal = updateThermalDose(state, env.temperature, dtDays);
-  const stress = calculateStress(env, thermal.degreeHeatingWeeks, oxygen, bod, state.sector, nextRespiratoryDic);
+  const stress = calculateStress(
+    env,
+    thermal.degreeHeatingWeeks,
+    oxygen,
+    bod,
+    state.sector,
+    nextRespiratoryDic,
+    state.sewageDischargeMode,
+  );
   const protection = clamp(env.recovery / 100);
   const exposure = PRESSURE_IDS.reduce(
     (result, id) => {
@@ -509,7 +579,12 @@ export interface EstimateCriticalDaysOptions {
 
 /**
  * Projeta, a partir de um recife saudável, quando a saúde geral cruza a faixa
- * crítica caso as condições aplicadas permaneçam constantes.
+ * crítica didática (índice global <= 33 pontos) caso as condições aplicadas permaneçam constantes.
+ *
+ * NOTA EPISTEMOLÓGICA (Regra do Modelo Didático):
+ * O limiar interno de 33 pontos é uma convenção didática para sinalizar colapso funcional da bancada,
+ * não uma previsão demográfica ou populacional de extinção biológica em campo. A escala (0 a 100)
+ * sintetiza pressões ponderadas relativas para demonstrar relações pedagógicas de estresse acumulado.
  *
  * Considera o estado completo, incluindo DBO inicial de pulsos e renovação do setor.
  */

@@ -165,15 +165,30 @@ export function SciencePanel({
 
   return (
     <aside className="science-panel" aria-label="Painel científico">
-      <nav className="panel-tabs" role="tablist">
-        {TABS.map((item) => (
+      <nav className="panel-tabs" role="tablist" aria-label="Navegação das seções científicas">
+        {TABS.map((item, index) => (
           <button
             type="button"
+            id={`tab-${item.id}`}
             key={item.id}
             role="tab"
             aria-selected={tab === item.id}
+            aria-controls={`tabpanel-${item.id}`}
+            tabIndex={tab === item.id ? 0 : -1}
             className={tab === item.id ? 'active' : ''}
             onClick={() => onTabChange(item.id)}
+            onKeyDown={(e) => {
+              let nextIndex = index;
+              if (e.key === 'ArrowRight') nextIndex = (index + 1) % TABS.length;
+              else if (e.key === 'ArrowLeft') nextIndex = (index - 1 + TABS.length) % TABS.length;
+              else if (e.key === 'Home') nextIndex = 0;
+              else if (e.key === 'End') nextIndex = TABS.length - 1;
+              else return;
+              e.preventDefault();
+              const nextId = TABS[nextIndex].id;
+              onTabChange(nextId);
+              document.getElementById(`tab-${nextId}`)?.focus();
+            }}
           >
             <span>{item.label}</span>
           </button>
@@ -183,7 +198,14 @@ export function SciencePanel({
       <div className="panel-body">
         {/* 1. ABA RESUMO */}
         {tab === 'summary' && (
-          <section className="panel-section" aria-label="Resumo do cenário e leitura atual">
+          <section
+            className="panel-section"
+            id="tabpanel-summary"
+            role="tabpanel"
+            aria-labelledby="tab-summary"
+            tabIndex={0}
+            aria-label="Resumo do cenário e leitura atual"
+          >
             <article className={`message-card tone-${message.tone}`}>
               <header className="message-heading">
                 <span className="message-icon"><Icon name={message.tone === 'positive' ? 'check' : 'info'} /></span>
@@ -245,7 +267,14 @@ export function SciencePanel({
 
         {/* 2. ABA RESULTADOS */}
         {tab === 'results' && (
-          <section className="panel-section" aria-label="Resultados e diagnóstico ecológico">
+          <section
+            className="panel-section"
+            id="tabpanel-results"
+            role="tabpanel"
+            aria-labelledby="tab-results"
+            tabIndex={0}
+            aria-label="Resultados e diagnóstico ecológico"
+          >
             {selectedIndicator && (
               <IndicatorContextCard
                 indicatorId={selectedIndicator}
@@ -435,7 +464,14 @@ export function SciencePanel({
 
         {/* 3. ABA EVOLUÇÃO (TIMELINE & HISTÓRICO) */}
         {tab === 'history' && (
-          <section className="panel-section" aria-label="Evolução temporal e histórico">
+          <section
+            className="panel-section"
+            id="tabpanel-history"
+            role="tabpanel"
+            aria-labelledby="tab-history"
+            tabIndex={0}
+            aria-label="Evolução temporal e histórico"
+          >
             <OxygenTrendChart
               history={state.history}
               currentOxygen={state.dissolvedOxygen}
@@ -487,7 +523,14 @@ export function SciencePanel({
 
         {/* 4. ABA ATIVIDADES (MISSÃO E DESAFIOS) */}
         {tab === 'activities' && (
-          <section className="panel-section" aria-label="Desafios e Missões Guiadas">
+          <section
+            className="panel-section"
+            id="tabpanel-activities"
+            role="tabpanel"
+            aria-labelledby="tab-activities"
+            tabIndex={0}
+            aria-label="Desafios e Missões Guiadas"
+          >
             {missionState ? (
               <div className="mission-active-panel">
                 <header className="mission-header-bar">
@@ -820,7 +863,14 @@ export function SciencePanel({
 
         {/* 5. ABA DADOS E MÉTODO (NOAA, OPEN-METEO, CARBONATO, ÓLEO E MICROPLÁSTICOS) */}
         {tab === 'data' && (
-          <section className="panel-section" aria-label="Dados Oceanográficos Externos e Metodologia Científica">
+          <section
+            className="panel-section"
+            id="tabpanel-data"
+            role="tabpanel"
+            aria-labelledby="tab-data"
+            tabIndex={0}
+            aria-label="Dados Oceanográficos Externos e Metodologia Científica"
+          >
             <header style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 {oceanData && (
@@ -856,7 +906,21 @@ export function SciencePanel({
             <article className="progressive-card">
               <div className="progressive-card-head">
                 <div>
+                  <span className="epistemological-badge" style={{ fontSize: '11px' }}>
+                    {oceanData?.latestCrw?.provenance?.isCachedFallback ? 'Snapshot Histórico de Contingência' : 'Produto de Satélite (NOAA CRW)'}
+                  </span>
                   <h3 style={{ marginTop: '4px' }}>1. Satélite NOAA Coral Reef Watch</h3>
+                </div>
+                <div>
+                  <span className="live-notice-pill" title={oceanData?.latestCrw?.provenance?.isCachedFallback ? 'Snapshot de contingência setorial (mar/abr 2024)' : 'Dado obtido de servidor remoto'}>
+                    {oceanData?.loading
+                      ? 'Consultando satélite...'
+                      : oceanData?.latestCrw?.provenance?.isCachedFallback
+                        ? 'Snapshot de contingência (mar/2024)'
+                        : oceanData?.latestCrw?.provenance?.fetchStatus === 'online_valid'
+                          ? `Modelo atualizado (${oceanData.latestCrw.timestampUtc ? oceanData.latestCrw.timestampUtc.substring(0, 10) : ''})`
+                          : 'Dados disponíveis'}
+                  </span>
                 </div>
               </div>
 
@@ -881,17 +945,32 @@ export function SciencePanel({
                     </div>
                     <div className="progressive-metric-box">
                       <span className="metric-label">Alerta de Branqueamento</span>
-                      <strong className={`metric-value ${oceanData.latestCrw.bleachingAlertLevel && oceanData.latestCrw.bleachingAlertLevel >= 3 ? 'critical' : oceanData.latestCrw.bleachingAlertLevel && oceanData.latestCrw.bleachingAlertLevel >= 1 ? 'watch' : 'healthy'}`} style={{ fontSize: '13px' }}>
-                        {oceanData.latestCrw.bleachingAlertLevel === 4
+                      {(() => {
+                        const baa = oceanData.latestCrw.bleachingAlertLevel;
+                        const baaDisplay = baa === 4
                           ? 'Nível 2 (Severo)'
-                          : oceanData.latestCrw.bleachingAlertLevel === 3
+                          : baa === 3
                             ? 'Nível 1 (Risco)'
-                            : oceanData.latestCrw.bleachingAlertLevel === 2
+                            : baa === 2
                               ? 'Aviso (Warning)'
-                              : oceanData.latestCrw.bleachingAlertLevel === 1
+                              : baa === 1
                                 ? 'Vigilância (Watch)'
-                                : 'Sem Alerta (Nível 0)'}
-                      </strong>
+                                : baa === 0
+                                  ? 'Sem Alerta (Nível 0)'
+                                  : 'Sem dado / Indisponível';
+                        const baaTone = baa === null || baa === undefined
+                          ? ''
+                          : baa >= 3
+                            ? 'critical'
+                            : baa >= 1
+                              ? 'watch'
+                              : 'healthy';
+                        return (
+                          <strong className={`metric-value ${baaTone}`} style={{ fontSize: '13px' }}>
+                            {baaDisplay}
+                          </strong>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -919,9 +998,9 @@ export function SciencePanel({
                     >
                       <Icon name="check" />
                       <span style={{ lineHeight: 1.3 }}>
-                        {oceanData.noaaStatus.state === 'success'
-                          ? `Usar SST do satélite NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
-                          : `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`}
+                        {oceanData.latestCrw.provenance.isCachedFallback
+                          ? `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
+                          : `Usar SST do satélite NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`}
                       </span>
                     </button>
                   )}
@@ -938,14 +1017,17 @@ export function SciencePanel({
                         )}
                         <strong>Dataset:</strong> <code>NOAA_DHW</code> via CoastWatch ERDDAP<br />
                         <strong>Anomalia Oficial (CRW_SSTANOMALY):</strong> {oceanData.latestCrw.sstAnomalyDegC !== null ? `${oceanData.latestCrw.sstAnomalyDegC > 0 ? '+' : ''}${oceanData.latestCrw.sstAnomalyDegC.toFixed(2)} °C` : 'Ausente'}<br />
+                        <strong>Período Válido do Dado:</strong> {oceanData.latestCrw.provenance.validTimeStartUtc.substring(0, 10)} a {oceanData.latestCrw.provenance.validTimeEndUtc.substring(0, 10)}<br />
+                        <strong>Data de Consulta / Registro:</strong> {oceanData.latestCrw.provenance.retrievedAtUtc ? oceanData.latestCrw.provenance.retrievedAtUtc.replace('T', ' ').substring(0, 19) + ' UTC' : '—'}<br />
+                        <strong>Tipo de Registro:</strong> {oceanData.latestCrw.provenance.isCachedFallback ? 'Snapshot Histórico de Contingência (Onda de calor mar/abr 2024 na BTS)' : 'Consulta operacional em tempo real'}<br />
                         {oceanData.latestCrw.provenance.responseHash && (
                           <>
-                            <strong>Checksum de Integridade:</strong> <code>{oceanData.latestCrw.provenance.responseHash}</code><br />
+                            <strong>Identificador de Conteúdo (Hash):</strong> <code>{oceanData.latestCrw.provenance.responseHash}</code><br />
                           </>
                         )}
                       </p>
                       <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                        O BAA e o HotSpot da NOAA são calculados sobre a climatologia do pixel (MMM de satélite em grade de 5 km). O Kirimurê calcula o estresse experimental na bancada sem sobrescrever os dados externos observados.
+                        O BAA e o HotSpot da NOAA são calculados sobre a climatologia do pixel (MMM de satélite em grade de 5 km). O Kirimurê adota 28,0 °C como referência didática de bancada para calcular estresse térmico, sem substituir a climatologia oficial do pixel NOAA.
                       </p>
                     </div>
                   </details>
@@ -961,12 +1043,20 @@ export function SciencePanel({
             <article className="progressive-card">
               <div className="progressive-card-head">
                 <div>
-                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
+                  <span className="epistemological-badge" style={{ fontSize: '11px' }}>
+                    {oceanData?.latestMeteo?.provenance?.isCachedFallback ? 'Snapshot de Contingência' : 'Produto de Modelo Numérico'}
+                  </span>
                   <h3 style={{ marginTop: '4px' }}>2. Modelo Costeiro Open-Meteo Marine</h3>
                 </div>
                 <div>
-                  <span className="live-notice-pill">
-                    Consulta Open-Meteo concluída {oceanData?.latestMeteo?.timestampUtc ? `(${oceanData.latestMeteo.timestampUtc.replace('T', ' ').substring(0, 16)} UTC)` : ''}
+                  <span className="live-notice-pill" title={oceanData?.latestMeteo?.provenance?.isCachedFallback ? 'Snapshot de contingência setorial (março/2024)' : 'Previsão operacional atualizada'}>
+                    {oceanData?.loading
+                      ? 'Consultando modelo...'
+                      : oceanData?.latestMeteo?.provenance?.isCachedFallback
+                        ? 'Snapshot de contingência (mar/2024)'
+                        : oceanData?.latestMeteo?.provenance?.fetchStatus === 'online_valid'
+                          ? `Modelo atualizado (${oceanData.latestMeteo.timestampUtc ? oceanData.latestMeteo.timestampUtc.replace('T', ' ').substring(0, 16) + ' UTC' : ''})`
+                          : 'Dados disponíveis'}
                   </span>
                 </div>
               </div>
@@ -1003,7 +1093,10 @@ export function SciencePanel({
                           </>
                         )}
                         <strong>Seleção de Modelos:</strong> Padrão Best Match da Open-Meteo API (combinação de produtos com resoluções de ondas e correntes distintas).<br />
-                        <strong>SST do Modelo:</strong> {oceanData.latestMeteo.seaSurfaceTemperatureDegC !== null ? `${oceanData.latestMeteo.seaSurfaceTemperatureDegC.toFixed(1)} °C` : 'Dado não informado'}
+                        <strong>SST do Modelo:</strong> {oceanData.latestMeteo.seaSurfaceTemperatureDegC !== null ? `${oceanData.latestMeteo.seaSurfaceTemperatureDegC.toFixed(1)} °C` : 'Dado não informado'}<br />
+                        <strong>Período Válido da Previsão:</strong> {oceanData.latestMeteo.provenance.validTimeStartUtc.replace('T', ' ').substring(0, 16)} a {oceanData.latestMeteo.provenance.validTimeEndUtc.replace('T', ' ').substring(0, 16)} UTC<br />
+                        <strong>Data de Consulta:</strong> {oceanData.latestMeteo.provenance.retrievedAtUtc ? oceanData.latestMeteo.provenance.retrievedAtUtc.replace('T', ' ').substring(0, 19) + ' UTC' : '—'}<br />
+                        <strong>Tipo de Registro:</strong> {oceanData.latestMeteo.provenance.isCachedFallback ? 'Snapshot Histórico de Contingência (mar/2024)' : 'Previsão operacional Open-Meteo Marine'}
                       </p>
                       <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
                         Ressalva Hidrodinâmica: Os produtos globais provêem condições de contorno de mar aberto. A hidrodinâmica em canais interiores rasos e estuários da BTS é dominada por forçantes locais e marés semidiurnas, não devendo ser usada como previsão de precisão náutica.
@@ -1022,11 +1115,11 @@ export function SciencePanel({
             <article className="progressive-card">
               <div className="progressive-card-head">
                 <div>
-                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Termodinâmica Aquática</span>
+                  <span className="epistemological-badge" style={{ fontSize: '11px' }}>Termodinâmica Aquática</span>
                   <h3 style={{ marginTop: '4px' }}>3. Sistema Carbonato & Aragonita</h3>
                 </div>
                 <div>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>
                     Setor: <strong>{sector.label}</strong> ({sectorSalinity} PSU)
                   </span>
                 </div>
@@ -1053,8 +1146,8 @@ export function SciencePanel({
                     {carbonate.omegaAragonite >= 3.0
                       ? 'Precipitação favorável'
                       : carbonate.omegaAragonite >= 2.0
-                        ? 'Estresse moderado'
-                        : 'Risco de dissolução'}
+                        ? 'Estresse à calcificação'
+                        : 'Risco de dissolução mineral'}
                   </strong>
                 </div>
               </div>
@@ -1063,16 +1156,16 @@ export function SciencePanel({
                 <summary className="source-method-summary">Fonte, método e limitações ▾</summary>
                 <div className="source-method-content">
                   <p style={{ margin: 0 }}>
-                    <strong>Alcalinidade Total Local (TA):</strong> {carbonate.totalAlkalinityUmolKg.toFixed(0)} µmol/kg (escalada pela salinidade setorial {sectorSalinity} PSU)<br />
-                    {state.biochemicalOxygenDemand > 0 && (
+                    <strong>Alcalinidade de referência do cenário (TA):</strong> {carbonate.totalAlkalinityUmolKg.toFixed(0)} µmol/kg (hipótese do modelo escalada pela salinidade de {sectorSalinity} PSU; não é medição in situ local)<br />
+                    {(state.respiratoryDicUmolKg ?? 0) > 0.01 && (
                       <>
-                        <strong>Acréscimo de DIC por Respiração Microbiana (DBO):</strong> +{((state.biochemicalOxygenDemand / 32) * 1000 * 0.98).toFixed(1)} µmol/kg<br />
+                        <strong>DIC respiratório acumulado integrado:</strong> +{(state.respiratoryDicUmolKg ?? 0).toFixed(1)} µmol/kg (produção microbiológica efetiva integrada no tempo; demanda potencial remanescente: {((state.biochemicalOxygenDemand / 32) * 1000 * 0.98).toFixed(1)} µmol/kg)<br />
                       </>
                     )}
-                    <strong>Formulação Química:</strong> Equilíbrio termodinâmico de Lueker et al. (2000) e Mucci (1983), compatível com vetores CO2SYS / Dickson & Goyet (1994).
+                    <strong>Formulação Química:</strong> Equilíbrio termodinâmico de Lueker et al. (2000) e Mucci (1983), calibrado com vetores de referência CO2SYS / Dickson & Goyet (1994).
                   </p>
                   <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                    A saturação de aragonita expressa a propensão química à precipitação mineral inorgânica. A calcificação biológica dos organismos recifais depende também do metabolismo, disponibilidade energética e taxa de crescimento individual.
+                    A saturação de aragonita expressa a propensão físico-química à formação mineral inorgânica. Não equivale à calcificação biológica plena de organismos recifais, que depende também de energia metabólica, simbiose e integridade tecidual.
                   </p>
                 </div>
               </details>
@@ -1083,11 +1176,11 @@ export function SciencePanel({
               <article className="progressive-card">
                 <div className="progressive-card-head">
                   <div>
-                    <span className="epistemological-badge" style={{ fontSize: '10px' }}>Balanço de Massa</span>
+                    <span className="epistemological-badge" style={{ fontSize: '11px' }}>Estimativa de Cenário / Balanço de Caixa</span>
                     <h3 style={{ marginTop: '4px' }}>4. Destino de Hidrocarbonetos (4 Caixas)</h3>
                   </div>
                   <div>
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+                    <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>
                       Massa derramada: <strong>{spilledOilMassKg.toLocaleString('pt-BR')} kg</strong>
                     </span>
                   </div>
@@ -1126,9 +1219,10 @@ export function SciencePanel({
                           <strong>Inibição Subletal de Regeneração Tecidual:</strong> {oilEcotox.tissueRegenerationInhibitionPercent}% (Risco pólipos: {oilEcotox.polypRetractionRisk}; May et al., 2020, EC50 = 10 µg/L)<br />
                         </>
                       )}
+                      <strong>Resíduo Contábil de Massa:</strong> {oilBudget.massBalanceResidualKg.toFixed(4)} kg
                     </p>
                     <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                      Modelo de 4 caixas determinístico com resíduo de balanço de massa &lt; 0,1%. Trata-se de uma estimativa didática exploratória, e não de uma previsão letal de campo descalibrada.
+                      Estimativa de Cenário Didático: Modelo de caixa para ensino do particionamento de hidrocarbonetos. O fechamento contábil garante conservação de massa por construção, mas não substitui modelagem hidrodinâmica tridimensional de transporte e pluma de derramamento. A pressão de óleo sobre o recife acopla a cobertura da mancha com a inibição celular de May et al. (2020).
                     </p>
                   </div>
                 </details>
@@ -1139,20 +1233,20 @@ export function SciencePanel({
             <article className="progressive-card">
               <div className="progressive-card-head">
                 <div>
-                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Dado Empírico Local</span>
+                  <span className="epistemological-badge" style={{ fontSize: '11px' }}>Dado Empírico Local (Seleção de Campo)</span>
                   <h3 style={{ marginTop: '4px' }}>5. Microplásticos nos Estuários da BTS</h3>
                 </div>
                 <div>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                    Trindade et al. (2023 / UFRB)
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>
+                    Trindade et al. (2023, v. 323 / UFRB)
                   </span>
                 </div>
               </div>
 
               <div className="progressive-metric-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
                 <div className="progressive-metric-box">
-                  <span className="metric-label">Concentração Média Estuarina</span>
-                  <strong className="metric-value">2.842 itens/m³</strong>
+                  <span className="metric-label">Média Amostral (4 Estuários Selecionados)</span>
+                  <strong className="metric-value">5.176 itens/m³</strong>
                 </div>
                 <div className="progressive-metric-box">
                   <span className="metric-label">Aporte Fluvial Anual Estimado</span>
@@ -1171,7 +1265,7 @@ export function SciencePanel({
                     ))}
                   </ul>
                   <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                    Metodologia: Amostragem in situ por arrasto horizontal com rede de plâncton (malhas de 300 µm e 64 µm) e digestão oxidativa com H₂O₂. Valores reportados em itens/m³ para fidelidade às observações de campo.
+                    Metodologia: Amostragem in situ em seleção representativa de 4 dos 10 ambientes estuarinos investigados por Trindade et al. (2023, Environmental Pollution v. 323, 121224; média global reportada no estudo de ~5.180 itens/m³). Valores preservados estritamente em itens/m³ para fidelidade às observações de campo, sem conversão fictícia para quilogramas.
                   </p>
                 </div>
               </details>

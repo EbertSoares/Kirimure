@@ -13,6 +13,7 @@ import {
   effectivePh,
   estimateCriticalDays,
   getDissolvedOxygenBreakdown,
+  normalizedSewagePressure,
   receivedLoadRange,
   speciesStress,
   tickSimulation,
@@ -92,6 +93,64 @@ describe('modelo de simulação', () => {
     expect(afterFast.dissolvedOxygen).toBeCloseTo(afterNormal.dissolvedOxygen, 3);
     expect(afterFast.biochemicalOxygenDemand).toBeCloseTo(afterNormal.biochemicalOxygenDemand, 3);
     expect(afterFast.overall).toBeCloseTo(afterNormal.overall, 3);
+  });
+
+  it('demonstra convergência temporal numérica comparando passos de 0.05, 0.025 e 0.0125 dia', () => {
+    // 1. Cenário de Carga Contínua Baixa (200 kg DBO₅/dia)
+    const runKineticSubsteps = (totalDays: number, dt: number, initialDo: number, initialBod: number, env: typeof BASELINE, discharge: 'continuous_daily' | 'instant_pulse') => {
+      let doVal = initialDo;
+      let bodVal = initialBod;
+      const steps = Math.round(totalDays / dt);
+      for (let i = 0; i < steps; i += 1) {
+        const res = integrateOxygenKinetics(doVal, bodVal, env, 'frades', dt, 15, discharge);
+        doVal = res.nextDo;
+        bodVal = res.nextBod;
+      }
+      return { doVal, bodVal };
+    };
+
+    const envLow = { ...BASELINE, sewage: 200 };
+    const low05 = runKineticSubsteps(5, 0.05, 6.55, 0, envLow, 'continuous_daily');
+    const low025 = runKineticSubsteps(5, 0.025, 6.55, 0, envLow, 'continuous_daily');
+    const low0125 = runKineticSubsteps(5, 0.0125, 6.55, 0, envLow, 'continuous_daily');
+
+    // Tolerância rigorosa de convergência: diferença relativa < 0,1%
+    expect(Math.abs(low05.doVal - low0125.doVal)).toBeLessThan(0.01);
+    expect(Math.abs(low025.doVal - low0125.doVal)).toBeLessThan(0.005);
+    expect(Math.abs(low05.bodVal - low0125.bodVal)).toBeLessThan(0.005);
+
+    // 2. Cenário de Carga Contínua Elevada (20.000 kg DBO₅/dia)
+    const envHigh = { ...BASELINE, sewage: 20000 };
+    const high05 = runKineticSubsteps(5, 0.05, 6.55, 0, envHigh, 'continuous_daily');
+    const high025 = runKineticSubsteps(5, 0.025, 6.55, 0, envHigh, 'continuous_daily');
+    const high0125 = runKineticSubsteps(5, 0.0125, 6.55, 0, envHigh, 'continuous_daily');
+
+    expect(Math.abs(high05.doVal - high0125.doVal)).toBeLessThan(0.02);
+    expect(Math.abs(high025.doVal - high0125.doVal)).toBeLessThan(0.01);
+    expect(Math.abs(high05.bodVal - high0125.bodVal)).toBeLessThan(0.01);
+
+    // 3. Cenário de Pulso Instantâneo (20.000 kg injetados em t = 0)
+    const pulseDeltaBod = convertBOD5ToPulseDeltaMgL(20000, BTS_SECTORS[0].mixingVolumeM3);
+    const envPulse = { ...BASELINE, sewage: 0 };
+    const pulse05 = runKineticSubsteps(5, 0.05, 6.55, pulseDeltaBod, envPulse, 'instant_pulse');
+    const pulse025 = runKineticSubsteps(5, 0.025, 6.55, pulseDeltaBod, envPulse, 'instant_pulse');
+    const pulse0125 = runKineticSubsteps(5, 0.0125, 6.55, pulseDeltaBod, envPulse, 'instant_pulse');
+
+    expect(Math.abs(pulse05.doVal - pulse0125.doVal)).toBeLessThan(0.02);
+    expect(Math.abs(pulse025.doVal - pulse0125.doVal)).toBeLessThan(0.01);
+    expect(Math.abs(pulse05.bodVal - pulse0125.bodVal)).toBeLessThan(0.01);
+  });
+
+  it('mantém separação dimensional entre taxa de esgoto em kg/dia e massa em kg de pulso', () => {
+    // Modo contínuo: compara estritamente com continuousMaximumKgPerDay (100.000 kg/dia)
+    const pressureContinuous = normalizedSewagePressure(10000, 'continuous', 0);
+    expect(pressureContinuous).toBeCloseTo(0.10, 4);
+
+    // Modo pulso com 10.000 kg e concentração em mg/L na água
+    const pressurePulse = normalizedSewagePressure(10000, 'pulse', 1.0);
+    expect(pressurePulse).toBeGreaterThan(0);
+    // Pulso instantâneo não usa a taxa diária de 100.000 kg/dia
+    expect(pressurePulse).not.toBe(pressureContinuous);
   });
 
   it('não avança enquanto a simulação está pausada', () => {

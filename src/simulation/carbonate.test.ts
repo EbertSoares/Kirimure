@@ -70,6 +70,36 @@ describe('módulo do sistema carbonato marinho e saturação de aragonita', () =
     expect(std.calcificationStatus).toBe('optimum');
   });
 
+  it('valida vetores de referência reproduzíveis tipo CO2SYS com tolerâncias numéricas explícitas em condições diversas', () => {
+    // Vetor A: Recife Tropical Quente (T = 28.0 °C, S = 35.0 PSU, TA = 2350 µmol/kg, pH_total = 8.15, P = 0 dbar)
+    const warmReef = calculateCarbonateSystem(8.15, 2350, 28.0, 35.0);
+    // Tolerâncias documentadas: DIC entre 1940 e 2010 µmol/kg, pCO2 entre 280 e 360 µatm, Ωarag entre 3.9 e 4.7
+    expect(warmReef.dissolvedInorganicCarbonUmolKg).toBeGreaterThan(1940);
+    expect(warmReef.dissolvedInorganicCarbonUmolKg).toBeLessThan(2010);
+    expect(warmReef.pCO2Uatm).toBeGreaterThan(280);
+    expect(warmReef.pCO2Uatm).toBeLessThan(360);
+    expect(warmReef.omegaAragonite).toBeGreaterThan(3.9);
+    expect(warmReef.omegaAragonite).toBeLessThan(4.7);
+    expect(warmReef.calcificationStatus).toBe('optimum');
+
+    // Vetor B: Acidificação Costeira Severa (T = 26.8 °C, S = 35.0 PSU, TA = 2350 µmol/kg, pH_total = 7.75)
+    const acidified = calculateCarbonateSystem(7.75, 2350, 26.8, 35.0);
+    // Sob acidificação: DIC sobe para ~2210 µmol/kg, pCO2 sobe para > 900 µatm, Ωarag cai para ~2.0 - 2.3
+    expect(acidified.dissolvedInorganicCarbonUmolKg).toBeGreaterThan(2180);
+    expect(acidified.dissolvedInorganicCarbonUmolKg).toBeLessThan(2250);
+    expect(acidified.pCO2Uatm).toBeGreaterThan(850);
+    expect(acidified.pCO2Uatm).toBeLessThan(1100);
+    expect(acidified.omegaAragonite).toBeGreaterThan(1.8);
+    expect(acidified.omegaAragonite).toBeLessThan(2.4);
+    expect(acidified.calcificationStatus).toBe('marginal');
+
+    // Vetor C: Estuário Salobro (T = 27.2 °C, S = 22.0 PSU, TA = 1477 µmol/kg [escalado por S/35], pH = 8.00)
+    const estuarine = calculateCarbonateSystem(8.00, 2350 * (22 / 35), 27.2, 22.0);
+    // No estuário salobro, o cálcio diluído deprime a saturação mineral (Ωarag < 2.5)
+    expect(estuarine.omegaAragonite).toBeLessThan(2.5);
+    expect(estuarine.omegaCalcite).toBeLessThan(3.8);
+  });
+
   it('conecta respiração de DBO com liberação estequiométrica de CO2 e redução de pH', () => {
     const result = calculateRespirationPhImpact(8.10, 5.0, 2350, 26.8, 35.0);
     expect(result.effectivePh).toBeLessThanOrEqual(8.10);
