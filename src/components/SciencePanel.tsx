@@ -188,10 +188,6 @@ export function SciencePanel({
               <header className="message-heading">
                 <span className="message-icon"><Icon name={message.tone === 'positive' ? 'check' : 'info'} /></span>
                 <div>
-                  <span className="message-kicker">
-                    Leitura atual <i>{messageStatus}</i>
-                    {message.badge && <span className="epistemological-badge">{message.badge}</span>}
-                  </span>
                   <h2>{message.title}</h2>
                 </div>
               </header>
@@ -218,107 +214,6 @@ export function SciencePanel({
                 <span className="ask-label"><Icon name="target" /> Pergunta de Investigação</span>
                 <p>{message.ask}</p>
               </aside>
-            </article>
-
-            <article className="summary-variables-card">
-              <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h3 style={{ margin: 0, fontSize: '13px', color: '#e2e8f0' }}>Variáveis-Chave do Cenário</h3>
-                <span className="epistemological-badge" style={{ fontSize: '10px' }}>Leitura Rápida</span>
-              </header>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 10px' }}>
-                Selecione uma variável para abrir interpretação, equações e limites normativos na aba Resultados:
-              </p>
-              <div className="summary-grid">
-                <button
-                  type="button"
-                  className="summary-metric-btn"
-                  onClick={() => {
-                    onSelectIndicator?.('dissolvedOxygen');
-                    onTabChange('results');
-                  }}
-                  title="Ver método e limites CONAMA de Oxigênio Dissolvido"
-                >
-                  <span className="metric-label">Oxigênio (OD)</span>
-                  <strong className={`metric-val ${state.dissolvedOxygen < 2 ? 'critical' : state.dissolvedOxygen < 5 ? 'watch' : 'healthy'}`}>
-                    {state.dissolvedOxygen.toFixed(1).replace('.', ',')} mg/L
-                  </strong>
-                </button>
-
-                <button
-                  type="button"
-                  className="summary-metric-btn"
-                  onClick={() => {
-                    onSelectIndicator?.('temperature');
-                    onTabChange('results');
-                  }}
-                  title="Ver método e limiares térmicos"
-                >
-                  <span className="metric-label">Temperatura</span>
-                  <strong className={`metric-val ${state.env.temperature >= 29 ? 'critical' : state.env.temperature >= 28 ? 'watch' : 'healthy'}`}>
-                    {state.env.temperature.toFixed(1).replace('.', ',')} °C
-                  </strong>
-                </button>
-
-                <button
-                  type="button"
-                  className="summary-metric-btn"
-                  onClick={() => {
-                    onSelectIndicator?.('ph');
-                    onTabChange('results');
-                  }}
-                  title="Ver método e sistema carbonato de pH"
-                >
-                  <span className="metric-label">pH da Água</span>
-                  <strong className={`metric-val ${currentPh < 7.9 ? 'critical' : currentPh < 8.1 ? 'watch' : 'healthy'}`}>
-                    {currentPh.toFixed(2).replace('.', ',')}
-                  </strong>
-                </button>
-
-                <button
-                  type="button"
-                  className="summary-metric-btn"
-                  onClick={() => {
-                    onSelectIndicator?.('overall');
-                    onTabChange('results');
-                  }}
-                  title="Ver índice sintético de resiliência geral"
-                >
-                  <span className="metric-label">Resiliência Geral</span>
-                  <strong className={`metric-val ${levelTone(state.overall)}`}>
-                    {Math.round(state.overall)}/100
-                  </strong>
-                </button>
-
-                <button
-                  type="button"
-                  className="summary-metric-btn"
-                  onClick={() => {
-                    onSelectIndicator?.('dhw');
-                    onTabChange('results');
-                  }}
-                  title="Ver estresse térmico acumulado Degree Heating Weeks"
-                >
-                  <span className="metric-label">DHW (12 sem)</span>
-                  <strong className={`metric-val ${state.degreeHeatingWeeks >= 4 ? 'critical' : state.degreeHeatingWeeks > 0 ? 'watch' : 'healthy'}`}>
-                    {state.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem
-                  </strong>
-                </button>
-
-                <button
-                  type="button"
-                  className="summary-metric-btn"
-                  onClick={() => {
-                    onSelectIndicator?.('coral');
-                    onTabChange('results');
-                  }}
-                  title="Ver resiliência relativa dos corais construtores"
-                >
-                  <span className="metric-label">Corais / Fauna</span>
-                  <strong className="metric-val">
-                    {Math.round(state.health.coral)}/100 · {Math.round(state.health.fish)}/100
-                  </strong>
-                </button>
-              </div>
             </article>
 
             <article className="events-card">
