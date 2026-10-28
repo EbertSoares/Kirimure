@@ -273,7 +273,7 @@ export function createInitialState(sectorId: BtsSectorId = 'frades'): Simulation
     overall: 100,
     elapsedDays: 0,
     speed: 1,
-    paused: true,
+    paused: false,
     everDegraded: false,
     history: [
       {

@@ -17,11 +17,12 @@ export interface OceanEngine {
 export async function createOceanEngine(canvas: HTMLCanvasElement): Promise<OceanEngine> {
   try {
     if ('gpu' in navigator && await WebGPUEngine.IsSupportedAsync) {
+      const isWindows = typeof navigator !== 'undefined' && /win/i.test(navigator.userAgent || '');
       const engine = new WebGPUEngine(canvas, {
         antialias: true,
         adaptToDeviceRatio: true,
         enableAllFeatures: true,
-        powerPreference: 'high-performance',
+        ...(isWindows ? {} : { powerPreference: 'high-performance' }),
       });
       await engine.initAsync();
       const maxDprWebGPU = typeof window !== 'undefined' && window.innerWidth <= 800 ? 1.4 : 1.75;

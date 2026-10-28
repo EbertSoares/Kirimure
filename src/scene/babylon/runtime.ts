@@ -3116,6 +3116,11 @@ export class BabylonOceanRuntime {
         if (!runtime.disposed) {
           runtime.riggedFishes3D = riggedFishes;
           runtime.sharks3D = sharks;
+          if (runtime.state.paused) {
+            for (const fish of riggedFishes) {
+              fish.animGroup?.pause();
+            }
+          }
         }
       })
       .catch((err) => {
@@ -3127,7 +3132,20 @@ export class BabylonOceanRuntime {
 
   updateState(state: SimulationState) {
     const prevDays = this.state.elapsedDays;
+    const wasPaused = this.state.paused;
     this.state = state;
+
+    if (state.paused !== wasPaused) {
+      this.scene.animationsEnabled = !state.paused;
+      for (const fish of this.riggedFishes3D) {
+        if (state.paused) {
+          fish.animGroup?.pause();
+        } else if (fish.deathStage === 'alive') {
+          fish.animGroup?.play(true);
+        }
+      }
+    }
+
     // Se o estado foi reiniciado (tempo voltou a 0 de um valor anterior), restaura o recife imediatamente
     if (prevDays > 0.05 && state.elapsedDays < 0.01) {
       this.resetReefLife();
@@ -3262,6 +3280,34 @@ export class BabylonOceanRuntime {
 
   private render() {
     if (this.disposed) return;
+
+    if (this.state.paused) {
+      // Congelamento total da cena (Freeze-frame):
+      // Pausa todas as animações esqueléticas e de cena do Babylon para congelar no instante exato
+      if (this.scene.animationsEnabled) {
+        this.scene.animationsEnabled = false;
+      }
+      for (const fish of this.riggedFishes3D) {
+        if (fish.animGroup?.isPlaying) {
+          fish.animGroup.pause();
+        }
+      }
+      // Renderiza o quadro estático congelado
+      this.scene.render();
+      return;
+    }
+
+    if (!this.scene.animationsEnabled) {
+      this.scene.animationsEnabled = true;
+    }
+
+    // Retoma animações quando o experimento continua
+    for (const fish of this.riggedFishes3D) {
+      if (fish.animGroup && !fish.animGroup.isPlaying && fish.deathStage === 'alive') {
+        fish.animGroup.play(true);
+      }
+    }
+
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
     this.elapsed += dt;
 

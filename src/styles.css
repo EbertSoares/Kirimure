@@ -307,8 +307,8 @@ button:focus-visible, input:focus-visible {
 }
 
 .brazil-map.zooming-to-bahia .brazil-map-svg {
-  transform-origin: 72.2% 48.0%;
-  transform: scale(6.5);
+  transform-origin: 77.4% 45.7%;
+  transform: translate(-27.4%, 4.3%) scale(6.5);
   transition: transform 1600ms cubic-bezier(0.2, 0, 0.25, 1);
   will-change: transform;
 }
@@ -338,13 +338,13 @@ button:focus-visible, input:focus-visible {
 
 @keyframes zoomOutFromBahia {
   from {
-    transform-origin: 72.2% 48.0%;
-    transform: scale(2.8);
+    transform-origin: 77.4% 45.7%;
+    transform: translate(-27.4%, 4.3%) scale(2.8);
     opacity: 0.55;
   }
   to {
-    transform-origin: 72.2% 48.0%;
-    transform: scale(1);
+    transform-origin: center center;
+    transform: translateX(4.87%) scale(1.06);
     opacity: 1;
   }
 }
@@ -3345,8 +3345,14 @@ input[type="range"]::-moz-range-thumb {
     width: 100%;
     height: auto;
     overflow: visible;
-    transform: scale(1.08) translateX(2.2%);
+    transform: translateX(4.87%) scale(1.06);
     transform-origin: center center;
+  }
+
+  .brazil-map.zooming-to-bahia .brazil-map-svg {
+    transform-origin: 77.4% 45.7%;
+    transform: translate(-27.4%, 4.3%) scale(6.5);
+    transition: transform 1600ms cubic-bezier(0.2, 0, 0.25, 1);
   }
 
   .map-legend {
@@ -3440,6 +3446,32 @@ input[type="range"]::-moz-range-thumb {
   .mobile-nav-btn.active .mobile-nav-icon svg {
     transform: scale(1.1);
     stroke: #38bdf8;
+  }
+
+  .factor-notices {
+    top: 56px;
+    right: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .factor-notice-pill {
+    max-width: 100%;
+    padding: 5px 12px;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .factor-notice-pill strong {
+    white-space: normal;
+    text-align: center;
+    word-break: break-word;
+    font-size: 11px;
+    line-height: 1.3;
   }
 
   .simulation-workspace {
@@ -3566,6 +3598,17 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .map-selection { padding: 2px 0 28px; }
+
+  .factor-notices {
+    top: 50px;
+    right: 8px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+  }
+
+  .factor-notice-pill strong {
+    font-size: 10px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
