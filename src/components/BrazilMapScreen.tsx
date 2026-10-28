@@ -141,7 +141,7 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
 
       {unavailable && (
         <div className="map-discreet-toast" role="status" aria-live="polite" key={unavailable.at}>
-          <span><strong>{unavailable.name}:</strong> Cenário em desenvolvimento. Clique na Bahia para explorar o recife 3D da BTS.</span>
+          <span><strong>{unavailable.name}:</strong> Cenário em desenvolvimento. Clique na Bahia para explorar o recife da Baía de Todos os Santos.</span>
         </div>
       )}
     </main>

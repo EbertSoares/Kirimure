@@ -693,7 +693,7 @@ export function App() {
                 onClick={() => handleSelectIndicator('temperature')}
                 title="Temperatura da água da superfície"
               >
-                <small>TEMP.</small>
+                <small>TEMPERATURA</small>
                 <strong>{simulation.env.temperature.toFixed(1).replace('.0', '').replace('.', ',')}°C</strong>
               </button>
 
@@ -714,7 +714,7 @@ export function App() {
                   onClick={() => handleSelectIndicator('dhw')}
                   title="Calor acumulado nas últimas 12 semanas (DHW)"
                 >
-                  <small>DHW · 12 SEM.</small>
+                  <small>DHW</small>
                   <strong>{simulation.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem.</strong>
                 </button>
               )}
@@ -725,7 +725,7 @@ export function App() {
                 onClick={() => handleSelectIndicator('dissolvedOxygen')}
                 title="Oxigênio dissolvido na água (OD)"
               >
-                <small>OXIGÊNIO (OD)</small>
+                <small>OXIGÊNIO</small>
                 <strong>{simulation.dissolvedOxygen.toFixed(1).replace('.', ',')} <span className="readout-unit">mg/L</span></strong>
               </button>
 
@@ -735,7 +735,7 @@ export function App() {
                 onClick={() => handleSelectIndicator('time')}
                 title="Tempo decorrido no cenário"
               >
-                <small>TEMPO SIMULADO</small>
+                <small>TEMPO</small>
                 <strong>{formatSimulatedTime(simulation.elapsedDays)}</strong>
               </button>
             </div>
