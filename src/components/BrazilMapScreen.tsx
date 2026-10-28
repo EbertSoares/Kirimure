@@ -67,21 +67,6 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
       <section className="map-selection" aria-label="Mapa do Brasil com o cenário da Bahia disponível">
         <h1>Escolha um estado para explorar</h1>
 
-        <ul className="map-legend" aria-label="Legenda do mapa">
-          <li>
-            <span className="legend-swatch available" aria-hidden="true" />
-            Bahia
-          </li>
-          <li>
-            <span className="legend-swatch coastal" aria-hidden="true" />
-            Amazônia Azul
-          </li>
-          <li>
-            <span className="legend-swatch other" aria-hidden="true" />
-            Demais regiões (Em breve)
-          </li>
-        </ul>
-
         <div className={`brazil-map ${isZooming ? 'zooming-to-bahia' : ''} ${isReturning ? 'returning-from-bahia' : ''}`}>
           <svg
             viewBox={`0 0 ${BRAZIL_VIEWBOX.width} ${BRAZIL_VIEWBOX.height}`}
@@ -137,6 +122,21 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
             </g>
           </svg>
         </div>
+
+        <ul className="map-legend" aria-label="Legenda do mapa">
+          <li>
+            <span className="legend-swatch available" aria-hidden="true" />
+            Bahia
+          </li>
+          <li>
+            <span className="legend-swatch coastal" aria-hidden="true" />
+            Amazônia Azul
+          </li>
+          <li>
+            <span className="legend-swatch other" aria-hidden="true" />
+            Demais regiões (Em breve)
+          </li>
+        </ul>
       </section>
 
       {unavailable && (

@@ -115,7 +115,7 @@ function FactorControl({
     ? (sewageDischargeMode === 'pulse' ? 'pulso' : 'DBO₅/d')
     : item.massQualifier;
   const shortLabel = id === 'sewage'
-    ? (sewageDischargeMode === 'pulse' ? 'Pulso DBO₅' : 'Aporte DBO₅/dia')
+    ? (sewageDischargeMode === 'pulse' ? 'Pulso DBO₅' : 'Esgoto DBO₅/dia')
     : item.shortLabel;
 
   const displayed = massLoad
@@ -278,36 +278,39 @@ function TeachingConsole({
             Focar apenas na Missão
           </button>
         )}
-        <button
-          type="button"
-          className={`apply-button ${pendingChange ? 'has-pending' : 'is-applied'}`}
-          disabled={!pendingChange}
-          onClick={apply}
-          title={pendingChange ? "Aplicar as alterações ao recife para iniciar o teste" : "Altere um slider para habilitar o teste"}
-        >
-          <Icon name={pendingChange ? "play" : "check"} />
-          <span>{pendingChange ? (missionFocusFactor ? 'Iniciar Experimento' : 'Aplicar Alterações') : 'Alterações Aplicadas'}</span>
-        </button>
       </header>
 
       <div className="console-regime-bar">
-        <div className="console-regime-controls">
-          <span className="console-regime-label">Regime de Lançamento de Esgoto:</span>
+        <div className="console-regime-row">
+          <div className="console-regime-controls">
+            <span className="console-regime-label">Regime de Lançamento de Esgoto:</span>
+            <button
+              type="button"
+              className={`console-regime-btn ${sewageDischargeMode === 'continuous' ? 'active' : ''}`}
+              onClick={() => onSewageDischargeModeChange?.('continuous')}
+              title="Aporte diário ininterrupto de DBO5 na enseada (gera patamar rebaixado contínuo)"
+            >
+              Carga Contínua (kg/dia)
+            </button>
+            <button
+              type="button"
+              className={`console-regime-btn ${sewageDischargeMode === 'pulse' ? 'active' : ''}`}
+              onClick={() => onSewageDischargeModeChange?.('pulse')}
+              title="Despejo pontual único em massa total (queda aguda com recuperação gradual posterior)"
+            >
+              Pulso Único (kg)
+            </button>
+          </div>
+
           <button
             type="button"
-            className={`console-regime-btn ${sewageDischargeMode === 'continuous' ? 'active' : ''}`}
-            onClick={() => onSewageDischargeModeChange?.('continuous')}
-            title="Aporte diário ininterrupto de DBO5 na enseada (gera patamar rebaixado contínuo)"
+            className={`apply-button ${pendingChange ? 'has-pending' : 'is-applied'}`}
+            disabled={!pendingChange}
+            onClick={apply}
+            title={pendingChange ? "Aplicar as alterações ao recife para iniciar o teste" : "Altere um slider para habilitar o teste"}
           >
-            Carga Contínua (kg/dia)
-          </button>
-          <button
-            type="button"
-            className={`console-regime-btn ${sewageDischargeMode === 'pulse' ? 'active' : ''}`}
-            onClick={() => onSewageDischargeModeChange?.('pulse')}
-            title="Despejo pontual único em massa total (queda aguda com recuperação gradual posterior)"
-          >
-            Pulso Único (kg)
+            <Icon name={pendingChange ? "play" : "check"} />
+            <span>{pendingChange ? (missionFocusFactor ? 'Iniciar Experimento' : 'Aplicar Alterações') : 'Alterações Aplicadas'}</span>
           </button>
         </div>
         <p className="console-regime-desc">
@@ -639,24 +642,6 @@ export function App() {
             <MarineScene state={simulation} resetToken={resetToken} />
           </Suspense>
           <DepthRuler side="left" />
-
-          {/* Atalhos rápidos flutuantes exclusivos para visualização móvel */}
-          <div className="mobile-scene-quick-actions" aria-hidden="true">
-            <button
-              type="button"
-              className="mobile-quick-btn"
-              onClick={() => setMobileView('console')}
-            >
-              ⚙️ Ajustar Bancada
-            </button>
-            <button
-              type="button"
-              className="mobile-quick-btn"
-              onClick={() => setMobileView('science')}
-            >
-              📊 Ver Ciência
-            </button>
-          </div>
 
           <div className="scene-top-overlay">
             <TimelineBar

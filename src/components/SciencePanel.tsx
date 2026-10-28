@@ -32,7 +32,7 @@ const TABS: ReadonlyArray<{ id: PanelTab; label: string }> = [
   { id: 'results', label: 'Resultados' },
   { id: 'history', label: 'Evolução' },
   { id: 'activities', label: 'Atividades' },
-  { id: 'data', label: 'Dados e Método' },
+  { id: 'data', label: 'Dados' },
 ];
 
 const BINOMIAL_MAP: Record<FishSpeciesId, { binomial: string; family: string }> = {
@@ -862,8 +862,6 @@ export function SciencePanel({
               <>
                 <div className="mission-intro-banner">
                   <header>
-                    <span className="mission-badge">Aula Guiada · 45 min</span>
-                    <span className="epistemological-badge">Cenário Didático</span>
                   </header>
                   <h3 className="mission-title">Investigação 1 · Oxigênio dissolvido</h3>
                   <p className="mission-desc">
@@ -930,7 +928,6 @@ export function SciencePanel({
           <section className="panel-section" aria-label="Dados Oceanográficos Externos e Metodologia Científica">
             <header style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="epistemological-badge">Modo de Referência Ambiental</span>
                 {oceanData && (
                   <button
                     type="button"
@@ -951,36 +948,20 @@ export function SciencePanel({
                 )}
               </div>
               <h2 style={{ fontSize: '18px', margin: '8px 0 4px', color: '#fff' }}>
-                Monitoramento Satelital & Metodologia da BTS
+                Monitoramento Satelital & Metodologia da Baía de Todos os Santos
               </h2>
               <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-                Dados observados e modelos em grade regional da Baía de Todos-os-Santos.
+                Dados observados e modelos em grade regional da Baía de Todos os Santos.
                 Resultados em destaque; fontes e formulações acessíveis em detalhes expansíveis.
               </p>
             </header>
 
-            {/* Banner de Fallback / Contingência se offline */}
-            {oceanData?.isFallback && (
-              <div className="snapshot-notice-pill" style={{ marginBottom: '16px' }}>
-                <span>⚠️ Snapshot histórico — março/abril de 2024. Não representa a condição atual do oceano.</span>
-              </div>
-            )}
 
             {/* 1. PRODUTO DE SATÉLITE - NOAA Coral Reef Watch */}
             <article className="progressive-card">
               <div className="progressive-card-head">
                 <div>
-                  <span className="epistemological-badge" style={{ fontSize: '10px' }}>Satélite Operacional</span>
                   <h3 style={{ marginTop: '4px' }}>1. Satélite NOAA Coral Reef Watch</h3>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  {oceanData?.isFallback ? (
-                    <span className="snapshot-notice-pill">Snapshot Mar/Abr 2024</span>
-                  ) : (
-                    <span className="live-notice-pill">
-                      Consulta NOAA concluída {oceanData?.latestCrw?.timestampUtc ? `(${oceanData.latestCrw.timestampUtc.substring(0, 10)})` : ''}
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -1025,6 +1006,7 @@ export function SciencePanel({
                       onClick={() => onApplySatelliteConditions(oceanData.latestCrw!.seaSurfaceTemperatureDegC)}
                       style={{
                         width: '100%',
+                        boxSizing: 'border-box',
                         background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(56, 189, 248, 0.15))',
                         border: '1px solid rgba(56, 189, 248, 0.45)',
                         color: '#e0f2fe',
@@ -1037,10 +1019,11 @@ export function SciencePanel({
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '6px',
+                        textAlign: 'center',
                       }}
                     >
                       <Icon name="check" />
-                      <span>
+                      <span style={{ lineHeight: 1.3 }}>
                         {oceanData.noaaStatus.state === 'success'
                           ? `Usar SST do satélite NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
                           : `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`}
