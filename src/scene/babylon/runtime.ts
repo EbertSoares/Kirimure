@@ -60,7 +60,64 @@ import { detectSceneQualityProfile, type SceneQualityProfile } from './quality';
 const CAMERA_FOV = 0.80;
 const TAN_HALF_FOV = Math.tan(CAMERA_FOV * 0.5);
 const PLANE_Z = 20;
-const REFERENCE_ASPECT = 1672 / 941;
+export const REFERENCE_ASPECT = 1672 / 941;
+
+export interface BackdropFitting {
+  uScale: number;
+  uOffset: number;
+  vScale: number;
+  vOffset: number;
+  meshScaleX: number;
+  meshScaleY: number;
+  artToScreen: (artU: number, artV: number) => { screenX: number; screenY: number };
+}
+
+export function computeBackdropFitting(aspect: number): BackdropFitting {
+  const meshScaleX = aspect / REFERENCE_ASPECT;
+  const meshScaleY = 1.0;
+
+  if (aspect >= REFERENCE_ASPECT) {
+    // Telas largas (desktop / widescreen / ultrawide):
+    // Preserva 100% da altura da arte sem corte vertical no topo (barco, céu) ou base (areia, corais).
+    // O artwork 16:9 fica perfeitamente enquadrado e centralizado, estendendo suavemente o mar/céu nas bordas laterais.
+    const uScale = aspect / REFERENCE_ASPECT;
+    const uOffset = (1 - uScale) * 0.5;
+    const vScale = 1.0;
+    const vOffset = 0.0;
+    return {
+      uScale,
+      uOffset,
+      vScale,
+      vOffset,
+      meshScaleX,
+      meshScaleY,
+      artToScreen: (artU: number, artV: number) => ({
+        screenX: (artU - uOffset) / uScale,
+        screenY: artV,
+      }),
+    };
+  }
+
+  // Telas estreitas (celulares / tablets portrait):
+  // Preserva 100% da largura da arte sem nenhum corte horizontal nas colônias de corais das extremidades.
+  // Os recifes da esquerda e direita e o saveiro ficam 100% no campo de visão do usuário no celular.
+  const uScale = 1.0;
+  const uOffset = 0.0;
+  const vScale = REFERENCE_ASPECT / aspect;
+  const vOffset = (1 - vScale) * 0.5;
+  return {
+    uScale,
+    uOffset,
+    vScale,
+    vOffset,
+    meshScaleX,
+    meshScaleY,
+    artToScreen: (artU: number, artV: number) => ({
+      screenX: artU,
+      screenY: (artV - vOffset) / vScale,
+    }),
+  };
+}
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
@@ -540,6 +597,8 @@ function createBackdrop(scene: Scene, camera: FreeCamera): { mesh: Mesh; materia
   const texture = new Texture('/textures/ocean-backdrop.png', scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
   texture.wrapU = Texture.CLAMP_ADDRESSMODE;
   texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+  texture.uRotationCenter = 0;
+  texture.vRotationCenter = 0;
 
   const material = new StandardMaterial('oceano-recife-backdrop-mat', scene);
   material.diffuseTexture = texture;
@@ -675,6 +734,8 @@ function createCoralBleachingLayer(
   coralTex.hasAlpha = true;
   coralTex.wrapU = Texture.CLAMP_ADDRESSMODE;
   coralTex.wrapV = Texture.CLAMP_ADDRESSMODE;
+  coralTex.uRotationCenter = 0;
+  coralTex.vRotationCenter = 0;
 
   const img = new Image();
   img.crossOrigin = 'anonymous';
@@ -772,6 +833,8 @@ function createSewageSystem(
   veilTex.hasAlpha = true;
   veilTex.wrapU = Texture.CLAMP_ADDRESSMODE;
   veilTex.wrapV = Texture.CLAMP_ADDRESSMODE;
+  veilTex.uRotationCenter = 0;
+  veilTex.vRotationCenter = 0;
 
   const ctx = veilTex.getContext();
   const img = ctx.getImageData(0, 0, texW, texH);
@@ -1006,6 +1069,8 @@ function createOilSpillSystem(scene: Scene, camera: FreeCamera): OilSpillSystem 
   shadowTex.hasAlpha = true;
   shadowTex.wrapU = Texture.CLAMP_ADDRESSMODE;
   shadowTex.wrapV = Texture.CLAMP_ADDRESSMODE;
+  shadowTex.uRotationCenter = 0;
+  shadowTex.vRotationCenter = 0;
   {
     const ctx = shadowTex.getContext();
     const img = ctx.getImageData(0, 0, sTexW, sTexH);
@@ -1439,6 +1504,7 @@ function updateOilSpillSystem(
   elapsed: number,
   dt: number,
   aspect: number,
+  fitting: BackdropFitting,
 ) {
   if (oilStrength <= 0.01) {
     system.shadowMesh.visibility = 0;
@@ -1463,7 +1529,8 @@ function updateOilSpillSystem(
     r.mesh.visibility = clamp(localStrength * 1.18, 0, 0.97);
 
     const driftX = Math.sin(elapsed * 0.35 + r.phase) * 0.012;
-    const pos = screenToWorld(r.baseScreenX + driftX, r.baseScreenY, r.depthZ, aspect);
+    const screen = fitting.artToScreen(r.baseScreenX + driftX, r.baseScreenY);
+    const pos = screenToWorld(screen.screenX, screen.screenY, r.depthZ, aspect);
     r.mesh.position.copyFrom(pos);
 
     const spreadScaleX = 0.52 + localStrength * 0.52;
@@ -1521,7 +1588,8 @@ function updateOilSpillSystem(
     p.u += p.vx * dt;
     p.v = clamp(p.v + p.vy * dt, 0.294, 0.392);
 
-    const pos = screenToWorld(p.u, p.v, p.depthZ, aspect);
+    const screenP = fitting.artToScreen(p.u, p.v);
+    const pos = screenToWorld(screenP.screenX, screenP.screenY, p.depthZ, aspect);
     p.mesh.position.copyFrom(pos);
 
     const lifeProgress = p.age / p.maxAge;
@@ -1587,7 +1655,8 @@ function updateOilSpillSystem(
     g.u += g.vx * dt;
     g.v = clamp(g.v + g.vy * dt, 0.294, 0.435);
 
-    const pos = screenToWorld(g.u, g.v, g.depthZ, aspect);
+    const screenG = fitting.artToScreen(g.u, g.v);
+    const pos = screenToWorld(screenG.screenX, screenG.screenY, g.depthZ, aspect);
     g.mesh.position.copyFrom(pos);
 
     const speed = Math.hypot(g.vx, g.vy);
@@ -1848,6 +1917,7 @@ function updateSandCausticsSystem(
   dt: number,
   waterClarity: number,
   aspect: number,
+  fitting: BackdropFitting,
 ) {
   // 1. Tapetes de cáusticas celulares com ondulação de vértices
   for (let i = 0; i < system.carpets.length; i += 1) {
@@ -1855,7 +1925,8 @@ function updateSandCausticsSystem(
     const swayU = Math.sin(elapsed * 0.55 + carpet.phase) * 0.032
       + Math.cos(elapsed * 0.28 - carpet.phase) * 0.018;
     const swayV = Math.cos(elapsed * 0.42 + carpet.phase * 1.3) * 0.008;
-    const pos = screenToWorld(carpet.baseU + swayU, carpet.baseV + swayV, carpet.depthZ, aspect);
+    const screen = fitting.artToScreen(carpet.baseU + swayU, carpet.baseV + swayV);
+    const pos = screenToWorld(screen.screenX, screen.screenY, carpet.depthZ, aspect);
     carpet.mesh.position.copyFrom(pos);
 
     const base = carpet.basePositions;
@@ -1895,7 +1966,8 @@ function updateSandCausticsSystem(
     }
 
     const v = pool.baseV + Math.sin(elapsed * 0.75 + pool.phase) * pool.bobAmpV;
-    pool.mesh.position.copyFrom(screenToWorld(pool.u, v, pool.depthZ, aspect));
+    const screen = fitting.artToScreen(pool.u, v);
+    pool.mesh.position.copyFrom(screenToWorld(screen.screenX, screen.screenY, pool.depthZ, aspect));
 
     const stretch = 1 + 0.18 * Math.sin(elapsed * 1.8 + pool.phase);
     const breath = 1 + 0.12 * Math.cos(elapsed * 1.3 - pool.phase);
@@ -3126,6 +3198,7 @@ export class BabylonOceanRuntime {
   private state: SimulationState;
   private elapsed = 0;
   private aspect = REFERENCE_ASPECT;
+  private fitting: BackdropFitting = computeBackdropFitting(REFERENCE_ASPECT);
   private disposed = false;
   private pauseRenderDone = false;
   private needsRender = true;
@@ -3340,12 +3413,49 @@ export class BabylonOceanRuntime {
     const width = this.engine.getRenderWidth(true) || 1672;
     const height = this.engine.getRenderHeight(true) || 941;
     this.aspect = width / Math.max(1, height);
-    // Escala uniforme para cobrir a viewport sem distorcer nem esticar a imagem verticalmente no celular
-    const uniformScale = Math.max(this.aspect / REFERENCE_ASPECT, 1);
-    this.backdrop.mesh.scaling.set(uniformScale, uniformScale, 1);
-    this.coralBleachLayer.mesh.scaling.set(uniformScale, uniformScale, 1);
-    this.oilSpillSystem.shadowMesh.scaling.set(uniformScale, uniformScale, 1);
-    this.sewageSystem.veilMesh.scaling.set(uniformScale, uniformScale, 1);
+
+    const fitting = computeBackdropFitting(this.aspect);
+    this.fitting = fitting;
+
+    // Escala uniforme das malhas de fundo para cobrir 100% da viewport da câmera sem margens pretas
+    this.backdrop.mesh.scaling.set(fitting.meshScaleX, fitting.meshScaleY, 1);
+    this.coralBleachLayer.mesh.scaling.set(fitting.meshScaleX, fitting.meshScaleY, 1);
+    this.oilSpillSystem.shadowMesh.scaling.set(fitting.meshScaleX, fitting.meshScaleY, 1);
+    this.sewageSystem.veilMesh.scaling.set(fitting.meshScaleX, fitting.meshScaleY, 1);
+
+    // Ajusta o mapeamento UV para manter o ecossistema marinho 16:9 contido e enquadrado
+    const updateTextureFitting = (mat: StandardMaterial | null | undefined) => {
+      if (!mat) return;
+      const tex = mat.diffuseTexture as Texture | null | undefined;
+      if (tex) {
+        tex.uScale = fitting.uScale;
+        tex.uOffset = fitting.uOffset;
+        tex.vScale = fitting.vScale;
+        tex.vOffset = fitting.vOffset;
+      }
+      const opTex = mat.opacityTexture as Texture | null | undefined;
+      if (opTex && opTex !== tex) {
+        opTex.uScale = fitting.uScale;
+        opTex.uOffset = fitting.uOffset;
+        opTex.vScale = fitting.vScale;
+        opTex.vOffset = fitting.vOffset;
+      }
+    };
+
+    updateTextureFitting(this.backdrop.material);
+    updateTextureFitting(this.coralBleachLayer.material);
+    updateTextureFitting(this.oilSpillSystem.shadowMesh.material as StandardMaterial);
+    updateTextureFitting(this.sewageSystem.veilMesh.material as StandardMaterial);
+
+    // Alinha a régua de profundidade (0m na lâmina d'água v=0.315 e 35m no leito de areia v=0.865)
+    const canvas = this.engine.getRenderingCanvas();
+    const sceneCard = (canvas?.closest?.('.scene-card') || canvas?.parentElement) as HTMLElement | null | undefined;
+    if (sceneCard && typeof sceneCard.style?.setProperty === 'function') {
+      const surfaceScreenY = fitting.artToScreen(0.5, 0.315).screenY;
+      const seabedScreenY = fitting.artToScreen(0.5, 0.865).screenY;
+      sceneCard.style.setProperty('--depth-top', `${(surfaceScreenY * 100).toFixed(2)}%`);
+      sceneCard.style.setProperty('--depth-bottom', `${((1 - seabedScreenY) * 100).toFixed(2)}%`);
+    }
   }
 
   dispose() {
@@ -3584,7 +3694,8 @@ export class BabylonOceanRuntime {
         const perspectiveScale = fish.individualScale * (0.34 + Math.pow(depth, 1.32) * 1.38);
         const worldScale = perspectiveScale * (dynamicDepthZ / PLANE_Z);
 
-        const worldPos = screenToWorld(screenX, screenY, dynamicDepthZ, this.aspect);
+        const screenPos = this.fitting.artToScreen(screenX, screenY);
+        const worldPos = screenToWorld(screenPos.screenX, screenPos.screenY, dynamicDepthZ, this.aspect);
         fish.holder.position.copyFrom(worldPos);
         // O sprite original possui a cabeça no lado esquerdo (X < 0) e cauda no lado direito (X > 0).
         // Para nadar para a frente:
@@ -3702,7 +3813,8 @@ export class BabylonOceanRuntime {
           }
         }
 
-        const worldPos = screenToWorld(fish.currentScreenX, fish.currentScreenY, fish.depthZ, this.aspect);
+        const deadPos = this.fitting.artToScreen(fish.currentScreenX, fish.currentScreenY);
+        const worldPos = screenToWorld(deadPos.screenX, deadPos.screenY, fish.depthZ, this.aspect);
         fish.holder.position.copyFrom(worldPos);
 
         this.deformFishBody(fish, 0, true);
@@ -3973,7 +4085,8 @@ export class BabylonOceanRuntime {
         const perspectiveScale = fish.individualScale * (0.38 + Math.pow(depth, 1.30) * 1.38);
         const worldScale = perspectiveScale * (dynamicDepthZ / PLANE_Z);
 
-        fish.holder.position.copyFrom(screenToWorld(screenX, screenY, dynamicDepthZ, this.aspect));
+        const screenPos = this.fitting.artToScreen(screenX, screenY);
+        fish.holder.position.copyFrom(screenToWorld(screenPos.screenX, screenPos.screenY, dynamicDepthZ, this.aspect));
         fish.holder.scaling.set(worldScale, worldScale, worldScale);
 
         // Em ordem Euler YXZ do Babylon:
@@ -4066,8 +4179,9 @@ export class BabylonOceanRuntime {
           }
         }
 
+        const deadPos = this.fitting.artToScreen(fish.currentScreenX, fish.currentScreenY);
         fish.holder.position.copyFrom(
-          screenToWorld(fish.currentScreenX, fish.currentScreenY, fish.depthZ, this.aspect),
+          screenToWorld(deadPos.screenX, deadPos.screenY, fish.depthZ, this.aspect),
         );
         fish.holder.scaling.set(worldScale, worldScale, worldScale);
         fish.holder.rotation.set(flipAngle, fish.currentYaw, 0.05);
@@ -4239,7 +4353,8 @@ export class BabylonOceanRuntime {
           shark.baseScale * (0.32 + Math.pow(depth, 1.32) * 1.22) * closeScaleBoost;
         const worldScale = perspectiveScale * (dynamicDepthZ / PLANE_Z);
 
-        shark.holder.position.copyFrom(screenToWorld(screenX, screenY, dynamicDepthZ, this.aspect));
+        const screenPos = this.fitting.artToScreen(screenX, screenY);
+        shark.holder.position.copyFrom(screenToWorld(screenPos.screenX, screenPos.screenY, dynamicDepthZ, this.aspect));
         shark.holder.scaling.set(worldScale, worldScale, worldScale);
         shark.holder.rotation.set(bankX, yaw, pitchZ);
 
@@ -4292,8 +4407,9 @@ export class BabylonOceanRuntime {
             : clamp(1 - (shark.stageElapsed - bottomWaitSeconds) / fadeDurationSeconds);
         }
 
+        const deadPos = this.fitting.artToScreen(shark.currentScreenX, shark.currentScreenY);
         shark.holder.position.copyFrom(
-          screenToWorld(shark.currentScreenX, shark.currentScreenY, shark.depthZ, this.aspect),
+          screenToWorld(deadPos.screenX, deadPos.screenY, shark.depthZ, this.aspect),
         );
         shark.holder.scaling.set(worldScale, worldScale, worldScale);
         shark.holder.rotation.set(flipAngle, 0, 0.04);
@@ -4357,8 +4473,7 @@ export class BabylonOceanRuntime {
 
     const activeBubbleFraction = coralVitality;
     const total = this.bubbles.length;
-    // Ancoragem horizontal fiel aos corais do backdrop da imagem de referência (16:9)
-    const backdropAspect = REFERENCE_ASPECT * Math.max(this.aspect / REFERENCE_ASPECT, 1);
+    const fitting = this.fitting;
 
     for (let i = 0; i < total; i += 1) {
       const bubble = this.bubbles[i];
@@ -4369,13 +4484,14 @@ export class BabylonOceanRuntime {
 
       const spanY = bubble.maxScreenY - bubble.minScreenY;
       const progress = (this.elapsed * bubble.speed + bubble.phase) % 1;
-      const screenY = bubble.maxScreenY - progress * spanY;
+      const artY = bubble.maxScreenY - progress * spanY;
       const wobbleX = Math.sin(this.elapsed * bubble.wobbleFreq + bubble.phase * 11)
         * bubble.wobbleAmp
         * (0.4 + progress * 0.8);
-      const screenX = bubble.emitterScreenX + wobbleX;
+      const artX = bubble.emitterScreenX + wobbleX;
 
-      const pos = screenToWorld(screenX, screenY, bubble.depthZ, backdropAspect);
+      const screen = fitting.artToScreen(artX, artY);
+      const pos = screenToWorld(screen.screenX, screen.screenY, bubble.depthZ, this.aspect);
       bubble.mesh.position.copyFrom(pos);
 
       const growth = bubble.baseScale * (0.78 + progress * 0.52);
@@ -4434,7 +4550,8 @@ export class BabylonOceanRuntime {
       }
       const sx = ((plume.baseScreenX + this.elapsed * plume.speedX) % 0.92) + 0.04;
       const sy = plume.baseScreenY + Math.sin(this.elapsed * 0.55 + plume.phase) * 0.022;
-      plume.mesh.position.copyFrom(screenToWorld(sx, sy, PLANE_Z + 0.8, this.aspect));
+      const screen = this.fitting.artToScreen(sx, sy);
+      plume.mesh.position.copyFrom(screenToWorld(screen.screenX, screen.screenY, PLANE_Z + 0.8, this.aspect));
       const pulse = 1 + Math.sin(this.elapsed * 0.8 + plume.phase) * 0.08;
       plume.mesh.scaling.set(plume.baseScaleX * pulse, plume.baseScaleY / pulse, 1);
       plume.mesh.visibility = sewageStrength * 0.28;
@@ -4442,12 +4559,11 @@ export class BabylonOceanRuntime {
 
     // 3. Atualiza sistema físico 3D do derramamento de óleo
     const oilStrength = Math.pow(clamp(this.visualOil), 0.68);
-    updateOilSpillSystem(this.oilSpillSystem, oilStrength, this.elapsed, dt, this.aspect);
+    updateOilSpillSystem(this.oilSpillSystem, oilStrength, this.elapsed, dt, this.aspect, this.fitting);
 
     // 3b. Atualiza cáusticas e feixes de luz solar passando na areia (atenuados pela turbidez/óleo)
     const waterClarity = clamp(1 - oilStrength * 0.72 - sewageStrength * 0.48, 0.12, 1.0);
-    const backdropAspect = REFERENCE_ASPECT * Math.max(this.aspect / REFERENCE_ASPECT, 1);
-    updateSandCausticsSystem(this.sandCausticsSystem, this.elapsed, dt, waterClarity, backdropAspect);
+    updateSandCausticsSystem(this.sandCausticsSystem, this.elapsed, dt, waterClarity, this.aspect, this.fitting);
 
     // 4. Atualiza advecção por vórtices (Curl Noise) e tombamento 3D dos microplásticos
     const plasticsStrength = Math.pow(clamp(this.visualMicroplastics), 0.62);
@@ -4479,7 +4595,8 @@ export class BabylonOceanRuntime {
         p.vy = Math.abs(p.vy) * 0.4;
       }
 
-      p.mesh.position.copyFrom(screenToWorld(p.u, p.v, p.depthZ, this.aspect));
+      const screen = this.fitting.artToScreen(p.u, p.v);
+      p.mesh.position.copyFrom(screenToWorld(screen.screenX, screen.screenY, p.depthZ, this.aspect));
 
       // Tombamento 3D (flutter) na água + cintilação especular quando a faceta reflete os raios solares
       const tumbleX = this.elapsed * p.tumbleSpeedX + p.phase;

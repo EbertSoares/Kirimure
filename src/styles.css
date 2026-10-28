@@ -608,7 +608,7 @@ button:focus-visible, input:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: url('/textures/ocean-backdrop.png') center / cover no-repeat;
+  background: url('/textures/ocean-backdrop.png') center / contain no-repeat #073d52;
 }
 
 .marine-canvas canvas { display: block; width: 100%; height: 100%; }
@@ -661,8 +661,8 @@ button:focus-visible, input:focus-visible {
 .depth-ruler {
   position: absolute;
   z-index: 3;
-  top: 31.5%;
-  bottom: 13.5%;
+  top: var(--depth-top, 31.5%);
+  bottom: var(--depth-bottom, 13.5%);
   width: 34px;
   color: rgba(255, 255, 255, .9);
   font-size: 9.5px;
@@ -3497,8 +3497,9 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .simulation-workspace[data-mobile-view="scene"] .scene-card {
-    height: calc(100dvh - 120px);
-    min-height: 400px;
+    height: calc(100dvh - 130px);
+    max-height: 520px;
+    min-height: 300px;
     position: relative;
   }
 
@@ -3528,7 +3529,11 @@ input[type="range"]::-moz-range-thumb {
   .reset-button svg { width: 17px; }
   .brand-logo { width: clamp(100px, 30vw, 130px); }
 
-  .scene-card { height: min(56vh, 420px); min-height: 290px; }
+  .simulation-workspace[data-mobile-view="scene"] .scene-card {
+    height: calc(100dvh - 130px);
+    max-height: 480px;
+    min-height: 280px;
+  }
 
   .scene-top-overlay {
     top: 8px;
