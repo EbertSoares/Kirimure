@@ -17,17 +17,7 @@ async function testInteractions() {
   await page.locator('.state.available').click();
   await page.waitForTimeout(2000);
 
-  console.log('1. Testing Sector Change to Paraguacu...');
-  await page.locator('#topbar-sector-select').selectOption('paraguacu');
-  await page.waitForTimeout(2000);
-  await page.screenshot({ path: '/tmp/test-sector-paraguacu.png' });
-
-  console.log('2. Testing Sector Change to Barra...');
-  await page.locator('#topbar-sector-select').selectOption('barra');
-  await page.waitForTimeout(2000);
-  await page.screenshot({ path: '/tmp/test-sector-barra.png' });
-
-  console.log('3. Testing Reset button...');
+  console.log('1. Testing Reset button...');
   await page.locator('button.reset-button').click();
   await page.waitForTimeout(2000);
   await page.screenshot({ path: '/tmp/test-after-reset.png' });

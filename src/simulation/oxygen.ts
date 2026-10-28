@@ -120,8 +120,8 @@ export function classifyDissolvedOxygen(dissolvedOxygen: number): OxygenStatus {
       category: 'normoxia',
       label: 'Normóxia / Adequado',
       tone: 'healthy',
-      description: 'Condição adequada para manutenção da ictiofauna e calcificação recifal plena.',
-      badge: 'Padrão Operacional',
+      description: 'Condição adequada para manutenção da ictiofauna e calcificação recifal.',
+      badge: 'Produto de Modelo',
     };
   }
   if (dissolvedOxygen >= 3.0) {
@@ -130,7 +130,7 @@ export function classifyDissolvedOxygen(dissolvedOxygen: number): OxygenStatus {
       label: 'Estresse Respiratório',
       tone: 'watch',
       description: 'Redução da atividade metabólica e motora de peixes; retração parcial de pólipos.',
-      badge: 'Padrão Operacional',
+      badge: 'Produto de Modelo',
     };
   }
   if (dissolvedOxygen >= 2.0) {
@@ -139,7 +139,7 @@ export function classifyDissolvedOxygen(dissolvedOxygen: number): OxygenStatus {
       label: 'Hipóxia',
       tone: 'critical',
       description: 'Fuga de espécies móveis; perda de equilíbrio e estresse agudo em peixes sensíveis.',
-      badge: 'Padrão Operacional',
+      badge: 'Produto de Modelo',
     };
   }
   if (dissolvedOxygen >= 0.2) {
@@ -148,7 +148,7 @@ export function classifyDissolvedOxygen(dissolvedOxygen: number): OxygenStatus {
       label: 'Hipóxia Severa',
       tone: 'critical',
       description: 'Risco crítico de asfixia e mortalidade sustentada; necrose de tecidos coralinos.',
-      badge: 'Padrão Operacional',
+      badge: 'Produto de Modelo',
     };
   }
   return {
@@ -156,7 +156,7 @@ export function classifyDissolvedOxygen(dissolvedOxygen: number): OxygenStatus {
     label: 'Anóxia',
     tone: 'critical',
     description: 'Ausência de oxigênio dissolvido livre; colapso imediato da vida aeróbia.',
-    badge: 'Padrão Operacional',
+    badge: 'Produto de Modelo',
   };
 }
 

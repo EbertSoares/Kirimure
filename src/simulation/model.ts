@@ -690,7 +690,7 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
       unit: 'mg/L',
       tone: oxygen >= 5 ? 'healthy' : oxygen >= 3 ? 'watch' : 'critical',
       note: 'Padrão US EPA / CONAMA 357: > 5 mg/L condição adequada; 3–5 mg/L estresse potencial; 2–3 mg/L hipóxia; < 2 mg/L hipóxia severa (anóxia em ~0 mg/L).',
-      badge: 'Padrão Operacional',
+      badge: 'Produto de Modelo',
       equation: 'd[OD]/dt = ka·(Cs - [OD]) - kd·[DBO] - SOD/H + (P - R)',
     },
   ];

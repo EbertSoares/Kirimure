@@ -493,32 +493,6 @@ button:focus-visible, input:focus-visible {
   white-space: nowrap;
 }
 
-.topbar-sector-select {
-  height: 38px;
-  padding: 0 10px;
-  background: rgba(8, 38, 51, .85);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: #d8f4ff;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  flex: 0 0 auto;
-}
-
-.topbar-sector-select:hover,
-.topbar-sector-select:focus {
-  border-color: #00e5ff;
-  box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
-}
-
-.topbar-sector-select option {
-  background: #051b27;
-  color: #fff;
-}
-
 .map-back-button:hover,
 .reset-button:hover { color: var(--foam); border-color: var(--line-strong); }
 .topbar-actions {
@@ -3029,6 +3003,194 @@ input[type="range"]::-moz-range-thumb {
   color: #38bdf8;
 }
 
+/* ── Divulgação Progressiva em Cartões Científicos ────────────────────── */
+.progressive-card {
+  background: rgba(14, 38, 58, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.progressive-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.progressive-card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #f0f9ff;
+}
+
+.snapshot-notice-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.live-notice-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.progressive-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (min-width: 600px) {
+  .progressive-metric-grid.cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.progressive-metric-box {
+  background: rgba(10, 25, 41, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.progressive-metric-box .metric-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(200, 230, 250, 0.75);
+}
+
+.progressive-metric-box .metric-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.progressive-metric-box .metric-value.healthy { color: #38bdf8; }
+.progressive-metric-box .metric-value.watch { color: #ffd052; }
+.progressive-metric-box .metric-value.critical { color: #ff5a5a; }
+
+.source-method-fold {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.source-method-summary {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7dd3fc;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease;
+}
+
+.source-method-summary:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.source-method-content {
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: rgba(220, 235, 250, 0.85);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Console Regime Bar ────────────────────────────────────────────────── */
+.console-regime-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.console-regime-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.console-regime-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+}
+
+.console-regime-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 32px;
+  transition: all 0.15s ease;
+}
+
+.console-regime-btn.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.console-regime-desc {
+  font-size: 10.5px;
+  color: rgba(186, 230, 253, 0.75);
+  line-height: 1.35;
+  margin: 0;
+}
+
+/* ── Barra de Navegação Mobile (Celular e Telas Pequenas) ──────────────── */
+.mobile-bottom-nav {
+  display: none;
+}
+
+.mobile-scene-quick-actions {
+  display: none;
+}
+
 /* ── Telas menores ─────────────────────────────────────────────────────── */
 
 @media (max-width: 1320px) {
@@ -3073,18 +3235,121 @@ input[type="range"]::-moz-range-thumb {
 
   .topbar { padding: 9px 14px; }
 
-  .simulation-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
-    grid-template-areas:
-      "scene"
-      "console"
-      "panel";
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: rgba(7, 19, 31, 0.97);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(56, 189, 248, 0.25);
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000;
+    padding: 0 8px;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.6);
   }
 
-  .scene-card { height: min(64vh, 540px); min-height: 340px; }
-  .science-panel { max-height: none; }
-  .panel-body { overflow: visible; }
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: rgba(220, 240, 255, 0.6);
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 6px 4px;
+    border-radius: 8px;
+    cursor: pointer;
+    min-height: 48px;
+    transition: all 0.15s ease;
+  }
+
+  .mobile-nav-btn.active {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+  }
+
+  .mobile-nav-icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .simulation-workspace {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 68px;
+    min-height: 0;
+  }
+
+  .simulation-workspace[data-mobile-view="scene"] .teaching-console,
+  .simulation-workspace[data-mobile-view="scene"] .science-panel {
+    display: none !important;
+  }
+
+  .simulation-workspace[data-mobile-view="console"] .scene-card,
+  .simulation-workspace[data-mobile-view="console"] .science-panel {
+    display: none !important;
+  }
+
+  .simulation-workspace[data-mobile-view="science"] .scene-card,
+  .simulation-workspace[data-mobile-view="science"] .teaching-console {
+    display: none !important;
+  }
+
+  .simulation-workspace[data-mobile-view="scene"] .scene-card {
+    height: calc(100dvh - 120px);
+    min-height: 400px;
+    position: relative;
+  }
+
+  .simulation-workspace[data-mobile-view="console"] .teaching-console {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .simulation-workspace[data-mobile-view="science"] .science-panel {
+    width: 100%;
+    max-width: 100%;
+    height: calc(100dvh - 120px);
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+  }
+
+  .mobile-scene-quick-actions {
+    display: flex;
+    position: absolute;
+    bottom: 74px;
+    right: 14px;
+    gap: 8px;
+    z-index: 10;
+  }
+
+  .mobile-quick-btn {
+    background: rgba(14, 38, 58, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    color: #e0f2fe;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    min-height: 38px;
+  }
+
+  .mobile-quick-btn:hover {
+    background: rgba(56, 189, 248, 0.25);
+    border-color: #38bdf8;
+  }
 
   .console-header { flex-wrap: wrap; }
   .apply-button { flex: 0 0 auto; margin-left: auto; }

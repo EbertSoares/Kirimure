@@ -62,7 +62,7 @@ export const INDICATOR_DETAILS: Record<IndicatorDetailId, IndicatorDetail> = {
     title: 'Oxigênio dissolvido',
     symbol: 'OD',
     unit: 'mg O₂/L',
-    badge: 'Padrão Operacional',
+    badge: 'Produto de Modelo',
     interpretation:
       'O OD indica quanto oxigênio está disponível na água para a respiração aquática. A queda pode ocorrer quando a demanda biológica supera a reposição por reaeração e mistura. O valor mostrado é uma estimativa do modelo para este cenário.',
     howToInterpret:

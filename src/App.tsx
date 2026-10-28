@@ -9,7 +9,7 @@ import { useOceanData } from './hooks/useOceanData';
 import { BASELINE, BTS_SECTORS, FACTOR_ORDER, isMassLoadId, ITEM_DEFINITIONS } from './simulation/config';
 import { CHALLENGES, evaluateChallenge } from './simulation/challenges';
 import { MISSION_01_OXYGEN } from './simulation/missions';
-import { calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL } from './simulation/oxygen';
+import { convertBOD5ToPulseDeltaMgL } from './simulation/oxygen';
 import {
   buildTargets,
   createInitialState,
@@ -290,42 +290,31 @@ function TeachingConsole({
         </button>
       </header>
 
-      <div className="console-regime-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '11px' }}>
-        <span style={{ color: 'rgba(255,255,255,0.65)' }}>Regime de Lançamento de Esgoto:</span>
-        <button
-          type="button"
-          onClick={() => onSewageDischargeModeChange?.('continuous')}
-          style={{
-            background: sewageDischargeMode === 'continuous' ? '#0284c7' : 'rgba(255,255,255,0.06)',
-            color: '#fff',
-            border: '1px solid ' + (sewageDischargeMode === 'continuous' ? '#38bdf8' : 'rgba(255,255,255,0.15)'),
-            borderRadius: '4px',
-            padding: '2px 8px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            fontWeight: sewageDischargeMode === 'continuous' ? 700 : 500,
-          }}
-          title="Aporte diário constante de DBO5 diluído no volume de mistura da enseada"
-        >
-          Carga Contínua (kg/dia)
-        </button>
-        <button
-          type="button"
-          onClick={() => onSewageDischargeModeChange?.('pulse')}
-          style={{
-            background: sewageDischargeMode === 'pulse' ? '#0284c7' : 'rgba(255,255,255,0.06)',
-            color: '#fff',
-            border: '1px solid ' + (sewageDischargeMode === 'pulse' ? '#38bdf8' : 'rgba(255,255,255,0.15)'),
-            borderRadius: '4px',
-            padding: '2px 8px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            fontWeight: sewageDischargeMode === 'pulse' ? 700 : 500,
-          }}
-          title="Despejo pontual único em massa total (kg), sem reposição contínua"
-        >
-          Pulso Único (kg)
-        </button>
+      <div className="console-regime-bar">
+        <div className="console-regime-controls">
+          <span className="console-regime-label">Regime de Lançamento de Esgoto:</span>
+          <button
+            type="button"
+            className={`console-regime-btn ${sewageDischargeMode === 'continuous' ? 'active' : ''}`}
+            onClick={() => onSewageDischargeModeChange?.('continuous')}
+            title="Aporte diário ininterrupto de DBO5 na enseada (gera patamar rebaixado contínuo)"
+          >
+            Carga Contínua (kg/dia)
+          </button>
+          <button
+            type="button"
+            className={`console-regime-btn ${sewageDischargeMode === 'pulse' ? 'active' : ''}`}
+            onClick={() => onSewageDischargeModeChange?.('pulse')}
+            title="Despejo pontual único em massa total (queda aguda com recuperação gradual posterior)"
+          >
+            Pulso Único (kg)
+          </button>
+        </div>
+        <p className="console-regime-desc">
+          {sewageDischargeMode === 'continuous'
+            ? 'Carga Contínua: Lançamento ininterrupto diário (emissário/rede). O oxigênio estabiliza em nível deprimido até haver redução na fonte.'
+            : 'Pulso Único: Evento agudo pontual (extravasamento/acidente). O oxigênio sofre queda nos primeiros dias e recupera gradualmente pela reaeração e marés.'}
+        </p>
       </div>
 
       <div className="console-body">
@@ -357,6 +346,8 @@ function DepthRuler({ side }: { side: 'left' | 'right' }) {
   );
 }
 
+type MobileViewTab = 'scene' | 'console' | 'science';
+
 export function App() {
   const [screen, setScreen] = useState<AppScreen>('map');
   const [mapZooming, setMapZooming] = useState(false);
@@ -367,6 +358,8 @@ export function App() {
   const [resetToken, setResetToken] = useState(0);
   const [simulation, setSimulation] = useState(createInitialState);
   const [panelTab, setPanelTab] = useState<PanelTab>('summary');
+  const [mobileView, setMobileView] = useState<MobileViewTab>('scene');
+  const lastInjectedSewageMassRef = useRef<number>(0);
   const oceanData = useOceanData(simulation.sector, screen === 'simulation');
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [criticalDays, setCriticalDays] = useState<number | null | undefined>(undefined);
@@ -377,6 +370,7 @@ export function App() {
     setSelectedIndicator(id);
     if (id) {
       setPanelTab('results');
+      setMobileView('science');
     }
   };
 
@@ -411,6 +405,7 @@ export function App() {
     });
     setChallengeId(null);
     setPanelTab('activities');
+    setMobileView('science');
   };
 
   const handleMissionStepChange = (step: MissionStepId) => {
@@ -475,12 +470,17 @@ export function App() {
     const targets = buildTargets(controls, simulation.sector, simulation.sewageDischargeMode);
     let nextBod = simulation.biochemicalOxygenDemand ?? 0;
 
-    if (simulation.sewageDischargeMode === 'pulse' && controls.sewage > 0) {
-      const sectorDef = BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0];
-      const deltaBod = convertBOD5ToPulseDeltaMgL(controls.sewage, sectorDef.mixingVolumeM3);
-      nextBod += deltaBod;
-      // No modo de pulso único, o efluente não é uma taxa contínua diária
+    if (simulation.sewageDischargeMode === 'pulse') {
+      // Injeção de pulso idempotente: adiciona massa somente quando o usuário altera a carga do pulso
+      if (controls.sewage > 0 && controls.sewage !== lastInjectedSewageMassRef.current) {
+        const sectorDef = BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0];
+        const deltaBod = convertBOD5ToPulseDeltaMgL(controls.sewage, sectorDef.mixingVolumeM3);
+        nextBod += deltaBod;
+        lastInjectedSewageMassRef.current = controls.sewage;
+      }
       targets.sewage = 0;
+    } else {
+      lastInjectedSewageMassRef.current = 0;
     }
 
     setSimulation((current) => ({
@@ -504,33 +504,8 @@ export function App() {
     if (!missionState) {
       setPanelTab('summary');
     }
-  };
-
-  const handleSectorChange = (sectorId: BtsSectorId) => {
-    const sectorDef = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
-    const newSat = calculateWeissOxygenSaturation(simulation.env.temperature, sectorDef.baselineSalinity);
-    const newDo = Math.min(newSat * 1.25, Math.max(0.05, simulation.dissolvedOxygen));
-
-    setSimulation((curr) => {
-      const nextTargets = buildTargets(curr.controls, sectorId, curr.sewageDischargeMode);
-      return {
-        ...curr,
-        sector: sectorId,
-        targets: nextTargets,
-        dissolvedOxygen: newDo,
-      };
-    });
-
-    const nextTargets = buildTargets(simulation.controls, sectorId, simulation.sewageDischargeMode);
-    setCriticalDays(
-      estimateCriticalDays(nextTargets, sectorId, 3650, {
-        sewageDischargeMode: simulation.sewageDischargeMode,
-        initialBod: simulation.biochemicalOxygenDemand,
-        initialDo: newDo,
-        initialControls: simulation.controls,
-        initialEnv: simulation.env,
-      }),
-    );
+    // Em dispositivos móveis, volta o foco para o recife 3D para observar o resultado
+    setMobileView('scene');
   };
 
   const handleApplySatelliteConditions = (sst: number) => {
@@ -549,6 +524,7 @@ export function App() {
   };
 
   const handleSewageDischargeModeChange = (mode: 'continuous' | 'pulse') => {
+    lastInjectedSewageMassRef.current = 0;
     setSimulation((curr) => ({
       ...curr,
       sewageDischargeMode: mode,
@@ -560,6 +536,7 @@ export function App() {
 
   const reset = () => {
     controlsRef.current = { ...BASELINE };
+    lastInjectedSewageMassRef.current = 0;
     setResetToken((token) => token + 1);
     setSimulation(createInitialState());
     setChallengeId(null);
@@ -567,6 +544,7 @@ export function App() {
     setPanelTab('summary');
     setMissionState(null);
     setSelectedIndicator(null);
+    setMobileView('scene');
   };
 
   const handleSelectBahia = () => {
@@ -637,22 +615,6 @@ export function App() {
           <button type="button" className="map-back-button" onClick={handleBackToMap}>
             ← <span>Mapa</span>
           </button>
-          <div className="topbar-sector-container">
-            <label htmlFor="topbar-sector-select" className="sr-only">Compartimento da BTS</label>
-            <select
-              id="topbar-sector-select"
-              value={simulation.sector}
-              onChange={(e) => handleSectorChange(e.target.value as BtsSectorId)}
-              className="topbar-sector-select"
-              title="Selecione o compartimento oceanográfico da Baía de Todos-os-Santos"
-            >
-              {BTS_SECTORS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label} ({s.baselineSalinity} PSU)
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         <div className="topbar-center brand compact">
@@ -666,7 +628,7 @@ export function App() {
         </div>
       </header>
 
-      <main className="simulation-workspace">
+      <main className="simulation-workspace" data-mobile-view={mobileView}>
         <section className="scene-card" aria-label="Visualização do recife">
           <Suspense fallback={(
             <div className="scene-loading" role="status">
@@ -677,6 +639,24 @@ export function App() {
             <MarineScene state={simulation} resetToken={resetToken} />
           </Suspense>
           <DepthRuler side="left" />
+
+          {/* Atalhos rápidos flutuantes exclusivos para visualização móvel */}
+          <div className="mobile-scene-quick-actions" aria-hidden="true">
+            <button
+              type="button"
+              className="mobile-quick-btn"
+              onClick={() => setMobileView('console')}
+            >
+              ⚙️ Ajustar Bancada
+            </button>
+            <button
+              type="button"
+              className="mobile-quick-btn"
+              onClick={() => setMobileView('science')}
+            >
+              📊 Ver Ciência
+            </button>
+          </div>
 
           <div className="scene-top-overlay">
             <TimelineBar
@@ -831,6 +811,37 @@ export function App() {
           sectorId={simulation.sector}
         />
       </main>
+
+      {/* Barra de Navegação Inferior para Celulares e Telas Pequenas */}
+      <nav className="mobile-bottom-nav" aria-label="Navegação móvel">
+        <button
+          type="button"
+          className={`mobile-nav-btn ${mobileView === 'scene' ? 'active' : ''}`}
+          onClick={() => setMobileView('scene')}
+          aria-current={mobileView === 'scene' ? 'page' : undefined}
+        >
+          <span className="mobile-nav-icon">🌊</span>
+          <span>Recife 3D</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${mobileView === 'console' ? 'active' : ''}`}
+          onClick={() => setMobileView('console')}
+          aria-current={mobileView === 'console' ? 'page' : undefined}
+        >
+          <span className="mobile-nav-icon">⚙️</span>
+          <span>Bancada</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${mobileView === 'science' ? 'active' : ''}`}
+          onClick={() => setMobileView('science')}
+          aria-current={mobileView === 'science' ? 'page' : undefined}
+        >
+          <span className="mobile-nav-icon">📊</span>
+          <span>Ciência</span>
+        </button>
+      </nav>
 
       <div
         className={`screen-transition-veil ${transitionDark ? 'active' : ''}`}
