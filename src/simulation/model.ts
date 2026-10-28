@@ -114,6 +114,7 @@ export function effectivePh(
     const consumedO2 = bodConcentrationMgL * (1 - Math.exp(-kd * tau));
     addedDic = (consumedO2 / 32) * 1000 * 0.98;
   } else if (env.sewage > 0) {
+    // Estimativa de aporte diário contínuo de DBO (kg DBO5/dia convertido para CBODu em mg/L):
     const kd = calculateDeoxygenationRate(env.temperature);
     const continuousBodMgL = (convertBOD5ToUltimateBOD(env.sewage) * 1000) / sector.mixingVolumeM3;
     const tau = Math.min(sector.dischargeDays, 5);
@@ -144,6 +145,7 @@ export function calculatePressures(
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
   sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
+  elapsedDays = 1,
 ): Pressures {
   const ph = effectivePh(env, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
   const currentHeat = stressAbove(
@@ -155,7 +157,7 @@ export function calculatePressures(
 
   let oilPressure = normalizedReceivedLoad('oil', env.oil);
   if (env.oil > 0) {
-    const budget = calculateOilFateBudget(env.oil, sectorId, 1);
+    const budget = calculateOilFateBudget(env.oil, sectorId, Math.max(0.1, elapsedDays));
     const ecotox = evaluateOilEcotoxicity(budget.dissolvedPahConcentrationUgL);
     const toxicResponse = clamp(ecotox.tissueRegenerationInhibitionPercent / 100);
     oilPressure = Math.max(oilPressure, toxicResponse);
@@ -199,6 +201,7 @@ export function calculateFishPressures(
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
   sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
+  elapsedDays = 1,
 ): Pressures {
   const base = calculatePressures(
     env,
@@ -207,6 +210,7 @@ export function calculateFishPressures(
     sectorId,
     respiratoryDicUmolKg,
     sewageDischargeMode,
+    elapsedDays,
   );
   const hypoxia = hypoxiaStress(dissolvedOxygen);
   return {
@@ -248,6 +252,7 @@ export function calculateStress(
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
   sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
+  elapsedDays = 1,
 ) {
   const pressures = calculatePressures(
     env,
@@ -256,6 +261,7 @@ export function calculateStress(
     sectorId,
     respiratoryDicUmolKg,
     sewageDischargeMode,
+    elapsedDays,
   );
   const fishPressures = calculateFishPressures(
     env,
@@ -265,6 +271,7 @@ export function calculateStress(
     sectorId,
     respiratoryDicUmolKg,
     sewageDischargeMode,
+    elapsedDays,
   );
   const species = Object.fromEntries(
     FISH_SPECIES.map((item) => [item.id, speciesStress(fishPressures, item.id)]),
@@ -495,6 +502,7 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
     state.sector,
     nextRespiratoryDic,
     state.sewageDischargeMode,
+    state.elapsedDays + dtDays,
   );
   const protection = clamp(env.recovery / 100);
   const exposure = PRESSURE_IDS.reduce(

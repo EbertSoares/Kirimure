@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { RemoteDataError, type RemoteErrorKind } from '../services/http';
 import { fetchBtsThermalForcing, getBtsCrwHistoricalSnapshot } from '../services/noaaCrw';
 import { fetchBtsMarineMeteo, getBtsMeteoHistoricalSnapshot, findClosestHourlyPoint } from '../services/openMeteo';
 import type { MarineMeteoPoint, ThermalForcingPoint } from '../services/types';
@@ -9,6 +10,11 @@ export interface DataSourceStatus {
   lastAttemptUtc: string | null;
   lastSuccessUtc: string | null;
   error: string | null;
+  errorKind?: RemoteErrorKind;
+  errorStatus?: number;
+  errorUrl?: string;
+  errorElapsedMs?: number;
+  serverMessage?: string;
   isFallback: boolean;
 }
 
@@ -68,7 +74,7 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
         fetchBtsMarineMeteo(requestSector),
       ]);
 
-      // Proteção contra concorrência: descarta resposta de requisição antiga se o setor mudou
+      // Proteção contra concorrência: descarta resposta se o setor mudou durante o fetch
       if (activeSectorRef.current !== requestSector) {
         return;
       }
@@ -85,15 +91,20 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
           isFallback,
         });
       } else {
-        const errMessage = thermalResults.reason instanceof Error
-          ? thermalResults.reason.message
-          : 'Falha na consulta remota ao NOAA CoastWatch';
+        const reason = thermalResults.reason;
+        const remoteErr = reason instanceof RemoteDataError ? reason : undefined;
+        const errMessage = reason instanceof Error ? reason.message : 'Falha na consulta remota ao NOAA CRW';
         setCrwData([]);
         setNoaaStatus({
           state: 'error',
           lastAttemptUtc: nowUtc,
           lastSuccessUtc: null,
           error: errMessage,
+          errorKind: remoteErr?.kind ?? 'network',
+          errorStatus: remoteErr?.status,
+          errorUrl: remoteErr?.url,
+          errorElapsedMs: remoteErr?.elapsedMs,
+          serverMessage: remoteErr?.serverMessage,
           isFallback: false,
         });
       }
@@ -110,15 +121,20 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
           isFallback,
         });
       } else {
-        const errMessage = meteoResults.reason instanceof Error
-          ? meteoResults.reason.message
-          : 'Falha na consulta ao Open-Meteo Marine';
+        const reason = meteoResults.reason;
+        const remoteErr = reason instanceof RemoteDataError ? reason : undefined;
+        const errMessage = reason instanceof Error ? reason.message : 'Falha na consulta ao Open-Meteo Marine';
         setMeteoData([]);
         setMeteoStatus({
           state: 'error',
           lastAttemptUtc: nowUtc,
           lastSuccessUtc: null,
           error: errMessage,
+          errorKind: remoteErr?.kind ?? 'network',
+          errorStatus: remoteErr?.status,
+          errorUrl: remoteErr?.url,
+          errorElapsedMs: remoteErr?.elapsedMs,
+          serverMessage: remoteErr?.serverMessage,
           isFallback: false,
         });
       }

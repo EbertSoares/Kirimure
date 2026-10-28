@@ -1,27 +1,92 @@
 import { BTS_SECTORS } from '../simulation/config';
 import type { BtsSectorId } from '../simulation/types';
-import type { DatasetProvenance, ThermalForcingPoint } from './types';
+import { RemoteDataError, fetchTextWithTimeout, withRetry } from './http';
+import { BTS_CRW_SECTOR_FALLBACKS, NOAA_CRW_PROVENANCE_BASE } from './noaaCrwSnapshots';
+import type { ThermalForcingPoint } from './types';
+
+export {
+  BTS_CRW_BARRA_FALLBACK_SNAPSHOT,
+  BTS_CRW_FALLBACK_SNAPSHOT,
+  BTS_CRW_SECTOR_FALLBACKS,
+} from './noaaCrwSnapshots';
 
 /**
- * Cliente do NOAA Coral Reef Watch (CRW v3.1 5km via CoastWatch ERDDAP).
+ * Cliente do NOAA Coral Reef Watch (CRW v3.1, produto diário global de 5 km) via ERDDAP.
  *
- * Mapeia coordenadas nominais por compartimento da Baía de Todos-os-Santos:
- * - Frades / Itaparica (Baía Central): Lat -12.85°, Lon -38.55°
- * - Paraguaçu (Estuário / Fundo da Baía): Lat -12.75°, Lon -38.85° (mascarado por terra na grade 5 km)
- * - Barra (Acesso Atlântico): Lat -12.97°, Lon -38.50°
+ * Variáveis oficiais consultadas:
+ * - CRW_SST: temperatura da superfície do mar (°C)
+ * - CRW_SSTANOMALY: anomalia de SST contra a climatologia diária do pixel (°C)
+ * - CRW_HOTSPOT: SST − MMM do pixel (°C); valores ≤ 0 indicam ausência de estresse térmico
+ * - CRW_DHW: Degree Heating Weeks oficial (°C-semana, janela de 84 dias)
+ * - CRW_BAA / CRW_BAA_7D_MAX: nível de alerta de branqueamento (0 a 4)
  *
- * Variáveis oficiais do dataset NOAA_DHW do ERDDAP:
- * - CRW_SST: Temperatura da Superfície do Mar (°C)
- * - CRW_SSTANOMALY: Anomalia de SST (°C) contra a climatologia satelital
- * - CRW_HOTSPOT: Anomalia positiva sobre a MMM local (°C) — estresse térmico ativo
- * - CRW_DHW: Grau-semanas de aquecimento acumulado em 84 dias (°C-semana)
- * - CRW_BAA: Categoria operacional de estresse térmico (0 a 4)
- * - CRW_BAA_7D_MAX: Alerta máximo dos últimos 7 dias (0 a 4)
+ * Diagnóstico realizado (out/2026): o servidor coastwatch.pfeg.noaa.gov estava inacessível já na
+ * conexão TCP (inclusive na página leve /info), enquanto o mesmo produto NOAA CRW é redistribuído
+ * pelo ERDDAP do PacIOOS (dataset `dhw_5km`, mesmas variáveis, CORS liberado). Por isso o cliente
+ * consulta distribuidores em ordem e registra na proveniência qual deles serviu o dado.
  */
+
+export interface CrwDistributor {
+  id: 'pacioos' | 'pfeg';
+  label: string;
+  baseUrl: string;
+  datasetId: string;
+}
+
+export const CRW_DISTRIBUTORS: readonly CrwDistributor[] = [
+  {
+    id: 'pacioos',
+    label: 'PacIOOS ERDDAP (redistribuição oficial do NOAA CRW 5 km)',
+    baseUrl: 'https://pae-paha.pacioos.hawaii.edu/erddap',
+    datasetId: 'dhw_5km',
+  },
+  {
+    id: 'pfeg',
+    label: 'NOAA CoastWatch ERDDAP (PFEG)',
+    baseUrl: 'https://coastwatch.pfeg.noaa.gov/erddap',
+    datasetId: 'NOAA_DHW',
+  },
+];
+
+const CRW_VARIABLES = ['CRW_SST', 'CRW_SSTANOMALY', 'CRW_HOTSPOT', 'CRW_DHW', 'CRW_BAA', 'CRW_BAA_7D_MAX'] as const;
+
+/** Número de dias recentes consultados para o indicador atual (o painel usa o dado mais recente). */
+export const CRW_RECENT_DAYS = 7;
+
+/** Timeout por distribuidor, cobrindo cabeçalhos e corpo. */
+export const CRW_TIMEOUT_MS = 10000;
+
+/**
+ * Pixels oceânicos válidos da grade NOAA de 5 km para cada setor.
+ * As coordenadas nominais da Barra (-12.97, -38.50) caem sobre a península de Salvador e o canal do
+ * Paraguaçu é mascarado como terra; nesses casos a consulta retornava apenas NaN. Os pixels abaixo
+ * foram verificados com valores válidos de SST.
+ */
+export const NOAA_CRW_PIXELS: Record<BtsSectorId, { latitude: number; longitude: number; note: string }> = {
+  frades: {
+    latitude: -12.875,
+    longitude: -38.525,
+    note: 'Pixel da Baía Central adjacente à Ilha dos Frades.',
+  },
+  barra: {
+    latitude: -13.025,
+    longitude: -38.525,
+    note: 'Pixel oceânico na entrada da baía (a coordenada nominal do setor cai sobre a península de Salvador, mascarada como terra).',
+  },
+  paraguacu: {
+    latitude: -12.825,
+    longitude: -38.775,
+    note: 'Pixel válido mais próximo na baía interior, a leste da foz do Paraguaçu. Não representa o canal estuarino, que é mascarado como terra na grade de 5 km.',
+  },
+};
 
 export function getSectorCoordinates(sectorId: BtsSectorId = 'frades'): { latitude: number; longitude: number } {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId);
   return sector?.coordinates ?? { latitude: -12.85, longitude: -38.55 };
+}
+
+export function getNoaaPixel(sectorId: BtsSectorId = 'frades') {
+  return NOAA_CRW_PIXELS[sectorId] ?? NOAA_CRW_PIXELS.frades;
 }
 
 function computeSimpleHash(text: string): string {
@@ -33,37 +98,24 @@ function computeSimpleHash(text: string): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-function isValidNumber(val: number): boolean {
-  return Number.isFinite(val) && val > -500 && val < 500;
+function parseNumber(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const value = Number(raw.trim());
+  return Number.isFinite(value) && value > -500 && value < 500 ? value : null;
 }
 
-const NOAA_CRW_PROVENANCE_BASE: Omit<DatasetProvenance, 'validTimeStartUtc' | 'validTimeEndUtc' | 'retrievedAtUtc' | 'isCachedFallback'> = {
-  sourceName: 'NOAA Coral Reef Watch (CRW)',
-  sourceUrl: 'https://coralreefwatch.noaa.gov/product/5km/',
-  datasetId: 'NOAA_DHW',
-  datasetVersion: 'v3.1 Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring',
-  epistemicClass: 'Produto de Modelo',
-  license: 'U.S. Government Public Domain / Open Data',
-  citation: 'NOAA Coral Reef Watch. Version 3.1 Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring. NOAA CoastWatch ERDDAP.',
-};
-
 /**
- * Gera uma janela temporal com recuo operacional seguro de 2 dias (48h)
- * para absorver o ciclo de ingestão e processamento de produtos satelitais diários da NOAA.
+ * Janela temporal explícita (usada para séries históricas sob demanda).
+ * Recuo de 2 dias absorve a latência operacional do produto diário.
  */
 export function getDefaultCrwWindow(days = 45): { startUtc: string; endUtc: string } {
-  const now = new Date();
-  const safeEnd = new Date(now.getTime() - 2 * 24 * 3600 * 1000);
+  const safeEnd = new Date(Date.now() - 2 * 24 * 3600 * 1000);
   const start = new Date(safeEnd.getTime() - days * 24 * 3600 * 1000);
-
   const fmt = (d: Date) => d.toISOString().slice(0, 10) + 'T12:00:00Z';
   return { startUtc: fmt(start), endUtc: fmt(safeEnd) };
 }
 
-/**
- * Divide intervalos longos em blocos de até maxChunkDays (padrão 15 dias)
- * para evitar sobrecarga e timeouts no servidor ERDDAP (> 30 passos temporais).
- */
+/** Divide intervalos longos em blocos de até `maxChunkDays` dias. */
 export function splitTimeWindowIntoChunks(
   startUtc: string,
   endUtc: string,
@@ -71,378 +123,253 @@ export function splitTimeWindowIntoChunks(
 ): Array<{ startUtc: string; endUtc: string }> {
   const startMs = new Date(startUtc).getTime();
   const endMs = new Date(endUtc).getTime();
-
   if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
     return [{ startUtc, endUtc }];
   }
 
   const chunkMs = maxChunkDays * 24 * 3600 * 1000;
+  const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10) + 'T12:00:00Z';
   const chunks: Array<{ startUtc: string; endUtc: string }> = [];
-
-  let currentStart = startMs;
-  while (currentStart < endMs) {
-    const currentEnd = Math.min(currentStart + chunkMs, endMs);
-    const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10) + 'T12:00:00Z';
-    chunks.push({
-      startUtc: fmt(currentStart),
-      endUtc: fmt(currentEnd),
-    });
-    currentStart = currentEnd;
-    if (currentStart >= endMs) break;
+  for (let cursor = startMs; cursor < endMs; cursor += chunkMs) {
+    chunks.push({ startUtc: fmt(cursor), endUtc: fmt(Math.min(cursor + chunkMs, endMs)) });
   }
-
   return chunks;
 }
 
-// Snapshots históricos calibrados (evento El Niño / onda de calor marinha mar/abr 2024 na BTS)
-// Utilizados exclusivamente para contingência explícita a pedido do usuário
-export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
-  {
-    timestampUtc: '2024-03-01T12:00:00Z',
-    seaSurfaceTemperatureDegC: 28.4,
-    sstAnomalyDegC: 0.4,
-    hotSpotDegC: 0.4,
-    degreeHeatingWeeks: 1.2,
-    bleachingAlertLevel: 1, // Watch
-    bleachingAlertArea: 1,
-    bleachingAlertMax7d: 1,
-    gridCell: { latitude: -12.85, longitude: -38.55 },
-    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.85][-38.55]',
-      responseHash: 'e4a8b291',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
-    },
-  },
-  {
-    timestampUtc: '2024-03-15T12:00:00Z',
-    seaSurfaceTemperatureDegC: 29.2,
-    sstAnomalyDegC: 1.1,
-    hotSpotDegC: 1.2,
-    degreeHeatingWeeks: 3.8,
-    bleachingAlertLevel: 2, // Warning
-    bleachingAlertArea: 2,
-    bleachingAlertMax7d: 2,
-    gridCell: { latitude: -12.85, longitude: -38.55 },
-    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.85][-38.55]',
-      responseHash: 'f721bc08',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
-    },
-  },
-  {
-    timestampUtc: '2024-04-01T12:00:00Z',
-    seaSurfaceTemperatureDegC: 29.8,
-    sstAnomalyDegC: 1.6,
-    hotSpotDegC: 1.8,
-    degreeHeatingWeeks: 6.4,
-    bleachingAlertLevel: 3, // Alert 1
-    bleachingAlertArea: 3,
-    bleachingAlertMax7d: 3,
-    gridCell: { latitude: -12.85, longitude: -38.55 },
-    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.85][-38.55]',
-      responseHash: '8ac41e3d',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
-    },
-  },
-  {
-    timestampUtc: '2024-04-15T12:00:00Z',
-    seaSurfaceTemperatureDegC: 29.5,
-    sstAnomalyDegC: 1.3,
-    hotSpotDegC: 1.5,
-    degreeHeatingWeeks: 8.2,
-    bleachingAlertLevel: 4, // Alert 2
-    bleachingAlertArea: 4,
-    bleachingAlertMax7d: 4,
-    gridCell: { latitude: -12.85, longitude: -38.55 },
-    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.85][-38.55]',
-      responseHash: '9d332fa1',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
-    },
-  },
-];
+/** Monta a URL griddap. `timeSelector` aceita `last-6:1:last` ou `(início):1:(fim)`. */
+export function buildCrwQueryUrl(
+  distributor: CrwDistributor,
+  pixel: { latitude: number; longitude: number },
+  timeSelector: string,
+): string {
+  const constraint = `[${timeSelector}][(${pixel.latitude})][(${pixel.longitude})]`;
+  return `${distributor.baseUrl}/griddap/${distributor.datasetId}.csv?${CRW_VARIABLES.map((v) => `${v}${constraint}`).join(',')}`;
+}
 
-export const BTS_CRW_BARRA_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
-  {
-    timestampUtc: '2024-03-01T12:00:00Z',
-    seaSurfaceTemperatureDegC: 28.2,
-    sstAnomalyDegC: 0.3,
-    hotSpotDegC: 0.3,
-    degreeHeatingWeeks: 1.0,
-    bleachingAlertLevel: 1, // Watch
-    bleachingAlertArea: 1,
-    bleachingAlertMax7d: 1,
-    gridCell: { latitude: -12.95, longitude: -38.50 },
-    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
-      responseHash: 'b4a1c832',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
-    },
-  },
-  {
-    timestampUtc: '2024-03-15T12:00:00Z',
-    seaSurfaceTemperatureDegC: 29.0,
-    sstAnomalyDegC: 0.9,
-    hotSpotDegC: 1.0,
-    degreeHeatingWeeks: 3.2,
-    bleachingAlertLevel: 2, // Warning
-    bleachingAlertArea: 2,
-    bleachingAlertMax7d: 2,
-    gridCell: { latitude: -12.95, longitude: -38.50 },
-    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
-      responseHash: 'c72e90f1',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
-    },
-  },
-  {
-    timestampUtc: '2024-04-01T12:00:00Z',
-    seaSurfaceTemperatureDegC: 29.5,
-    sstAnomalyDegC: 1.4,
-    hotSpotDegC: 1.5,
-    degreeHeatingWeeks: 5.8,
-    bleachingAlertLevel: 3, // Alert 1
-    bleachingAlertArea: 3,
-    bleachingAlertMax7d: 3,
-    gridCell: { latitude: -12.95, longitude: -38.50 },
-    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
-      responseHash: 'e108d47b',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
-    },
-  },
-  {
-    timestampUtc: '2024-04-15T12:00:00Z',
-    seaSurfaceTemperatureDegC: 29.2,
-    sstAnomalyDegC: 1.1,
-    hotSpotDegC: 1.3,
-    degreeHeatingWeeks: 7.5,
-    bleachingAlertLevel: 3, // Alert 1
-    bleachingAlertArea: 3,
-    bleachingAlertMax7d: 3,
-    gridCell: { latitude: -12.95, longitude: -38.50 },
-    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
-    spatialResolution: '5 km (0.05° pixel)',
-    provenance: {
-      ...NOAA_CRW_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-04-15T12:00:00Z',
-      retrievedAtUtc: '2024-04-16T10:00:00Z',
-      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
-      responseHash: 'a57cb912',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
-    },
-  },
-];
-
-export const BTS_CRW_SECTOR_FALLBACKS: Partial<Record<BtsSectorId, ThermalForcingPoint[]>> = {
-  frades: BTS_CRW_FALLBACK_SNAPSHOT,
-  barra: BTS_CRW_BARRA_FALLBACK_SNAPSHOT,
-  // paraguacu: canal estuarino interior; resolução de 5 km da NOAA mascara a célula com terra.
-};
-
-/**
- * Retorna o snapshot histórico de contingência de um setor específico sob demanda manual do usuário.
- */
-export function getBtsCrwHistoricalSnapshot(sectorId: BtsSectorId = 'frades'): ThermalForcingPoint[] {
-  return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
+export interface ParsedCrwRow {
+  timestampUtc: string;
+  latitude: number | null;
+  longitude: number | null;
+  sst: number | null;
+  sstAnomaly: number | null;
+  hotSpot: number | null;
+  dhw: number | null;
+  baa: number | null;
+  baa7d: number | null;
 }
 
 /**
- * Executa requisição HTTP com timeout de ~12s e 1 repetição automática em falhas transitórias.
+ * Interpreta o CSV do ERDDAP pelos NOMES das colunas (linha 0), ignorando a linha de unidades (linha 1).
+ * Lança RemoteDataError('parse') se colunas obrigatórias estiverem ausentes.
  */
-async function fetchWithTimeoutAndRetry(
-  url: string,
-  timeoutMs = 12000,
-  maxRetries = 1,
-): Promise<Response> {
-  let lastError: unknown;
+export function parseErddapCrwCsv(csvText: string): ParsedCrwRow[] {
+  const lines = csvText.trim().split(/\r?\n/);
+  if (lines.length < 2) {
+    throw new RemoteDataError('parse', 'Resposta NOAA sem cabeçalho CSV reconhecível.');
+  }
 
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const header = lines[0].split(',').map((h) => h.trim());
+  const column = (name: string) => header.indexOf(name);
+  const idx = {
+    time: column('time'),
+    latitude: column('latitude'),
+    longitude: column('longitude'),
+    sst: column('CRW_SST'),
+    anomaly: column('CRW_SSTANOMALY'),
+    hotSpot: column('CRW_HOTSPOT'),
+    dhw: column('CRW_DHW'),
+    baa: column('CRW_BAA'),
+    baa7d: column('CRW_BAA_7D_MAX'),
+  };
 
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { Accept: 'text/csv' },
-        signal: controller.signal,
+  if (idx.time < 0 || idx.sst < 0) {
+    throw new RemoteDataError(
+      'parse',
+      `Resposta NOAA sem as colunas obrigatórias "time" e "CRW_SST" (recebido: ${header.join(', ').slice(0, 160)}).`,
+    );
+  }
+
+  const rows: ParsedCrwRow[] = [];
+  for (let i = 2; i < lines.length; i += 1) {
+    if (!lines[i].trim()) continue;
+    const parts = lines[i].split(',');
+    const get = (index: number) => (index >= 0 ? parseNumber(parts[index]) : null);
+    const timestampUtc = parts[idx.time]?.trim();
+    if (!timestampUtc) continue;
+    const baa = get(idx.baa);
+    rows.push({
+      timestampUtc,
+      latitude: get(idx.latitude),
+      longitude: get(idx.longitude),
+      sst: get(idx.sst),
+      sstAnomaly: get(idx.anomaly),
+      hotSpot: get(idx.hotSpot),
+      dhw: get(idx.dhw),
+      baa,
+      baa7d: idx.baa7d >= 0 ? get(idx.baa7d) : baa,
+    });
+  }
+  return rows;
+}
+
+async function querySingleDistributor(
+  distributor: CrwDistributor,
+  sectorId: BtsSectorId,
+  timeSelector: string,
+  window: { startUtc: string; endUtc: string } | null,
+): Promise<ThermalForcingPoint[]> {
+  const pixel = getNoaaPixel(sectorId);
+  const queryUrl = buildCrwQueryUrl(distributor, pixel, timeSelector);
+  const source = distributor.label;
+
+  const response = await withRetry(
+    () => fetchTextWithTimeout(queryUrl, { timeoutMs: CRW_TIMEOUT_MS, accept: 'text/csv', source }),
+    1,
+  ).catch((err: unknown) => {
+    // ERDDAP responde HTTP 404 "Your query produced no matching results" quando não há dado no recorte.
+    if (err instanceof RemoteDataError && err.kind === 'http' && err.status === 404
+      && /no matching results|greater than the axis maximum|less than the axis minimum/i.test(err.serverMessage ?? '')) {
+      throw new RemoteDataError('no_data', `${source}: sem dados no período/pixel solicitado (${err.serverMessage}).`, {
+        status: 404, url: queryUrl, elapsedMs: err.elapsedMs, serverMessage: err.serverMessage, source,
       });
-      clearTimeout(timeoutId);
+    }
+    throw err;
+  });
 
-      if (response.ok) {
-        return response;
-      }
+  let rows: ParsedCrwRow[];
+  try {
+    rows = parseErddapCrwCsv(response.text);
+  } catch (err) {
+    if (err instanceof RemoteDataError) {
+      throw new RemoteDataError('parse', `${source}: ${err.message}`, { url: queryUrl, elapsedMs: response.elapsedMs, source });
+    }
+    throw err;
+  }
 
-      // Se status 5xx e ainda tiver retentativa, aguarda 1s antes de repetir
-      if (response.status >= 500 && attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        continue;
-      }
+  const valid = rows.filter((row) => row.sst !== null);
+  if (valid.length === 0) {
+    throw new RemoteDataError(
+      'no_data',
+      `${source} respondeu (${rows.length} linha(s)), mas sem SST válida para o pixel ${pixel.latitude}°, ${pixel.longitude}° — provável máscara terrestre ou lacuna do produto.`,
+      { url: queryUrl, elapsedMs: response.elapsedMs, source },
+    );
+  }
 
-      return response;
+  const responseHash = computeSimpleHash(response.text);
+  const retrievedAt = new Date().toISOString();
+  const validStart = window?.startUtc ?? valid[0].timestampUtc;
+  const validEnd = window?.endUtc ?? valid[valid.length - 1].timestampUtc;
+
+  return valid.map((row) => ({
+    timestampUtc: row.timestampUtc,
+    seaSurfaceTemperatureDegC: row.sst as number,
+    sstAnomalyDegC: row.sstAnomaly,
+    hotSpotDegC: row.hotSpot,
+    degreeHeatingWeeks: row.dhw,
+    bleachingAlertLevel: row.baa,
+    bleachingAlertArea: row.baa,
+    bleachingAlertMax7d: row.baa7d,
+    gridCell: row.latitude !== null && row.longitude !== null
+      ? { latitude: row.latitude, longitude: row.longitude }
+      : { latitude: pixel.latitude, longitude: pixel.longitude },
+    requestedCoordinates: { latitude: pixel.latitude, longitude: pixel.longitude },
+    spatialResolution: '5 km (0,05°)',
+    provenance: {
+      ...NOAA_CRW_PROVENANCE_BASE,
+      datasetId: distributor.datasetId,
+      distributor: distributor.label,
+      pixelNote: pixel.note,
+      validTimeStartUtc: validStart,
+      validTimeEndUtc: validEnd,
+      retrievedAtUtc: retrievedAt,
+      queryUrl,
+      responseHash,
+      responseTimeMs: response.elapsedMs,
+      isCachedFallback: false,
+      fetchStatus: 'online_valid',
+    },
+  }));
+}
+
+/**
+ * Consulta distribuidores em ordem; devolve o primeiro resultado válido.
+ * Se todos falharem, lança o erro do primeiro distribuidor com o resumo de todos.
+ */
+async function queryWithFailover(
+  sectorId: BtsSectorId,
+  timeSelector: string,
+  window: { startUtc: string; endUtc: string } | null,
+  distributors: readonly CrwDistributor[],
+): Promise<ThermalForcingPoint[]> {
+  const failures: RemoteDataError[] = [];
+  for (const distributor of distributors) {
+    try {
+      return await querySingleDistributor(distributor, sectorId, timeSelector, window);
     } catch (err) {
-      clearTimeout(timeoutId);
-      lastError = err;
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
+      failures.push(err instanceof RemoteDataError
+        ? err
+        : new RemoteDataError('parse', err instanceof Error ? err.message : String(err), { source: distributor.label }));
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(`Falha de conexão com NOAA ERDDAP`);
+  // Prioriza a falha mais informativa: dado ausente > HTTP > parse > timeout > rede
+  const priority: Record<string, number> = { no_data: 0, http: 1, parse: 2, timeout: 3, network: 4 };
+  const primary = [...failures].sort((a, b) => priority[a.kind] - priority[b.kind])[0];
+  const summary = failures.map((f) => `• ${f.message}`).join('\n');
+  throw new RemoteDataError(primary.kind, summary, {
+    status: primary.status,
+    url: primary.url,
+    elapsedMs: primary.elapsedMs,
+    serverMessage: primary.serverMessage,
+    source: primary.source,
+  });
 }
 
 /**
- * Consulta a série temporal do NOAA Coral Reef Watch via CoastWatch ERDDAP.
+ * Indicador atual: consulta apenas os últimos CRW_RECENT_DAYS dias disponíveis no servidor
+ * (seleção por índice `last`, que dispensa adivinhar a data da última atualização).
  *
- * Características:
- * - Timeout estendido para 12 segundos com 1 repetição para evitar falsos positivos de indisponibilidade;
- * - Divisão de períodos longos em blocos de até 15 dias para contornar limitações do ERDDAP;
- * - Recuo operacional de 2 dias na data final padrão para respeitar a janela de síntese do satélite;
- * - Rejeição estrita de falhas sem injeção silenciosa de snapshot histórico (elimina fallback automático);
- * - O snapshot histórico só é carregado se explicitamente solicitado pelo usuário.
+ * Com `startUtc`/`endUtc` explícitos, consulta a série histórica em blocos de ≤ 15 dias em paralelo,
+ * preservando os blocos bem-sucedidos mesmo que algum falhe.
+ *
+ * Nunca devolve lista vazia como sucesso: ausência de SST válida gera RemoteDataError('no_data').
  */
 export async function fetchBtsThermalForcing(
   sectorId: BtsSectorId = 'frades',
   startUtc?: string,
   endUtc?: string,
+  distributors: readonly CrwDistributor[] = CRW_DISTRIBUTORS,
 ): Promise<ThermalForcingPoint[]> {
   // Setores estuarinos interiores estreitos (como o Paraguaçu) sofrem mascaramento de terra na grade de 5 km
   if (sectorId === 'paraguacu') {
     return [];
   }
 
-  const windowDates = startUtc && endUtc ? { startUtc, endUtc } : getDefaultCrwWindow(45);
-  const coords = getSectorCoordinates(sectorId);
-  const chunks = splitTimeWindowIntoChunks(windowDates.startUtc, windowDates.endUtc, 15);
-
-  const pointsMap = new Map<string, ThermalForcingPoint>();
-
-  for (const chunk of chunks) {
-    const queryUrl = `https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_SSTANOMALY[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_HOTSPOT[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_DHW[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_BAA[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_BAA_7D_MAX[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})]`;
-
-    const response = await fetchWithTimeoutAndRetry(queryUrl, 12000, 1);
-
-    if (!response.ok) {
-      throw new Error(`Falha no servidor NOAA CoastWatch ERDDAP (HTTP ${response.status} ${response.statusText})`);
-    }
-
-    const csvText = await response.text();
-    const lines = csvText.trim().split('\n');
-    if (lines.length <= 2) {
-      continue;
-    }
-
-    const responseHash = computeSimpleHash(csvText);
-    const retrievedAt = new Date().toISOString();
-
-    for (let index = 2; index < lines.length; index += 1) {
-      const parts = lines[index].split(',');
-      if (parts.length >= 8) {
-        const timestampUtc = parts[0]?.trim();
-        const returnedLat = parseFloat(parts[1]);
-        const returnedLon = parseFloat(parts[2]);
-        const sst = parseFloat(parts[3]);
-        const sstAnomaly = parseFloat(parts[4]);
-        const hotspot = parseFloat(parts[5]);
-        const dhw = parseFloat(parts[6]);
-        const baa = parseInt(parts[7], 10);
-        const baa7d = parts[8] ? parseInt(parts[8], 10) : baa;
-
-        if (timestampUtc && isValidNumber(sst)) {
-          pointsMap.set(timestampUtc, {
-            timestampUtc,
-            seaSurfaceTemperatureDegC: sst,
-            sstAnomalyDegC: isValidNumber(sstAnomaly) ? sstAnomaly : null,
-            hotSpotDegC: isValidNumber(hotspot) ? hotspot : null,
-            degreeHeatingWeeks: isValidNumber(dhw) ? dhw : null,
-            bleachingAlertLevel: isValidNumber(baa) ? baa : null,
-            bleachingAlertArea: isValidNumber(baa) ? baa : null,
-            bleachingAlertMax7d: isValidNumber(baa7d) ? baa7d : null,
-            gridCell: isValidNumber(returnedLat) && isValidNumber(returnedLon)
-              ? { latitude: returnedLat, longitude: returnedLon }
-              : coords,
-            requestedCoordinates: coords,
-            spatialResolution: '5 km (0.05° pixel)',
-            provenance: {
-              ...NOAA_CRW_PROVENANCE_BASE,
-              validTimeStartUtc: chunk.startUtc,
-              validTimeEndUtc: chunk.endUtc,
-              retrievedAtUtc: retrievedAt,
-              queryUrl,
-              responseHash,
-              isCachedFallback: false,
-              fetchStatus: 'online_valid',
-            },
-          });
-        }
-      }
-    }
+  if (!startUtc || !endUtc) {
+    return queryWithFailover(sectorId, `last-${CRW_RECENT_DAYS - 1}:1:last`, null, distributors);
   }
 
-  return Array.from(pointsMap.values()).sort(
+  const chunks = splitTimeWindowIntoChunks(startUtc, endUtc, 15);
+  const results = await Promise.allSettled(
+    chunks.map((chunk) => queryWithFailover(sectorId, `(${chunk.startUtc}):1:(${chunk.endUtc})`, chunk, distributors)),
+  );
+
+  const merged = new Map<string, ThermalForcingPoint>();
+  results.forEach((result) => {
+    if (result.status === 'fulfilled') result.value.forEach((p) => merged.set(p.timestampUtc, p));
+  });
+
+  if (merged.size === 0) {
+    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    throw firstFailure?.reason ?? new RemoteDataError('no_data', 'Nenhum bloco temporal retornou dados válidos.');
+  }
+
+  return [...merged.values()].sort(
     (a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime(),
   );
+}
+
+/** Exemplo histórico (mar/abr 2024) carregado apenas por ação explícita do usuário. */
+export function getBtsCrwHistoricalSnapshot(sectorId: BtsSectorId = 'frades'): ThermalForcingPoint[] {
+  return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
 }

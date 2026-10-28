@@ -14,8 +14,8 @@ A aplicação permite modificar temperatura da água, pH, cargas de matéria org
 
 O Kirimurê distingue explicitamente quatro categorias de informação ambiental para manter total transparência epistemológica:
 
-1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico e Degree Heating Weeks (DHW) obtidos via ERDDAP da NOAA (grade 5 km), com snapshot histórico calibrado (El Niño mar/abr 2024) para contingência offline.
-2. **Produtos de Modelo Numérico Global (Open-Meteo Marine):** Séries horárias de altura de onda ($H_s$), correntes e nível do mar baseadas em modelos Copernicus/ECMWF para o canal da BTS.
+1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico e Degree Heating Weeks (DHW) obtidos via ERDDAP da NOAA (grade 5 km), com arquitetura multi-distribuidor e failover automático (espelho PacIOOS ERDDAP primário de baixa latência e NOAA CoastWatch ERDDAP secundário), consulta otimizada da janela recente (`last-6:1:last`) e mapeamento georreferenciado preciso de pixels oceânicos válidos para os setores da BTS. Em caso de contingência, erros reais de protocolo (timeout integral, rede, HTTP e no-data) são apresentados sem mascaramento, com acesso a snapshots históricos calibrados (El Niño mar/abr 2024).
+2. **Produtos de Modelo Numérico Global (Open-Meteo Marine):** Séries horárias de altura de onda ($H_s$), correntes e nível do mar baseadas em modelos Copernicus/ECMWF para o canal da BTS, com normalização estrita de carimbos de data/hora em UTC.
 3. **Modelos Físico-Químicos Acoplados da Simulação:**
    - **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Cinética acoplada ar-mar baseada em Weiss (1970) para saturação termodinâmica, Streeter-Phelps para reaeração atmosférica e desoxigenação por DBO, demanda de oxigênio bentônica (SOD; Bowie et al., 1985) e fotossíntese/respiração líquida de algas e corais. Piso numérico de proteção termodinâmica a 0,05 mg/L.
    - **Sistema Carbonato Marinho (`carbonate.ts`):** Equilíbrio termodinâmico do $\text{CO}_2$ marinho ($K_1, K_2, K_w, K_B$ de Lueker et al., 2000 e Dickson, 1990; $K'_{sp}$ de Mucci, 1983) calculando pH efetivo, $p\text{CO}_2$, saturação de aragonita ($\Omega_{\text{arag}}$) e calcita ($\Omega_{\text{calc}}$), acoplado à produção respiratória de $\text{CO}_2$.
@@ -96,8 +96,11 @@ src/
 │   └── useOceanData.ts   Hook de sincronização com NOAA CRW e Open-Meteo
 ├── scene/                Cena 3D Babylon.js e animação procedural dos peixes
 ├── services/             Adaptadores de dados externos, tratamento e contingência
-│   ├── noaaCrw.ts        Cliente CoastWatch ERDDAP NOAA CRW e fallback calibrado
-│   ├── openMeteo.ts      Cliente Copernicus/ECMWF Open-Meteo Marine
+│   ├── http.ts           Cliente HTTP resiliente com timeout total de leitura, retry e classificação de erros
+│   ├── noaaCrw.ts        Cliente ERDDAP multi-distribuidor (PacIOOS primário / CoastWatch secundário)
+│   ├── noaaCrwSnapshots.ts Snapshots históricos calibrados (El Niño 2024) do NOAA CRW
+│   ├── openMeteo.ts      Cliente Copernicus/ECMWF Open-Meteo Marine com normalização UTC
+│   ├── openMeteoSnapshots.ts Snapshots históricos meteorológicos e hidrodinâmicos
 │   └── types.ts          Tipagem estrita de proveniência de dados oceanográficos
 ├── simulation/           Motor de simulação científica determinística
 │   ├── carbonate.ts      Equilíbrio termodinâmico do sistema carbonato (Lueker/Mucci)

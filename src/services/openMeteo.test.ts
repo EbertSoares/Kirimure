@@ -6,6 +6,7 @@ import {
   findClosestHourlyPoint,
   getBtsMeteoHistoricalSnapshot,
   getMeteoCoordinates,
+  normalizeUtcTimestamp,
 } from './openMeteo';
 import type { MarineMeteoPoint } from './types';
 
@@ -151,6 +152,12 @@ describe('serviço Open-Meteo Marine API', () => {
     expect(points[0]!.currentVelocityMs).toBe(0.45);
     expect(points[0]!.waveHeightM).toBeNull();
     expect(points[0]!.currentDirectionDeg).toBeNull();
+  });
+
+  it('normaliza strings de data sem fuso para UTC anexando Z', () => {
+    expect(normalizeUtcTimestamp('2026-10-28T12:00')).toBe('2026-10-28T12:00:00Z');
+    expect(normalizeUtcTimestamp('2026-10-28T12:00:00Z')).toBe('2026-10-28T12:00:00Z');
+    expect(normalizeUtcTimestamp('2026-10-28T12:00:00+00:00')).toBe('2026-10-28T12:00:00+00:00');
   });
 
   it('rejeita com erro em falha de rede em vez de substituir automaticamente por snapshot histórico', async () => {

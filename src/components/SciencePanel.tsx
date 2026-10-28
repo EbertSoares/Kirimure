@@ -896,7 +896,7 @@ export function SciencePanel({
                 Monitoramento Satelital & Metodologia da Baía de Todos os Santos
               </h2>
               <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-                Dados observados e modelos em grade regional da Baía de Todos os Santos.
+                Produtos de satélite, modelos marinhos e referências de campo da Baía de Todos-os-Santos.
                 Resultados em destaque; fontes e formulações acessíveis em detalhes expansíveis.
               </p>
             </header>
@@ -1028,10 +1028,15 @@ export function SciencePanel({
                             <strong>Célula de Grade NOAA:</strong> {oceanData.latestCrw.gridCell.latitude.toFixed(2)}°, {oceanData.latestCrw.gridCell.longitude.toFixed(2)}° ({oceanData.latestCrw.spatialResolution ?? '5 km'})<br />
                           </>
                         )}
-                        <strong>Dataset:</strong> <code>NOAA_DHW</code> via CoastWatch ERDDAP<br />
+                        <strong>Dataset:</strong> <code>{oceanData.latestCrw.provenance.datasetId}</code> ({oceanData.latestCrw.provenance.distributor ?? 'ERDDAP'})<br />
                         <strong>Anomalia Oficial (CRW_SSTANOMALY):</strong> {oceanData.latestCrw.sstAnomalyDegC !== null ? `${oceanData.latestCrw.sstAnomalyDegC > 0 ? '+' : ''}${oceanData.latestCrw.sstAnomalyDegC.toFixed(2)} °C` : 'Ausente'}<br />
-                        <strong>Período Válido do Dado:</strong> {oceanData.latestCrw.provenance.validTimeStartUtc.substring(0, 10)} a {oceanData.latestCrw.provenance.validTimeEndUtc.substring(0, 10)}<br />
-                        <strong>Data de Consulta / Registro:</strong> {oceanData.latestCrw.provenance.retrievedAtUtc ? oceanData.latestCrw.provenance.retrievedAtUtc.replace('T', ' ').substring(0, 19) + ' UTC' : '—'}<br />
+                        <strong>Dado Válido em:</strong> {oceanData.latestCrw.provenance.validTimeEndUtc.substring(0, 10)} (período de {oceanData.latestCrw.provenance.validTimeStartUtc.substring(0, 10)} a {oceanData.latestCrw.provenance.validTimeEndUtc.substring(0, 10)})<br />
+                        <strong>Consulta Realizada em:</strong> {oceanData.latestCrw.provenance.retrievedAtUtc ? oceanData.latestCrw.provenance.retrievedAtUtc.replace('T', ' ').substring(0, 19) + ' UTC' : '—'}<br />
+                        {oceanData.latestCrw.provenance.responseTimeMs !== undefined && (
+                          <>
+                            <strong>Tempo de Resposta:</strong> {oceanData.latestCrw.provenance.responseTimeMs} ms<br />
+                          </>
+                        )}
                         <strong>Tipo de Registro:</strong> {oceanData.latestCrw.provenance.isCachedFallback ? 'Snapshot Histórico de Contingência (Onda de calor mar/abr 2024 na BTS)' : 'Consulta operacional em tempo real'}<br />
                         {oceanData.latestCrw.provenance.responseHash && (
                           <>
@@ -1040,7 +1045,7 @@ export function SciencePanel({
                         )}
                       </p>
                       <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
-                        <strong>Diferenciação Metodológica:</strong> O <em>HotSpot Térmico</em> é uma grandeza biofísica oficial da NOAA correspondente à anomalia de temperatura acima da média máxima mensal (MMM). Já o <em>Snapshot de Contingência</em> é um registro arquivado local de eventos pretéritos (mar/2024), utilizado com integridade epistemológica quando o enlace de satélite estiver indisponível.
+                        <strong>Diferenciação Metodológica:</strong> O <em>HotSpot Térmico</em> é uma grandeza biofísica oficial da NOAA correspondente à anomalia de temperatura acima da média máxima mensal (MMM) do pixel de satélite de 5 km. Já o <em>Snapshot de Contingência</em> é um registro arquivado local de eventos pretéritos (mar/2024), utilizado com integridade epistemológica quando o enlace de satélite estiver indisponível.
                       </p>
                     </div>
                   </details>
@@ -1074,8 +1079,19 @@ export function SciencePanel({
                   <p style={{ margin: '0 0 6px', fontWeight: 600 }}>
                     Dados satelitais remotos indisponíveis no momento
                   </p>
-                  <p style={{ margin: '0 0 10px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.75)' }}>
-                    O servidor CoastWatch ERDDAP da NOAA não respondeu dentro da janela de tolerância (timeout de 12s com repetição). O Kirimurê não mascara quedas de rede forjando dados ao vivo.
+                  <p style={{ margin: '0 0 8px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.4 }}>
+                    {oceanData.noaaStatus.errorKind === 'timeout'
+                      ? `Tempo limite excedido: o servidor NOAA não concluiu a transferência em ${oceanData.noaaStatus.errorElapsedMs ? Math.round(oceanData.noaaStatus.errorElapsedMs / 1000) + 's' : '10s'}.`
+                      : oceanData.noaaStatus.errorKind === 'http'
+                        ? `Erro HTTP ${oceanData.noaaStatus.errorStatus ?? ''} do servidor ERDDAP${oceanData.noaaStatus.serverMessage ? `: ${oceanData.noaaStatus.serverMessage}` : ''}.`
+                        : oceanData.noaaStatus.errorKind === 'no_data'
+                          ? `Sem dados válidos: ${oceanData.noaaStatus.serverMessage || oceanData.noaaStatus.error}.`
+                          : oceanData.noaaStatus.errorKind === 'network'
+                            ? `Falha de rede/conexão: ${oceanData.noaaStatus.error}`
+                            : (oceanData.noaaStatus.error || 'Falha ao consultar satélite NOAA.')}
+                  </p>
+                  <p style={{ margin: '0 0 10px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)' }}>
+                    O Kirimurê não mascara quedas de rede forjando dados ao vivo. Você pode tentar reconectar ou carregar o exemplo histórico calibrado (mar/2024).
                   </p>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     {oceanData?.refresh && (
@@ -1195,7 +1211,11 @@ export function SciencePanel({
                     </div>
                     <div className="progressive-metric-box">
                       <span className="metric-label">Direção da Corrente</span>
-                      <strong className="metric-value">{oceanData.latestMeteo.currentDirectionDeg !== null ? `${oceanData.latestMeteo.currentDirectionDeg}°` : '—'}</strong>
+                      <strong className="metric-value">
+                        {typeof oceanData.latestMeteo.currentDirectionDeg === 'number' && Number.isFinite(oceanData.latestMeteo.currentDirectionDeg)
+                          ? `${oceanData.latestMeteo.currentDirectionDeg}°`
+                          : '—'}
+                      </strong>
                     </div>
                     <div className="progressive-metric-box">
                       <span className="metric-label">Nível do Mar (MSL)</span>
@@ -1213,14 +1233,19 @@ export function SciencePanel({
                             <strong>Célula Efetiva do Modelo:</strong> {oceanData.latestMeteo.gridCell.latitude.toFixed(2)}°, {oceanData.latestMeteo.gridCell.longitude.toFixed(2)}° ({oceanData.latestMeteo.spatialResolution ?? '~8 km'})<br />
                           </>
                         )}
-                        <strong>Seleção de Modelos:</strong> Padrão Best Match da Open-Meteo API (combinação de produtos com resoluções de ondas e correntes distintas).<br />
+                        <strong>Modelo Hidrodinâmico:</strong> {oceanData.latestMeteo.provenance.modelName ?? 'Previsão marinha do Open-Meteo (Best Match)'}<br />
                         <strong>SST do Modelo:</strong> {oceanData.latestMeteo.seaSurfaceTemperatureDegC !== null ? `${oceanData.latestMeteo.seaSurfaceTemperatureDegC.toFixed(1)} °C` : 'Dado não informado'}<br />
-                        <strong>Período Válido da Previsão:</strong> {oceanData.latestMeteo.provenance.validTimeStartUtc.replace('T', ' ').substring(0, 16)} a {oceanData.latestMeteo.provenance.validTimeEndUtc.replace('T', ' ').substring(0, 16)} UTC<br />
-                        <strong>Data de Consulta:</strong> {oceanData.latestMeteo.provenance.retrievedAtUtc ? oceanData.latestMeteo.provenance.retrievedAtUtc.replace('T', ' ').substring(0, 19) + ' UTC' : '—'}<br />
+                        <strong>Previsão Válida para:</strong> {oceanData.latestMeteo.provenance.validTimeStartUtc.replace('T', ' ').substring(0, 16)} a {oceanData.latestMeteo.provenance.validTimeEndUtc.replace('T', ' ').substring(0, 16)} UTC<br />
+                        <strong>Consulta Realizada em:</strong> {oceanData.latestMeteo.provenance.retrievedAtUtc ? oceanData.latestMeteo.provenance.retrievedAtUtc.replace('T', ' ').substring(0, 19) + ' UTC' : '—'}<br />
+                        {oceanData.latestMeteo.provenance.responseTimeMs !== undefined && (
+                          <>
+                            <strong>Tempo de Resposta:</strong> {oceanData.latestMeteo.provenance.responseTimeMs} ms<br />
+                          </>
+                        )}
                         <strong>Tipo de Registro:</strong> {oceanData.latestMeteo.provenance.isCachedFallback ? 'Snapshot Histórico de Contingência (mar/2024)' : 'Previsão operacional Open-Meteo Marine'}
                       </p>
                       <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
-                        Ressalva Hidrodinâmica: Os produtos globais provêem condições de contorno de mar aberto. A hidrodinâmica em canais interiores rasos e estuários da BTS é dominada por forçantes locais e marés semidiurnas, não devendo ser usada como previsão de precisão náutica.
+                        Ressalva Hidrodinâmica: Os produtos numéricos globais provêem condições de contorno oceânicas. A hidrodinâmica em canais interiores rasos e estuários da BTS é dominada por marés semidiurnas locais e batimetria complexa, devendo ser interpretada em escala pedagógica e contextual.
                       </p>
                     </div>
                   </details>
@@ -1230,8 +1255,15 @@ export function SciencePanel({
                   <p style={{ margin: '0 0 6px', fontWeight: 600 }}>
                     Previsão Open-Meteo Marine temporariamente indisponível
                   </p>
-                  <p style={{ margin: '0 0 10px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.75)' }}>
-                    Falha na consulta ao modelo oceânico global (timeout de 8s). O snapshot de contingência só é ativado caso solicitado manualmente.
+                  <p style={{ margin: '0 0 8px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.4 }}>
+                    {oceanData.meteoStatus.errorKind === 'timeout'
+                      ? `Tempo limite excedido (${oceanData.meteoStatus.errorElapsedMs ? Math.round(oceanData.meteoStatus.errorElapsedMs / 1000) + 's' : '8s'}): o servidor não concluiu a transferência da previsão.`
+                      : oceanData.meteoStatus.errorKind === 'http'
+                        ? `Erro HTTP ${oceanData.meteoStatus.errorStatus ?? ''} do serviço Open-Meteo.`
+                        : (oceanData.meteoStatus.error || 'Falha na consulta ao modelo oceânico Open-Meteo.')}
+                  </p>
+                  <p style={{ margin: '0 0 10px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)' }}>
+                    O Kirimurê não mascara quedas de rede forjando dados. O exemplo de contingência só é ativado mediante solicitação manual.
                   </p>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     {oceanData?.refresh && (
@@ -1314,13 +1346,13 @@ export function SciencePanel({
                   <strong className="metric-value">{carbonate.dissolvedInorganicCarbonUmolKg} µmol/kg</strong>
                 </div>
                 <div className="progressive-metric-box">
-                  <span className="metric-label">Condição Química</span>
+                  <span className="metric-label">Condição de Saturação</span>
                   <strong className={`metric-value ${carbonate.omegaAragonite >= 3.0 ? 'healthy' : carbonate.omegaAragonite >= 2.0 ? 'watch' : 'critical'}`} style={{ fontSize: '12px' }}>
                     {carbonate.omegaAragonite >= 3.0
-                      ? 'Precipitação favorável'
+                      ? 'Favorável (Ωarag ≥ 3,0)'
                       : carbonate.omegaAragonite >= 2.0
-                        ? 'Estresse à calcificação'
-                        : 'Risco de dissolução mineral'}
+                        ? 'Estresse marginal (2,0–3,0)'
+                        : 'Sub-saturação mineral (< 2,0)'}
                   </strong>
                 </div>
               </div>
@@ -1335,10 +1367,10 @@ export function SciencePanel({
                         <strong>DIC respiratório acumulado integrado:</strong> +{(state.respiratoryDicUmolKg ?? 0).toFixed(1)} µmol/kg (produção microbiológica efetiva integrada no tempo; demanda potencial remanescente: {((state.biochemicalOxygenDemand / 32) * 1000 * 0.98).toFixed(1)} µmol/kg)<br />
                       </>
                     )}
-                    <strong>Formulação Química:</strong> Equilíbrio termodinâmico de Lueker et al. (2000) e Mucci (1983), calibrado com vetores de referência CO2SYS / Dickson & Goyet (1994).
+                    <strong>Formulação Química:</strong> Equilíbrio termodinâmico de Lueker et al. (2000) e Mucci (1983), com testes numéricos independentes baseados em referências CO2SYS / Dickson & Goyet (1994).
                   </p>
                   <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                    A saturação de aragonita expressa a propensão físico-química à formação mineral inorgânica. Não equivale à calcificação biológica plena de organismos recifais, que depende também de energia metabólica, simbiose e integridade tecidual.
+                    A saturação de aragonita expressa a propensão físico-química à formação mineral inorgânica. Não equivale diretamente à calcificação biológica plena de organismos recifais, que depende também de energia metabólica, simbiose e integridade tecidual.
                   </p>
                 </div>
               </details>

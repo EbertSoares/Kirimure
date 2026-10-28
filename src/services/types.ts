@@ -16,6 +16,14 @@ export interface DatasetProvenance {
   isCachedFallback: boolean;
   fallbackNote?: string;
   fetchStatus?: 'online_valid' | 'fallback_cached' | 'network_error' | 'invalid_response';
+  /** Servidor que efetivamente entregou o dado (ex.: redistribuidor ERDDAP). */
+  distributor?: string;
+  /** Observação sobre a representatividade da célula de grade consultada. */
+  pixelNote?: string;
+  /** Tempo total da resposta (cabeçalhos + corpo), em ms. */
+  responseTimeMs?: number;
+  /** Modelo numérico efetivamente utilizado, quando informado pela fonte. */
+  modelName?: string;
 }
 
 export interface ThermalForcingPoint {
