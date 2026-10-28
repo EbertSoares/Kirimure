@@ -26,8 +26,8 @@ export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
     id: 'frades',
     label: 'Ilha dos Frades & Itaparica',
     sublabel: 'Baía Central · Recifes de Franja',
-    description: 'Águas claras e circulação moderada com recifes de Siderastrea e Mussismilia. Tempo de descarga medido entre 38 e 62 dias.',
-    badge: 'Dado Local BTS',
+    description: 'Águas claras e circulação moderada com recifes de Siderastrea e Mussismilia. Tempo de descarga medido entre 38 e 62 dias (Cirano & Lessa, 2007); salinidade de 35,0 PSU e profundidade média recifal de 8 m.',
+    badge: 'Modelo de Caixa (Ref. BTS)',
     dischargeDays: 38,
     dischargeRange: [38, 62],
     baselineSalinity: 35.0,
@@ -42,7 +42,7 @@ export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
     id: 'paraguacu',
     label: 'Estuário do Paraguaçu',
     sublabel: 'Fundo da Baía · Manguezais & Maragogipe',
-    description: 'Águas estuarinas com gradiente salobro. Parâmetro provisório de modelagem: circulação lenta, alta retenção de efluentes e sensibilidade a hipóxia.',
+    description: 'Águas estuarinas com gradiente salobro. Parâmetro provisório de modelagem de caixa: circulação lenta, alta retenção de efluentes e sensibilidade a hipóxia.',
     badge: 'Cenário Didático',
     dischargeDays: 75,
     dischargeRange: [60, 90],
@@ -58,7 +58,7 @@ export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
     id: 'barra',
     label: 'Boca da Baía / Barra',
     sublabel: 'Canal de Salvador · Acesso Atlântico',
-    description: 'Águas oceânicas de alta energia com forte troca de maré e ondas. Parâmetro provisório: rápida dispersão e baixa retenção de efluentes.',
+    description: 'Águas oceânicas de alta energia com forte troca de maré e ondas. Parâmetro provisório de modelagem de caixa: rápida dispersão e baixa retenção de efluentes.',
     badge: 'Cenário Didático',
     dischargeDays: 9,
     dischargeRange: [6, 14],
@@ -167,8 +167,10 @@ export const PARAMETERS = {
     centralRetention: CENTRAL_RETENTION,
   },
   receivedLoads: {
-    // Escalas didáticas da massa que permanece na BTS após 30 dias. Não são
-    // limites legais ou toxicológicos e não equivalem a concentração na água.
+    // Escalas didáticas da massa retida na baía após 30 dias. A capacidade máxima de referência
+    // (100.000 kg × retenção central da baía) é mantida fixa para permitir a comparação intersetorial
+    // do efeito de descarga/renovação hidrodinâmica dos diferentes compartimentos da BTS.
+    // Não equivale diretamente à concentração local, que requer modelagem de pluma advectiva.
     microplastics: { maximumKg: 100000 * CENTRAL_RETENTION },
     oil: { maximumKg: 100000 * CENTRAL_RETENTION },
     sewage: { maximumKg: 100000 * CENTRAL_RETENTION },

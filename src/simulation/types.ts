@@ -12,10 +12,12 @@ export type SimulationSpeed = 1 | 3 | 5 | 10;
 
 export type EpistemologicalBadge =
   | 'Dado Local BTS'
+  | 'Modelo de Caixa (Ref. BTS)'
   | 'Produto de Modelo'
   | 'Padrão Operacional'
   | 'Referência Laboratorial Externa'
   | 'Cenário Didático'
+  | 'Cenário Didático / Modelo de Caixa'
   | 'Regra do Modelo'
   | 'Efeito Visual';
 

@@ -349,7 +349,7 @@ export function App() {
   const [resetToken, setResetToken] = useState(0);
   const [simulation, setSimulation] = useState(createInitialState);
   const [panelTab, setPanelTab] = useState<PanelTab>('now');
-  const oceanData = useOceanData(simulation.sector);
+  const oceanData = useOceanData(simulation.sector, screen === 'simulation');
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [criticalDays, setCriticalDays] = useState<number | null | undefined>(undefined);
   const [missionState, setMissionState] = useState<MissionState | null>(null);
@@ -361,7 +361,7 @@ export function App() {
       case 'temperature':
         return `${simulation.env.temperature.toFixed(1).replace('.', ',')} °C`;
       case 'ph':
-        return `${effectivePh(simulation.env).toFixed(2).replace('.', ',')}`;
+        return `${effectivePh(simulation.env, simulation.biochemicalOxygenDemand, simulation.sector, simulation.dissolvedOxygen).toFixed(2).replace('.', ',')}`;
       case 'dhw':
         return `${simulation.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem.`;
       case 'dissolvedOxygen':
@@ -497,7 +497,9 @@ export function App() {
     applyChanges(updated);
     setSimulation((current) => ({
       ...current,
-      initialConditionSource: 'NOAA_CRW_OBSERVED',
+      initialConditionSource: oceanData.noaaStatus.state === 'success'
+        ? 'NOAA_CRW_LIVE'
+        : 'NOAA_CRW_HISTORICAL_SNAPSHOT',
     }));
   };
 
@@ -657,7 +659,7 @@ export function App() {
                 title="pH da água [Clique para detalhes pedagógicos]"
               >
                 <small>pH</small>
-                <strong>{effectivePh(simulation.env).toFixed(2).replace('.', ',')}</strong>
+                <strong>{effectivePh(simulation.env, simulation.biochemicalOxygenDemand, simulation.sector, simulation.dissolvedOxygen).toFixed(2).replace('.', ',')}</strong>
               </button>
 
               {!missionState && (

@@ -48,6 +48,8 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
     seaLevelHeightM: 0.45,
     seaSurfaceTemperatureDegC: 28.2,
     gridCell: { latitude: -12.97, longitude: -38.50 },
+    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
+    spatialResolution: '8 km (Copernicus / ECMWF)',
     hourlyUnits: {
       wave_height: 'm',
       ocean_current_velocity: 'm/s',
@@ -75,6 +77,8 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
     seaLevelHeightM: 0.92,
     seaSurfaceTemperatureDegC: 28.5,
     gridCell: { latitude: -12.97, longitude: -38.50 },
+    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
+    spatialResolution: '8 km (Copernicus / ECMWF)',
     hourlyUnits: {
       wave_height: 'm',
       ocean_current_velocity: 'm/s',
@@ -102,6 +106,8 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
     seaLevelHeightM: 0.12,
     seaSurfaceTemperatureDegC: 28.1,
     gridCell: { latitude: -12.97, longitude: -38.50 },
+    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
+    spatialResolution: '8 km (Copernicus / ECMWF)',
     hourlyUnits: {
       wave_height: 'm',
       ocean_current_velocity: 'm/s',
@@ -122,6 +128,73 @@ export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
     },
   },
 ];
+
+export const BTS_METEO_FRADES_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
+  {
+    timestampUtc: '2024-03-01T12:00:00Z',
+    waveHeightM: 0.35,
+    currentVelocityMs: 0.18,
+    currentDirectionDeg: 110,
+    seaLevelHeightM: 0.42,
+    seaSurfaceTemperatureDegC: 28.4,
+    gridCell: { latitude: -12.85, longitude: -38.55 },
+    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
+    spatialResolution: '8 km (Copernicus / ECMWF)',
+    hourlyUnits: {
+      wave_height: 'm',
+      ocean_current_velocity: 'm/s',
+      ocean_current_direction: '°',
+      sea_level_height_msl: 'm',
+      sea_surface_temperature: '°C',
+    },
+    provenance: {
+      ...OPEN_METEO_PROVENANCE_BASE,
+      validTimeStartUtc: '2024-03-01T12:00:00Z',
+      validTimeEndUtc: '2024-03-02T00:00:00Z',
+      retrievedAtUtc: '2024-03-01T06:00:00Z',
+      queryUrl: 'https://marine-api.open-meteo.com/v1/marine?latitude=-12.85&longitude=-38.55',
+      responseHash: 'd512a84e',
+      isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
+      fallbackNote: 'Snapshot meteorológico de contingência abrigado (Baía Central / Frades). Não representa a previsão horária do dia atual.',
+    },
+  },
+  {
+    timestampUtc: '2024-03-01T18:00:00Z',
+    waveHeightM: 0.40,
+    currentVelocityMs: 0.22,
+    currentDirectionDeg: 125,
+    seaLevelHeightM: 0.88,
+    seaSurfaceTemperatureDegC: 28.7,
+    gridCell: { latitude: -12.85, longitude: -38.55 },
+    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
+    spatialResolution: '8 km (Copernicus / ECMWF)',
+    hourlyUnits: {
+      wave_height: 'm',
+      ocean_current_velocity: 'm/s',
+      ocean_current_direction: '°',
+      sea_level_height_msl: 'm',
+      sea_surface_temperature: '°C',
+    },
+    provenance: {
+      ...OPEN_METEO_PROVENANCE_BASE,
+      validTimeStartUtc: '2024-03-01T12:00:00Z',
+      validTimeEndUtc: '2024-03-02T00:00:00Z',
+      retrievedAtUtc: '2024-03-01T06:00:00Z',
+      queryUrl: 'https://marine-api.open-meteo.com/v1/marine?latitude=-12.85&longitude=-38.55',
+      responseHash: 'e623b95f',
+      isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
+      fallbackNote: 'Snapshot meteorológico de contingência abrigado (Baía Central / Frades). Não representa a previsão horária do dia atual.',
+    },
+  },
+];
+
+export const BTS_METEO_SECTOR_FALLBACKS: Partial<Record<BtsSectorId, MarineMeteoPoint[]>> = {
+  barra: BTS_METEO_FALLBACK_SNAPSHOT,
+  frades: BTS_METEO_FRADES_FALLBACK_SNAPSHOT,
+  // paraguacu: modelo oceânico global (~8 km) não resolve estuários estreitos interiores
+};
 
 /**
  * Localiza na série temporal horária o registro cujo timestamp é mais próximo
@@ -174,8 +247,8 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn(`[Open-Meteo] HTTP ${response.status}. Usando snapshot de contingência.`);
-      return BTS_METEO_FALLBACK_SNAPSHOT;
+      console.warn(`[Open-Meteo] HTTP ${response.status}. Usando snapshot de contingência do setor ${sectorId}.`);
+      return BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? [];
     }
 
     const rawText = await response.text();
@@ -185,7 +258,7 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
     const units = data?.hourly_units ?? {};
 
     if (!hourly || !Array.isArray(hourly.time)) {
-      return BTS_METEO_FALLBACK_SNAPSHOT;
+      return BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? [];
     }
 
     // Se a unidade de velocidade for km/h, converter para m/s dividindo por 3.6
@@ -222,6 +295,8 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
           ocean_current_velocity: 'm/s',
         },
         gridCell,
+        requestedCoordinates: coords,
+        spatialResolution: '8 km (Copernicus / ECMWF)',
         provenance: {
           ...OPEN_METEO_PROVENANCE_BASE,
           validTimeStartUtc: validStart,
@@ -235,9 +310,9 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
       });
     }
 
-    return points.length > 0 ? points : BTS_METEO_FALLBACK_SNAPSHOT;
+    return points.length > 0 ? points : (BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? []);
   } catch (error) {
-    console.info('[Open-Meteo] Conexão remota indisponível ou offline. Usando snapshot de contingência.');
-    return BTS_METEO_FALLBACK_SNAPSHOT;
+    console.info(`[Open-Meteo] Conexão remota indisponível ou offline para ${sectorId}. Usando snapshot de contingência.`);
+    return BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? [];
   }
 }

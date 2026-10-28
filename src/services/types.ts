@@ -30,6 +30,8 @@ export interface ThermalForcingPoint {
   bleachingAlertArea?: number | null;
   bleachingAlertMax7d?: number | null;
   gridCell?: { latitude: number; longitude: number };
+  requestedCoordinates?: { latitude: number; longitude: number };
+  spatialResolution?: string;
   provenance: DatasetProvenance;
 }
 
@@ -42,6 +44,8 @@ export interface MarineMeteoPoint {
   seaSurfaceTemperatureDegC: number | null;
   hourlyUnits?: Record<string, string>;
   gridCell?: { latitude: number; longitude: number };
+  requestedCoordinates?: { latitude: number; longitude: number };
+  spatialResolution?: string;
   provenance: DatasetProvenance;
 }
 

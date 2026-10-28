@@ -920,7 +920,11 @@ export function SciencePanel({
                 <span className="epistemological-badge" style={{ fontSize: '10px' }}>Produto de Modelo</span>
               </div>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 8px' }}>
-                Pixel: {sector.coordinates.latitude.toFixed(2)}°, {sector.coordinates.longitude.toFixed(2)}° ({sector.label}) · Dataset <code>NOAA_DHW</code> CoastWatch ERDDAP
+                Posição Solicitada: {sector.coordinates.latitude.toFixed(2)}°, {sector.coordinates.longitude.toFixed(2)}° ({sector.label})
+                {oceanData?.latestCrw?.gridCell && (
+                  <span> · Célula de Grade NOAA: {oceanData.latestCrw.gridCell.latitude.toFixed(2)}°, {oceanData.latestCrw.gridCell.longitude.toFixed(2)}° ({oceanData.latestCrw.spatialResolution ?? '5 km'})</span>
+                )}
+                <span> · Dataset <code>NOAA_DHW</code> CoastWatch ERDDAP</span>
               </p>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
                 <span style={{
@@ -973,7 +977,9 @@ export function SciencePanel({
                               ? 'Aviso Térmico (Warning)'
                               : oceanData.latestCrw.bleachingAlertLevel === 1
                                 ? 'Vigilância (Watch)'
-                                : 'Sem Estresse Térmico (Nível 0)'}
+                                : oceanData.latestCrw.bleachingAlertLevel === 0
+                                  ? 'Sem Estresse Térmico (Nível 0)'
+                                  : 'Dado Ausente / Não Informado pelo Satélite'}
                       </em>
                     </li>
                   </ul>
@@ -1000,7 +1006,11 @@ export function SciencePanel({
                       }}
                     >
                       <Icon name="check" />
-                      <span>Adotar SST Observada ({oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como Ponto de Partida do Cenário</span>
+                      <span>
+                        {oceanData.noaaStatus.state === 'success'
+                          ? `Usar SST do produto NOAA em tempo real (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como ponto de partida`
+                          : `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como ponto de partida histórico`}
+                      </span>
                     </button>
                   )}
 
@@ -1023,7 +1033,14 @@ export function SciencePanel({
                   </div>
                 </>
               ) : (
-                <p>Nenhum dado térmico disponível no momento.</p>
+                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                  <p style={{ margin: 0 }}>
+                    <strong>Nenhum dado térmico de satélite disponível para {sector.label}:</strong>
+                  </p>
+                  <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.5)' }}>
+                    Setores estuarinos interiores estreitos sofrem mascaramento de terra na grade oceânica de 5 km da NOAA. O Kirimurê mantém os parâmetros físico-químicos e batimétricos calibrados da simulação local.
+                  </p>
+                </div>
               )}
             </article>
 
@@ -1082,7 +1099,14 @@ export function SciencePanel({
                   </p>
                 </>
               ) : (
-                <p>Nenhum dado meteorológico disponível no momento.</p>
+                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                  <p style={{ margin: 0 }}>
+                    <strong>Nenhum dado meteorológico/ondas disponível para {sector.label}:</strong>
+                  </p>
+                  <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.5)' }}>
+                    O modelo numérico oceânico global (~8 km) não resolve a hidrodinâmica em canais interiores rasos e estuários. A simulação aplica os parâmetros hidrodinâmicos específicos do compartimento.
+                  </p>
+                </div>
               )}
             </article>
 

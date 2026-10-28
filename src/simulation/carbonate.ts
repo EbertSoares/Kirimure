@@ -143,20 +143,32 @@ export function calculateCarbonateSystem(
 }
 
 /**
- * Converte a respiração adicional de matéria orgânica (DBO) em acréscimo de DIC
- * e resolve a queda termodinâmica real de pH (eliminando fórmula fictícia linear).
+ * Converte o consumo de oxigênio por respiração microbiana da matéria orgânica
+ * em acréscimo estequiométrico de DIC (1 mol O2 consumido -> ~1 mol CO2 liberado, RQ = 1.0)
+ * e resolve o novo equilíbrio termodinâmico do sistema carbonato marinho (Lueker et al., 2000).
+ *
+ * Classificação Epistemológica: Estimativa de Modelo Acoplado Didático / Teórico.
+ * Ressalva científica: a DBO representa demanda potencial de oxigênio; o acréscimo de
+ * carbono inorgânico decorre do oxigênio efetivamente consumido na respiração microbiana.
  */
 export function calculateRespirationPhImpact(
   baselinePh: number,
-  bodConcentrationMgL: number,
+  consumedO2MgL: number,
   totalAlkalinity = 2350,
   temperature = 26.8,
   salinity = 35.0,
 ): { effectivePh: number; carbonateSystem: CarbonateSystemState } {
+  if (consumedO2MgL <= 0) {
+    return {
+      effectivePh: baselinePh,
+      carbonateSystem: calculateCarbonateSystem(baselinePh, totalAlkalinity, temperature, salinity),
+    };
+  }
+
   // 1 mol de O2 consumido na respiração heterotrófica libera aproximadamente 1 mol de CO2
   // 32 g O2 -> 1 mol CO2 (razão respiratória 1.0)
-  // bodConcentration em mg/L -> mmol/m^3 -> umol/kg (~dividido por densidade 1.024)
-  const addedDicUmolKg = (bodConcentrationMgL / 32) * 1000 * 0.98;
+  // consumedO2 em mg/L -> mmol/m^3 -> umol/kg (~dividido por densidade 1.024)
+  const addedDicUmolKg = Math.max(0, (consumedO2MgL / 32) * 1000 * 0.98);
 
   // Calculamos o estado baseline de DIC
   const baseSystem = calculateCarbonateSystem(baselinePh, totalAlkalinity, temperature, salinity);

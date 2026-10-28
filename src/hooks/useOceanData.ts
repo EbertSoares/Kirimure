@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { fetchBtsThermalForcing, BTS_CRW_FALLBACK_SNAPSHOT } from '../services/noaaCrw';
-import { fetchBtsMarineMeteo, BTS_METEO_FALLBACK_SNAPSHOT, findClosestHourlyPoint } from '../services/openMeteo';
+import { fetchBtsThermalForcing, BTS_CRW_SECTOR_FALLBACKS } from '../services/noaaCrw';
+import { fetchBtsMarineMeteo, BTS_METEO_SECTOR_FALLBACKS, findClosestHourlyPoint } from '../services/openMeteo';
 import type { MarineMeteoPoint, ThermalForcingPoint } from '../services/types';
 import type { BtsSectorId } from '../simulation/types';
 
@@ -42,8 +42,8 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
   const [noaaStatus, setNoaaStatus] = useState<DataSourceStatus>(INITIAL_STATUS);
   const [meteoStatus, setMeteoStatus] = useState<DataSourceStatus>(INITIAL_STATUS);
 
-  const [crwData, setCrwData] = useState<ThermalForcingPoint[]>(BTS_CRW_FALLBACK_SNAPSHOT);
-  const [meteoData, setMeteoData] = useState<MarineMeteoPoint[]>(BTS_METEO_FALLBACK_SNAPSHOT);
+  const [crwData, setCrwData] = useState<ThermalForcingPoint[]>(() => BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? []);
+  const [meteoData, setMeteoData] = useState<MarineMeteoPoint[]>(() => BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? []);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const activeSectorRef = useRef(sectorId);
@@ -55,16 +55,21 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
     setLoading(true);
     setError(null);
     const nowUtc = new Date().toISOString();
+    const requestSector = activeSectorRef.current;
 
     setNoaaStatus((prev) => ({ ...prev, state: 'loading', lastAttemptUtc: nowUtc }));
     setMeteoStatus((prev) => ({ ...prev, state: 'loading', lastAttemptUtc: nowUtc }));
 
     try {
-      const currentSector = activeSectorRef.current;
       const [thermalResults, meteoResults] = await Promise.allSettled([
-        fetchBtsThermalForcing(currentSector),
-        fetchBtsMarineMeteo(currentSector),
+        fetchBtsThermalForcing(requestSector),
+        fetchBtsMarineMeteo(requestSector),
       ]);
+
+      // Proteção contra concorrência: descarta resposta de requisição antiga se o setor mudou
+      if (activeSectorRef.current !== requestSector) {
+        return;
+      }
 
       if (thermalResults.status === 'fulfilled') {
         const points = thermalResults.value;

@@ -39,9 +39,17 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
     expect(maxStress.bleachingAlertLevel).toBe(4); // Alert 2
     expect(maxStress.bleachingAlertArea).toBe(4);
     expect(maxStress.degreeHeatingWeeks).toBe(8.2);
+    expect(maxStress.requestedCoordinates?.latitude).toBe(-12.85);
+    expect(maxStress.spatialResolution).toContain('5 km');
     expect(maxStress.provenance.isCachedFallback).toBe(true);
     expect(maxStress.provenance.fetchStatus).toBe('fallback_cached');
     expect(maxStress.provenance.fallbackNote).toContain('Snapshot histórico de contingência');
+  });
+
+  it('não contamina setores estuarinos interiores com snapshots de mar aberto', async () => {
+    // Paraguaçu não possui pixel de mar aberto na grade satelital de 5 km (mascaramento de terra)
+    const paraguacuPoints = await fetchBtsThermalForcing('paraguacu');
+    expect(paraguacuPoints).toHaveLength(0);
   });
 
   it('fornece dados hidrodinâmicos e de ondas da Open-Meteo Marine', async () => {

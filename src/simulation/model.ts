@@ -9,7 +9,7 @@ import {
   type MassLoadId,
 } from './config';
 import { calculateCarbonateSystem, calculateRespirationPhImpact } from './carbonate';
-import { calculateEquilibriumOxygen, calculateWeissOxygenSaturation, convertBOD5ToUltimateBOD, integrateOxygenKinetics } from './oxygen';
+import { calculateDeoxygenationRate, calculateEquilibriumOxygen, calculateWeissOxygenSaturation, convertBOD5ToUltimateBOD, integrateOxygenKinetics } from './oxygen';
 import type {
   BtsSectorId,
   Environment,
@@ -65,26 +65,43 @@ export function normalizedReceivedLoad(id: MassLoadId, valueKg: number) {
 }
 
 /**
- * pH que o recife sente: pH de contorno ajustado termodinamicamente pela respiração
- * microbiana da matéria orgânica (DBO) que eleva o DIC, eliminando deduções lineares fictícias.
+ * pH que o recife sente: pH de contorno ajustado termodinamicamente pelo consumo
+ * de oxigênio da respiração microbiana que oxida a matéria orgânica e libera CO2 (Lueker et al., 2000).
+ *
+ * Unifica o visor da interface, os pontos do histórico e o cálculo de estresse sobre corais e peixes.
  */
 export function effectivePh(
   env: Environment,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
+  dissolvedOxygenMgL?: number,
 ): number {
-  if (bodConcentrationMgL <= 0 && env.sewage <= 0) {
+  const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+  const satO2 = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
+
+  let consumedO2MgL = 0;
+  if (dissolvedOxygenMgL !== undefined) {
+    // Quando o OD simulado está disponível, o oxigênio efetivamente consumido é (satO2 - dissolvedOxygenMgL)
+    consumedO2MgL = Math.max(0, satO2 - dissolvedOxygenMgL);
+  } else if (bodConcentrationMgL > 0) {
+    // Estimativa cinética do oxigênio consumido por respiração da DBO ativa
+    const kd = calculateDeoxygenationRate(env.temperature);
+    consumedO2MgL = bodConcentrationMgL * (1 - Math.exp(-kd * Math.min(sector.dischargeDays, 5)));
+  } else if (env.sewage > 0) {
+    // Carga contínua convertida no volume de mistura
+    const kd = calculateDeoxygenationRate(env.temperature);
+    const continuousBodMgL = (convertBOD5ToUltimateBOD(env.sewage) * 1000) / sector.mixingVolumeM3;
+    consumedO2MgL = continuousBodMgL * (1 - Math.exp(-kd * Math.min(sector.dischargeDays, 5)));
+  }
+
+  if (consumedO2MgL <= 0.001) {
     return env.ph;
   }
-  const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
-  const scaledTa = 2350 * (sector.baselineSalinity / 35.0);
-  const effectiveBodMgL = bodConcentrationMgL > 0
-    ? bodConcentrationMgL
-    : (convertBOD5ToUltimateBOD(env.sewage) * 1000) / sector.mixingVolumeM3;
 
+  const scaledTa = 2350 * (sector.baselineSalinity / 35.0);
   const impact = calculateRespirationPhImpact(
     env.ph,
-    effectiveBodMgL,
+    consumedO2MgL,
     scaledTa,
     env.temperature,
     sector.baselineSalinity,
@@ -98,8 +115,9 @@ export function calculatePressures(
   dhw = 0,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
+  dissolvedOxygenMgL?: number,
 ): Pressures {
-  const ph = effectivePh(env, bodConcentrationMgL, sectorId);
+  const ph = effectivePh(env, bodConcentrationMgL, sectorId, dissolvedOxygenMgL);
   const currentHeat = stressAbove(
     env.temperature,
     PARAMETERS.temperature.bleachingThreshold,
@@ -144,12 +162,12 @@ export function calculateFishPressures(
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
 ): Pressures {
-  const base = calculatePressures(env, dhw, bodConcentrationMgL, sectorId);
+  const base = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, dissolvedOxygen);
   const hypoxia = hypoxiaStress(dissolvedOxygen);
   return {
     ...base,
     thermal: stressAbove(env.temperature, PARAMETERS.temperature.fishStart, PARAMETERS.temperature.fishMax),
-    acidification: stressBelow(effectivePh(env, bodConcentrationMgL, sectorId), PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
+    acidification: stressBelow(effectivePh(env, bodConcentrationMgL, sectorId, dissolvedOxygen), PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
     // A hipóxia acopla-se à pressão de efluentes/esgoto, expressando o mecanismo biológico de asfixia
     sewage: combine([base.sewage, hypoxia]),
   };
@@ -184,7 +202,7 @@ export function calculateStress(
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
 ) {
-  const pressures = calculatePressures(env, dhw, bodConcentrationMgL, sectorId);
+  const pressures = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, dissolvedOxygen);
   const fishPressures = calculateFishPressures(env, dhw, dissolvedOxygen, bodConcentrationMgL, sectorId);
   const species = Object.fromEntries(
     FISH_SPECIES.map((item) => [item.id, speciesStress(fishPressures, item.id)]),
@@ -322,7 +340,7 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
     overall: next.overall,
     algae: calculateAlgae(next.env, next.health),
     temperature: next.env.temperature,
-    ph: effectivePh(next.env, next.biochemicalOxygenDemand, next.sector),
+    ph: effectivePh(next.env, next.biochemicalOxygenDemand, next.sector, next.dissolvedOxygen),
     dhw: next.degreeHeatingWeeks,
     dissolvedOxygen: next.dissolvedOxygen,
     bod: next.biochemicalOxygenDemand,

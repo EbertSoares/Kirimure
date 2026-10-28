@@ -72,6 +72,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     bleachingAlertArea: 1,
     bleachingAlertMax7d: 1,
     gridCell: { latitude: -12.85, longitude: -38.55 },
+    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
+    spatialResolution: '5 km (0.05° pixel)',
     provenance: {
       ...NOAA_CRW_PROVENANCE_BASE,
       validTimeStartUtc: '2024-03-01T12:00:00Z',
@@ -81,7 +83,7 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
       responseHash: 'e4a8b291',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na BTS). Não representa a condição atual de satélite.',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
     },
   },
   {
@@ -94,6 +96,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     bleachingAlertArea: 2,
     bleachingAlertMax7d: 2,
     gridCell: { latitude: -12.85, longitude: -38.55 },
+    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
+    spatialResolution: '5 km (0.05° pixel)',
     provenance: {
       ...NOAA_CRW_PROVENANCE_BASE,
       validTimeStartUtc: '2024-03-01T12:00:00Z',
@@ -103,7 +107,7 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
       responseHash: 'f721bc08',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na BTS). Não representa a condição atual de satélite.',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
     },
   },
   {
@@ -116,6 +120,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     bleachingAlertArea: 3,
     bleachingAlertMax7d: 3,
     gridCell: { latitude: -12.85, longitude: -38.55 },
+    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
+    spatialResolution: '5 km (0.05° pixel)',
     provenance: {
       ...NOAA_CRW_PROVENANCE_BASE,
       validTimeStartUtc: '2024-03-01T12:00:00Z',
@@ -125,7 +131,7 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
       responseHash: '8ac41e3d',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na BTS). Não representa a condição atual de satélite.',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
     },
   },
   {
@@ -138,6 +144,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     bleachingAlertArea: 4,
     bleachingAlertMax7d: 4,
     gridCell: { latitude: -12.85, longitude: -38.55 },
+    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
+    spatialResolution: '5 km (0.05° pixel)',
     provenance: {
       ...NOAA_CRW_PROVENANCE_BASE,
       validTimeStartUtc: '2024-03-01T12:00:00Z',
@@ -147,10 +155,115 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
       responseHash: '9d332fa1',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na BTS). Não representa a condição atual de satélite.',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Baía Central/Frades). Não representa a condição atual de satélite.',
     },
   },
 ];
+
+export const BTS_CRW_BARRA_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
+  {
+    timestampUtc: '2024-03-01T12:00:00Z',
+    seaSurfaceTemperatureDegC: 28.2,
+    sstAnomalyDegC: 0.3,
+    hotSpotDegC: 0.3,
+    degreeHeatingWeeks: 1.0,
+    bleachingAlertLevel: 1, // Watch
+    bleachingAlertArea: 1,
+    bleachingAlertMax7d: 1,
+    gridCell: { latitude: -12.95, longitude: -38.50 },
+    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
+    spatialResolution: '5 km (0.05° pixel)',
+    provenance: {
+      ...NOAA_CRW_PROVENANCE_BASE,
+      validTimeStartUtc: '2024-03-01T12:00:00Z',
+      validTimeEndUtc: '2024-04-15T12:00:00Z',
+      retrievedAtUtc: '2024-04-16T10:00:00Z',
+      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
+      responseHash: 'b4a1c832',
+      isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
+    },
+  },
+  {
+    timestampUtc: '2024-03-15T12:00:00Z',
+    seaSurfaceTemperatureDegC: 29.0,
+    sstAnomalyDegC: 0.9,
+    hotSpotDegC: 1.0,
+    degreeHeatingWeeks: 3.2,
+    bleachingAlertLevel: 2, // Warning
+    bleachingAlertArea: 2,
+    bleachingAlertMax7d: 2,
+    gridCell: { latitude: -12.95, longitude: -38.50 },
+    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
+    spatialResolution: '5 km (0.05° pixel)',
+    provenance: {
+      ...NOAA_CRW_PROVENANCE_BASE,
+      validTimeStartUtc: '2024-03-01T12:00:00Z',
+      validTimeEndUtc: '2024-04-15T12:00:00Z',
+      retrievedAtUtc: '2024-04-16T10:00:00Z',
+      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
+      responseHash: 'c72e90f1',
+      isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
+    },
+  },
+  {
+    timestampUtc: '2024-04-01T12:00:00Z',
+    seaSurfaceTemperatureDegC: 29.5,
+    sstAnomalyDegC: 1.4,
+    hotSpotDegC: 1.5,
+    degreeHeatingWeeks: 5.8,
+    bleachingAlertLevel: 3, // Alert 1
+    bleachingAlertArea: 3,
+    bleachingAlertMax7d: 3,
+    gridCell: { latitude: -12.95, longitude: -38.50 },
+    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
+    spatialResolution: '5 km (0.05° pixel)',
+    provenance: {
+      ...NOAA_CRW_PROVENANCE_BASE,
+      validTimeStartUtc: '2024-03-01T12:00:00Z',
+      validTimeEndUtc: '2024-04-15T12:00:00Z',
+      retrievedAtUtc: '2024-04-16T10:00:00Z',
+      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
+      responseHash: 'e108d47b',
+      isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
+    },
+  },
+  {
+    timestampUtc: '2024-04-15T12:00:00Z',
+    seaSurfaceTemperatureDegC: 29.2,
+    sstAnomalyDegC: 1.1,
+    hotSpotDegC: 1.3,
+    degreeHeatingWeeks: 7.5,
+    bleachingAlertLevel: 3, // Alert 1
+    bleachingAlertArea: 3,
+    bleachingAlertMax7d: 3,
+    gridCell: { latitude: -12.95, longitude: -38.50 },
+    requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
+    spatialResolution: '5 km (0.05° pixel)',
+    provenance: {
+      ...NOAA_CRW_PROVENANCE_BASE,
+      validTimeStartUtc: '2024-03-01T12:00:00Z',
+      validTimeEndUtc: '2024-04-15T12:00:00Z',
+      retrievedAtUtc: '2024-04-16T10:00:00Z',
+      queryUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT,CRW_DHW,CRW_BAA[-12.97][-38.50]',
+      responseHash: 'a57cb912',
+      isCachedFallback: true,
+      fetchStatus: 'fallback_cached',
+      fallbackNote: 'Snapshot histórico de contingência (Onda de calor marinha mar/abr 2024 na Boca da Barra). Não representa a condição atual de satélite.',
+    },
+  },
+];
+
+export const BTS_CRW_SECTOR_FALLBACKS: Partial<Record<BtsSectorId, ThermalForcingPoint[]>> = {
+  frades: BTS_CRW_FALLBACK_SNAPSHOT,
+  barra: BTS_CRW_BARRA_FALLBACK_SNAPSHOT,
+  // paraguacu: canal estuarino interior; resolução de 5 km da NOAA mascara a célula com terra.
+};
 
 /**
  * Consulta a série temporal do NOAA Coral Reef Watch via CoastWatch ERDDAP
@@ -183,14 +296,14 @@ export async function fetchBtsThermalForcing(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn(`[NOAA CRW] HTTP ${response.status}. Utilizando snapshot histórico de contingência.`);
-      return BTS_CRW_FALLBACK_SNAPSHOT;
+      console.warn(`[NOAA CRW] HTTP ${response.status}. Utilizando snapshot histórico de contingência do setor ${sectorId}.`);
+      return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
     }
 
     const csvText = await response.text();
     const lines = csvText.trim().split('\n');
     // ERDDAP retorna linha 0 (nomes das colunas) e linha 1 (unidades das colunas)
-    if (lines.length <= 2) return BTS_CRW_FALLBACK_SNAPSHOT;
+    if (lines.length <= 2) return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
 
     const responseHash = computeSimpleHash(csvText);
     const points: ThermalForcingPoint[] = [];
@@ -200,6 +313,8 @@ export async function fetchBtsThermalForcing(
       const parts = lines[index].split(',');
       if (parts.length >= 8) {
         const timestampUtc = parts[0]?.trim();
+        const returnedLat = parseFloat(parts[1]);
+        const returnedLon = parseFloat(parts[2]);
         const sst = parseFloat(parts[3]);
         const sstAnomaly = parseFloat(parts[4]); // CRW_SSTANOMALY oficial
         const hotspot = parseFloat(parts[5]);    // CRW_HOTSPOT oficial
@@ -219,7 +334,11 @@ export async function fetchBtsThermalForcing(
             bleachingAlertLevel: isValidNumber(baa) ? baa : null,
             bleachingAlertArea: isValidNumber(baa) ? baa : null,
             bleachingAlertMax7d: isValidNumber(baa7d) ? baa7d : null,
-            gridCell: coords,
+            gridCell: isValidNumber(returnedLat) && isValidNumber(returnedLon)
+              ? { latitude: returnedLat, longitude: returnedLon }
+              : coords,
+            requestedCoordinates: coords,
+            spatialResolution: '5 km (0.05° pixel)',
             provenance: {
               ...NOAA_CRW_PROVENANCE_BASE,
               validTimeStartUtc: windowDates.startUtc,
@@ -235,9 +354,9 @@ export async function fetchBtsThermalForcing(
       }
     }
 
-    return points.length > 0 ? points : BTS_CRW_FALLBACK_SNAPSHOT;
+    return points.length > 0 ? points : (BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? []);
   } catch (error) {
-    console.info('[NOAA CRW] Conexão remota indisponível ou offline. Usando snapshot histórico de contingência.');
-    return BTS_CRW_FALLBACK_SNAPSHOT;
+    console.info(`[NOAA CRW] Conexão remota indisponível ou offline para ${sectorId}. Usando snapshot de contingência setorial.`);
+    return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
   }
 }
