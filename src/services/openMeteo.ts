@@ -153,39 +153,10 @@ export const BTS_METEO_FRADES_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
       validTimeEndUtc: '2024-03-02T00:00:00Z',
       retrievedAtUtc: '2024-03-01T06:00:00Z',
       queryUrl: 'https://marine-api.open-meteo.com/v1/marine?latitude=-12.85&longitude=-38.55',
-      responseHash: 'd512a84e',
+      responseHash: 'd92a104f',
       isCachedFallback: true,
       fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot meteorológico de contingência abrigado (Baía Central / Frades). Não representa a previsão horária do dia atual.',
-    },
-  },
-  {
-    timestampUtc: '2024-03-01T18:00:00Z',
-    waveHeightM: 0.40,
-    currentVelocityMs: 0.22,
-    currentDirectionDeg: 125,
-    seaLevelHeightM: 0.88,
-    seaSurfaceTemperatureDegC: 28.7,
-    gridCell: { latitude: -12.85, longitude: -38.55 },
-    requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
-    spatialResolution: '8 km (Copernicus / ECMWF)',
-    hourlyUnits: {
-      wave_height: 'm',
-      ocean_current_velocity: 'm/s',
-      ocean_current_direction: '°',
-      sea_level_height_msl: 'm',
-      sea_surface_temperature: '°C',
-    },
-    provenance: {
-      ...OPEN_METEO_PROVENANCE_BASE,
-      validTimeStartUtc: '2024-03-01T12:00:00Z',
-      validTimeEndUtc: '2024-03-02T00:00:00Z',
-      retrievedAtUtc: '2024-03-01T06:00:00Z',
-      queryUrl: 'https://marine-api.open-meteo.com/v1/marine?latitude=-12.85&longitude=-38.55',
-      responseHash: 'e623b95f',
-      isCachedFallback: true,
-      fetchStatus: 'fallback_cached',
-      fallbackNote: 'Snapshot meteorológico de contingência abrigado (Baía Central / Frades). Não representa a previsão horária do dia atual.',
+      fallbackNote: 'Snapshot meteorológico de contingência marinho (Baía Central/Frades). Não representa a previsão horária do dia atual.',
     },
   },
 ];
@@ -193,38 +164,98 @@ export const BTS_METEO_FRADES_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [
 export const BTS_METEO_SECTOR_FALLBACKS: Partial<Record<BtsSectorId, MarineMeteoPoint[]>> = {
   barra: BTS_METEO_FALLBACK_SNAPSHOT,
   frades: BTS_METEO_FRADES_FALLBACK_SNAPSHOT,
-  // paraguacu: modelo oceânico global (~8 km) não resolve estuários estreitos interiores
+  // paraguacu: dados estuarinos de modelo global de 8 km têm alta incerteza de batimetria e linha de costa
 };
 
 /**
- * Localiza na série temporal horária o registro cujo timestamp é mais próximo
- * do horário atual (ou de um horário de referência informado).
- * Evita retornar cegamente o índice [0], que corresponde ao início do dia (00:00 UTC).
+ * Retorna o snapshot meteorológico histórico de contingência sob demanda manual.
+ */
+export function getBtsMeteoHistoricalSnapshot(sectorId: BtsSectorId = 'barra'): MarineMeteoPoint[] {
+  return BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? [];
+}
+
+/**
+ * Localiza o ponto horário mais próximo a uma data de referência (padrão agora).
  */
 export function findClosestHourlyPoint(
   points: MarineMeteoPoint[],
-  targetDate: Date = new Date(),
+  referenceDate: Date = new Date(),
 ): MarineMeteoPoint | null {
   if (points.length === 0) return null;
-  const targetMs = targetDate.getTime();
+
+  const targetMs = referenceDate.getTime();
   let closest = points[0];
-  let minDiff = Math.abs(new Date(points[0].timestampUtc).getTime() - targetMs);
+  let minDiff = Math.abs(new Date(closest.timestampUtc).getTime() - targetMs);
 
   for (let i = 1; i < points.length; i += 1) {
-    const ptMs = new Date(points[i].timestampUtc).getTime();
-    if (Number.isFinite(ptMs)) {
-      const diff = Math.abs(ptMs - targetMs);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = points[i];
-      }
+    const pt = points[i];
+    const diff = Math.abs(new Date(pt.timestampUtc).getTime() - targetMs);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = pt;
     }
   }
+
   return closest;
 }
 
+/**
+ * Executa requisição com timeout de 8 segundos e 1 retentativa automática em falha de rede/5xx.
+ */
+async function fetchWithTimeoutAndRetry(
+  url: string,
+  timeoutMs = 8000,
+  maxRetries = 1,
+): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        return response;
+      }
+
+      if (response.status >= 500 && attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        continue;
+      }
+
+      return response;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastError = err;
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Falha de conexão com Open-Meteo Marine`);
+}
+
+/**
+ * Consulta a previsão horária da Open-Meteo Marine API.
+ *
+ * Características:
+ * - Timeout estendido para 8 segundos com 1 repetição automática;
+ * - Rejeita e repassa falhas de rede em vez de substituir silenciosamente por dados de 2024;
+ * - O snapshot de contingência só é ativado se expressamente requisitado pelo usuário.
+ */
 export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Promise<MarineMeteoPoint[]> {
   const coords = getMeteoCoordinates(sectorId);
+
   const url = new URL('https://marine-api.open-meteo.com/v1/marine');
   url.search = new URLSearchParams({
     latitude: coords.latitude.toString(),
@@ -235,84 +266,69 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
     cell_selection: 'sea',
   }).toString();
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+  const response = await fetchWithTimeoutAndRetry(url.toString(), 8000, 1);
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      console.warn(`[Open-Meteo] HTTP ${response.status}. Usando snapshot de contingência do setor ${sectorId}.`);
-      return BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? [];
-    }
-
-    const rawText = await response.text();
-    const responseHash = computeSimpleHash(rawText);
-    const data = JSON.parse(rawText);
-    const hourly = data?.hourly;
-    const units = data?.hourly_units ?? {};
-
-    if (!hourly || !Array.isArray(hourly.time)) {
-      return BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? [];
-    }
-
-    // Se a unidade de velocidade for km/h, converter para m/s dividindo por 3.6
-    const velocityIsKmH = units.ocean_current_velocity === 'km/h';
-    const gridCell = {
-      latitude: typeof data.latitude === 'number' ? data.latitude : coords.latitude,
-      longitude: typeof data.longitude === 'number' ? data.longitude : coords.longitude,
-    };
-
-    const retrievedAt = new Date().toISOString();
-    const validStart = hourly.time[0] ?? retrievedAt;
-    const validEnd = hourly.time[hourly.time.length - 1] ?? retrievedAt;
-
-    const points: MarineMeteoPoint[] = [];
-    const len = Math.min(hourly.time.length, 24);
-
-    for (let i = 0; i < len; i += 1) {
-      const rawVelocity = hourly.ocean_current_velocity?.[i];
-      let velocityMs: number | null = null;
-      if (typeof rawVelocity === 'number' && Number.isFinite(rawVelocity)) {
-        velocityMs = velocityIsKmH ? parseFloat((rawVelocity / 3.6).toFixed(3)) : parseFloat(rawVelocity.toFixed(3));
-      }
-
-      points.push({
-        timestampUtc: hourly.time[i],
-        // Preserva null quando o modelo não tiver o dado (sem substituição por números inventados)
-        waveHeightM: typeof hourly.wave_height?.[i] === 'number' && Number.isFinite(hourly.wave_height[i]) ? hourly.wave_height[i] : null,
-        currentVelocityMs: velocityMs,
-        currentDirectionDeg: typeof hourly.ocean_current_direction?.[i] === 'number' && Number.isFinite(hourly.ocean_current_direction[i]) ? hourly.ocean_current_direction[i] : null,
-        seaLevelHeightM: typeof hourly.sea_level_height_msl?.[i] === 'number' && Number.isFinite(hourly.sea_level_height_msl[i]) ? hourly.sea_level_height_msl[i] : null,
-        seaSurfaceTemperatureDegC: typeof hourly.sea_surface_temperature?.[i] === 'number' && Number.isFinite(hourly.sea_surface_temperature[i]) ? hourly.sea_surface_temperature[i] : null,
-        hourlyUnits: {
-          ...units,
-          ocean_current_velocity: 'm/s',
-        },
-        gridCell,
-        requestedCoordinates: coords,
-        spatialResolution: '8 km (Copernicus / ECMWF)',
-        provenance: {
-          ...OPEN_METEO_PROVENANCE_BASE,
-          validTimeStartUtc: validStart,
-          validTimeEndUtc: validEnd,
-          retrievedAtUtc: retrievedAt,
-          queryUrl: url.toString(),
-          responseHash,
-          isCachedFallback: false,
-          fetchStatus: 'online_valid',
-        },
-      });
-    }
-
-    return points.length > 0 ? points : (BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? []);
-  } catch (error) {
-    console.info(`[Open-Meteo] Conexão remota indisponível ou offline para ${sectorId}. Usando snapshot de contingência.`);
-    return BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? [];
+  if (!response.ok) {
+    throw new Error(`Falha ao consultar Open-Meteo Marine (HTTP ${response.status} ${response.statusText})`);
   }
+
+  const rawText = await response.text();
+  const responseHash = computeSimpleHash(rawText);
+  const data = JSON.parse(rawText);
+  const hourly = data?.hourly;
+  const units = data?.hourly_units ?? {};
+
+  if (!hourly || !Array.isArray(hourly.time)) {
+    return [];
+  }
+
+  // Se a unidade de velocidade for km/h, converter para m/s dividindo por 3.6
+  const velocityIsKmH = units.ocean_current_velocity === 'km/h';
+  const gridCell = {
+    latitude: typeof data.latitude === 'number' ? data.latitude : coords.latitude,
+    longitude: typeof data.longitude === 'number' ? data.longitude : coords.longitude,
+  };
+
+  const retrievedAt = new Date().toISOString();
+  const validStart = hourly.time[0] ?? retrievedAt;
+  const validEnd = hourly.time[hourly.time.length - 1] ?? retrievedAt;
+
+  const points: MarineMeteoPoint[] = [];
+  const len = Math.min(hourly.time.length, 24);
+
+  for (let i = 0; i < len; i += 1) {
+    const rawVelocity = hourly.ocean_current_velocity?.[i];
+    let velocityMs: number | null = null;
+    if (typeof rawVelocity === 'number' && Number.isFinite(rawVelocity)) {
+      velocityMs = velocityIsKmH ? parseFloat((rawVelocity / 3.6).toFixed(3)) : parseFloat(rawVelocity.toFixed(3));
+    }
+
+    points.push({
+      timestampUtc: hourly.time[i],
+      waveHeightM: typeof hourly.wave_height?.[i] === 'number' && Number.isFinite(hourly.wave_height[i]) ? hourly.wave_height[i] : null,
+      currentVelocityMs: velocityMs,
+      currentDirectionDeg: typeof hourly.ocean_current_direction?.[i] === 'number' && Number.isFinite(hourly.ocean_current_direction[i]) ? hourly.ocean_current_direction[i] : null,
+      seaLevelHeightM: typeof hourly.sea_level_height_msl?.[i] === 'number' && Number.isFinite(hourly.sea_level_height_msl[i]) ? hourly.sea_level_height_msl[i] : null,
+      seaSurfaceTemperatureDegC: typeof hourly.sea_surface_temperature?.[i] === 'number' && Number.isFinite(hourly.sea_surface_temperature[i]) ? hourly.sea_surface_temperature[i] : null,
+      hourlyUnits: {
+        ...units,
+        ocean_current_velocity: 'm/s',
+      },
+      gridCell,
+      requestedCoordinates: coords,
+      spatialResolution: '8 km (Copernicus / ECMWF)',
+      provenance: {
+        ...OPEN_METEO_PROVENANCE_BASE,
+        validTimeStartUtc: validStart,
+        validTimeEndUtc: validEnd,
+        retrievedAtUtc: retrievedAt,
+        queryUrl: url.toString(),
+        responseHash,
+        isCachedFallback: false,
+        fetchStatus: 'online_valid',
+      },
+    });
+  }
+
+  return points;
 }

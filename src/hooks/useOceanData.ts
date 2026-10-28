@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { fetchBtsThermalForcing, BTS_CRW_SECTOR_FALLBACKS } from '../services/noaaCrw';
-import { fetchBtsMarineMeteo, BTS_METEO_SECTOR_FALLBACKS, findClosestHourlyPoint } from '../services/openMeteo';
+import { fetchBtsThermalForcing, getBtsCrwHistoricalSnapshot } from '../services/noaaCrw';
+import { fetchBtsMarineMeteo, getBtsMeteoHistoricalSnapshot, findClosestHourlyPoint } from '../services/openMeteo';
 import type { MarineMeteoPoint, ThermalForcingPoint } from '../services/types';
 import type { BtsSectorId } from '../simulation/types';
 
@@ -25,6 +25,8 @@ export interface OceanDataState {
   isFallback: boolean;
   sectorId: BtsSectorId;
   refresh: () => Promise<void>;
+  loadHistoricalCrwSnapshot: () => void;
+  loadHistoricalMeteoSnapshot: () => void;
 }
 
 const INITIAL_STATUS: DataSourceStatus = {
@@ -32,7 +34,7 @@ const INITIAL_STATUS: DataSourceStatus = {
   lastAttemptUtc: null,
   lastSuccessUtc: null,
   error: null,
-  isFallback: true,
+  isFallback: false,
 };
 
 export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): OceanDataState {
@@ -42,8 +44,8 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
   const [noaaStatus, setNoaaStatus] = useState<DataSourceStatus>(INITIAL_STATUS);
   const [meteoStatus, setMeteoStatus] = useState<DataSourceStatus>(INITIAL_STATUS);
 
-  const [crwData, setCrwData] = useState<ThermalForcingPoint[]>(() => BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? []);
-  const [meteoData, setMeteoData] = useState<MarineMeteoPoint[]>(() => BTS_METEO_SECTOR_FALLBACKS[sectorId] ?? []);
+  const [crwData, setCrwData] = useState<ThermalForcingPoint[]>([]);
+  const [meteoData, setMeteoData] = useState<MarineMeteoPoint[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const activeSectorRef = useRef(sectorId);
@@ -73,7 +75,7 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
 
       if (thermalResults.status === 'fulfilled') {
         const points = thermalResults.value;
-        const isFallback = points.length === 0 || Boolean(points[0]?.provenance.isCachedFallback);
+        const isFallback = points.length > 0 && Boolean(points[0]?.provenance.isCachedFallback);
         setCrwData(points);
         setNoaaStatus({
           state: isFallback ? 'fallback' : 'success',
@@ -83,19 +85,22 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
           isFallback,
         });
       } else {
-        const errMessage = thermalResults.reason instanceof Error ? thermalResults.reason.message : 'Falha na consulta NOAA';
+        const errMessage = thermalResults.reason instanceof Error
+          ? thermalResults.reason.message
+          : 'Falha na consulta remota ao NOAA CoastWatch';
+        setCrwData([]);
         setNoaaStatus({
           state: 'error',
           lastAttemptUtc: nowUtc,
           lastSuccessUtc: null,
           error: errMessage,
-          isFallback: true,
+          isFallback: false,
         });
       }
 
       if (meteoResults.status === 'fulfilled') {
         const points = meteoResults.value;
-        const isFallback = points.length === 0 || Boolean(points[0]?.provenance.isCachedFallback);
+        const isFallback = points.length > 0 && Boolean(points[0]?.provenance.isCachedFallback);
         setMeteoData(points);
         setMeteoStatus({
           state: isFallback ? 'fallback' : 'success',
@@ -105,13 +110,16 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
           isFallback,
         });
       } else {
-        const errMessage = meteoResults.reason instanceof Error ? meteoResults.reason.message : 'Falha na consulta Open-Meteo';
+        const errMessage = meteoResults.reason instanceof Error
+          ? meteoResults.reason.message
+          : 'Falha na consulta ao Open-Meteo Marine';
+        setMeteoData([]);
         setMeteoStatus({
           state: 'error',
           lastAttemptUtc: nowUtc,
           lastSuccessUtc: null,
           error: errMessage,
-          isFallback: true,
+          isFallback: false,
         });
       }
 
@@ -122,6 +130,30 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
       setLoading(false);
     }
   }, [enabled]);
+
+  const loadHistoricalCrwSnapshot = useCallback(() => {
+    const snapshot = getBtsCrwHistoricalSnapshot(activeSectorRef.current);
+    setCrwData(snapshot);
+    setNoaaStatus({
+      state: 'fallback',
+      lastAttemptUtc: new Date().toISOString(),
+      lastSuccessUtc: null,
+      error: null,
+      isFallback: true,
+    });
+  }, []);
+
+  const loadHistoricalMeteoSnapshot = useCallback(() => {
+    const snapshot = getBtsMeteoHistoricalSnapshot(activeSectorRef.current);
+    setMeteoData(snapshot);
+    setMeteoStatus({
+      state: 'fallback',
+      lastAttemptUtc: new Date().toISOString(),
+      lastSuccessUtc: null,
+      error: null,
+      isFallback: true,
+    });
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -144,5 +176,7 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
     isFallback,
     sectorId,
     refresh: loadData,
+    loadHistoricalCrwSnapshot,
+    loadHistoricalMeteoSnapshot,
   };
 }

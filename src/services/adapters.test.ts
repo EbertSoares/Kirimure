@@ -1,10 +1,28 @@
-import { describe, expect, it } from 'vitest';
-import { BTS_CRW_FALLBACK_SNAPSHOT, fetchBtsThermalForcing, getSectorCoordinates } from './noaaCrw';
-import { BTS_METEO_FALLBACK_SNAPSHOT, fetchBtsMarineMeteo, getMeteoCoordinates } from './openMeteo';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  BTS_CRW_FALLBACK_SNAPSHOT,
+  fetchBtsThermalForcing,
+  getBtsCrwHistoricalSnapshot,
+  getSectorCoordinates,
+} from './noaaCrw';
+import {
+  BTS_METEO_FALLBACK_SNAPSHOT,
+  fetchBtsMarineMeteo,
+  getBtsMeteoHistoricalSnapshot,
+  getMeteoCoordinates,
+} from './openMeteo';
 
 describe('camada de serviços de dados oceanográficos e proveniência', () => {
-  it('fornece snapshot calibrado do NOAA CRW para a Baía de Todos-os-Santos', async () => {
-    const points = await fetchBtsThermalForcing();
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fornece snapshot calibrado do NOAA CRW para a Baía de Todos-os-Santos', () => {
+    const points = getBtsCrwHistoricalSnapshot('frades');
     expect(points.length).toBeGreaterThan(0);
 
     const first = points[0];
@@ -52,13 +70,39 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
     expect(paraguacuPoints).toHaveLength(0);
   });
 
-  it('fornece dados hidrodinâmicos e de ondas da Open-Meteo Marine', async () => {
-    const meteo = await fetchBtsMarineMeteo();
+  it('fornece dados hidrodinâmicos e de ondas da Open-Meteo Marine com resposta estruturada', async () => {
+    const mockMeteoJson = {
+      latitude: -12.97,
+      longitude: -38.50,
+      hourly_units: {
+        wave_height: 'm',
+        ocean_current_velocity: 'm/s',
+        ocean_current_direction: '°',
+        sea_level_height_msl: 'm',
+        sea_surface_temperature: '°C',
+      },
+      hourly: {
+        time: ['2026-10-28T12:00:00Z'],
+        wave_height: [1.3],
+        ocean_current_velocity: [0.42],
+        ocean_current_direction: [155],
+        sea_level_height_msl: [0.6],
+        sea_surface_temperature: [28.3],
+      },
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(mockMeteoJson),
+    } as Response);
+
+    const meteo = await fetchBtsMarineMeteo('barra');
     expect(meteo.length).toBeGreaterThan(0);
 
     const sample = meteo[0];
-    expect(sample.waveHeightM).toBeGreaterThan(0);
-    expect(sample.currentVelocityMs).toBeGreaterThan(0);
+    expect(sample.waveHeightM).toBe(1.3);
+    expect(sample.currentVelocityMs).toBe(0.42);
     expect(sample.provenance.sourceName).toBe('Open-Meteo Marine Weather API');
     expect(sample.provenance.epistemicClass).toBe('Produto de Modelo');
   });

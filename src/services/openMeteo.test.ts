@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BTS_METEO_FALLBACK_SNAPSHOT,
   BTS_METEO_FRADES_FALLBACK_SNAPSHOT,
-  BTS_METEO_SECTOR_FALLBACKS,
   fetchBtsMarineMeteo,
   findClosestHourlyPoint,
+  getBtsMeteoHistoricalSnapshot,
   getMeteoCoordinates,
 } from './openMeteo';
 import type { MarineMeteoPoint } from './types';
@@ -153,15 +153,20 @@ describe('serviço Open-Meteo Marine API', () => {
     expect(points[0]!.currentDirectionDeg).toBeNull();
   });
 
-  it('usa snapshot setorial de contingência em caso de falha de rede', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+  it('rejeita com erro em falha de rede em vez de substituir automaticamente por snapshot histórico', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
 
-    const barraPoints = await fetchBtsMarineMeteo('barra');
-    expect(barraPoints).toEqual(BTS_METEO_FALLBACK_SNAPSHOT);
-    expect(barraPoints[0]!.provenance.isCachedFallback).toBe(true);
+    await expect(fetchBtsMarineMeteo('barra'))
+      .rejects
+      .toThrow(/Network error/);
+  });
 
-    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
-    const fradesPoints = await fetchBtsMarineMeteo('frades');
-    expect(fradesPoints).toEqual(BTS_METEO_FRADES_FALLBACK_SNAPSHOT);
+  it('retorna snapshots históricos de contingência explicitamente sob demanda via getBtsMeteoHistoricalSnapshot', () => {
+    const barra = getBtsMeteoHistoricalSnapshot('barra');
+    expect(barra).toEqual(BTS_METEO_FALLBACK_SNAPSHOT);
+    expect(barra[0]!.provenance.isCachedFallback).toBe(true);
+
+    const frades = getBtsMeteoHistoricalSnapshot('frades');
+    expect(frades).toEqual(BTS_METEO_FRADES_FALLBACK_SNAPSHOT);
   });
 });

@@ -7,13 +7,13 @@ import type { DatasetProvenance, ThermalForcingPoint } from './types';
  *
  * Mapeia coordenadas nominais por compartimento da Baía de Todos-os-Santos:
  * - Frades / Itaparica (Baía Central): Lat -12.85°, Lon -38.55°
- * - Paraguaçu (Estuário / Fundo da Baía): Lat -12.75°, Lon -38.85°
+ * - Paraguaçu (Estuário / Fundo da Baía): Lat -12.75°, Lon -38.85° (mascarado por terra na grade 5 km)
  * - Barra (Acesso Atlântico): Lat -12.97°, Lon -38.50°
  *
- * Consulta direta ao dataset NOAA_DHW do ERDDAP:
+ * Variáveis oficiais do dataset NOAA_DHW do ERDDAP:
  * - CRW_SST: Temperatura da Superfície do Mar (°C)
- * - CRW_SSTANOMALY: Anomalia de SST (°C) calculada contra a climatologia satelital
- * - CRW_HOTSPOT: Anomalia positiva sobre a MMM local (°C)
+ * - CRW_SSTANOMALY: Anomalia de SST (°C) contra a climatologia satelital
+ * - CRW_HOTSPOT: Anomalia positiva sobre a MMM local (°C) — estresse térmico ativo
  * - CRW_DHW: Grau-semanas de aquecimento acumulado em 84 dias (°C-semana)
  * - CRW_BAA: Categoria operacional de estresse térmico (0 a 4)
  * - CRW_BAA_7D_MAX: Alerta máximo dos últimos 7 dias (0 a 4)
@@ -48,19 +48,54 @@ const NOAA_CRW_PROVENANCE_BASE: Omit<DatasetProvenance, 'validTimeStartUtc' | 'v
 };
 
 /**
- * Gera uma janela temporal dinâmica padrão (últimos 45 dias até ontem)
- * para consultas à API do ERDDAP.
+ * Gera uma janela temporal com recuo operacional seguro de 2 dias (48h)
+ * para absorver o ciclo de ingestão e processamento de produtos satelitais diários da NOAA.
  */
-export function getDefaultCrwWindow(): { startUtc: string; endUtc: string } {
+export function getDefaultCrwWindow(days = 45): { startUtc: string; endUtc: string } {
   const now = new Date();
-  const yesterday = new Date(now.getTime() - 24 * 3600 * 1000);
-  const past45 = new Date(yesterday.getTime() - 45 * 24 * 3600 * 1000);
+  const safeEnd = new Date(now.getTime() - 2 * 24 * 3600 * 1000);
+  const start = new Date(safeEnd.getTime() - days * 24 * 3600 * 1000);
 
   const fmt = (d: Date) => d.toISOString().slice(0, 10) + 'T12:00:00Z';
-  return { startUtc: fmt(past45), endUtc: fmt(yesterday) };
+  return { startUtc: fmt(start), endUtc: fmt(safeEnd) };
 }
 
-// Snapshot calibrado histórico (evento El Niño / onda de calor marinha mar/abr 2024 na BTS)
+/**
+ * Divide intervalos longos em blocos de até maxChunkDays (padrão 15 dias)
+ * para evitar sobrecarga e timeouts no servidor ERDDAP (> 30 passos temporais).
+ */
+export function splitTimeWindowIntoChunks(
+  startUtc: string,
+  endUtc: string,
+  maxChunkDays = 15,
+): Array<{ startUtc: string; endUtc: string }> {
+  const startMs = new Date(startUtc).getTime();
+  const endMs = new Date(endUtc).getTime();
+
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+    return [{ startUtc, endUtc }];
+  }
+
+  const chunkMs = maxChunkDays * 24 * 3600 * 1000;
+  const chunks: Array<{ startUtc: string; endUtc: string }> = [];
+
+  let currentStart = startMs;
+  while (currentStart < endMs) {
+    const currentEnd = Math.min(currentStart + chunkMs, endMs);
+    const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10) + 'T12:00:00Z';
+    chunks.push({
+      startUtc: fmt(currentStart),
+      endUtc: fmt(currentEnd),
+    });
+    currentStart = currentEnd;
+    if (currentStart >= endMs) break;
+  }
+
+  return chunks;
+}
+
+// Snapshots históricos calibrados (evento El Niño / onda de calor marinha mar/abr 2024 na BTS)
+// Utilizados exclusivamente para contingência explícita a pedido do usuário
 export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
   {
     timestampUtc: '2024-03-01T12:00:00Z',
@@ -266,47 +301,101 @@ export const BTS_CRW_SECTOR_FALLBACKS: Partial<Record<BtsSectorId, ThermalForcin
 };
 
 /**
- * Consulta a série temporal do NOAA Coral Reef Watch via CoastWatch ERDDAP
- * utilizando o pixel específico do compartimento da Baía de Todos-os-Santos.
+ * Retorna o snapshot histórico de contingência de um setor específico sob demanda manual do usuário.
+ */
+export function getBtsCrwHistoricalSnapshot(sectorId: BtsSectorId = 'frades'): ThermalForcingPoint[] {
+  return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
+}
+
+/**
+ * Executa requisição HTTP com timeout de ~12s e 1 repetição automática em falhas transitórias.
+ */
+async function fetchWithTimeoutAndRetry(
+  url: string,
+  timeoutMs = 12000,
+  maxRetries = 1,
+): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'text/csv' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        return response;
+      }
+
+      // Se status 5xx e ainda tiver retentativa, aguarda 1s antes de repetir
+      if (response.status >= 500 && attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        continue;
+      }
+
+      return response;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastError = err;
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Falha de conexão com NOAA ERDDAP`);
+}
+
+/**
+ * Consulta a série temporal do NOAA Coral Reef Watch via CoastWatch ERDDAP.
  *
- * Rejeita valores inválidos/flags de preenchimento e NÃO inventa anomalia nem HotSpot
- * a partir de limiar fixo caso estejam ausentes na resposta oficial.
+ * Características:
+ * - Timeout estendido para 12 segundos com 1 repetição para evitar falsos positivos de indisponibilidade;
+ * - Divisão de períodos longos em blocos de até 15 dias para contornar limitações do ERDDAP;
+ * - Recuo operacional de 2 dias na data final padrão para respeitar a janela de síntese do satélite;
+ * - Rejeição estrita de falhas sem injeção silenciosa de snapshot histórico (elimina fallback automático);
+ * - O snapshot histórico só é carregado se explicitamente solicitado pelo usuário.
  */
 export async function fetchBtsThermalForcing(
   sectorId: BtsSectorId = 'frades',
   startUtc?: string,
   endUtc?: string,
 ): Promise<ThermalForcingPoint[]> {
-  const windowDates = startUtc && endUtc ? { startUtc, endUtc } : getDefaultCrwWindow();
+  // Setores estuarinos interiores estreitos (como o Paraguaçu) sofrem mascaramento de terra na grade de 5 km
+  if (sectorId === 'paraguacu') {
+    return [];
+  }
+
+  const windowDates = startUtc && endUtc ? { startUtc, endUtc } : getDefaultCrwWindow(45);
   const coords = getSectorCoordinates(sectorId);
+  const chunks = splitTimeWindowIntoChunks(windowDates.startUtc, windowDates.endUtc, 15);
 
-  // Variáveis oficiais do produto NOAA CRW 5km v3.1:
-  // CRW_SST, CRW_SSTANOMALY, CRW_HOTSPOT, CRW_DHW, CRW_BAA, CRW_BAA_7D_MAX
-  const queryUrl = `https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST[(${windowDates.startUtc}):1:(${windowDates.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_SSTANOMALY[(${windowDates.startUtc}):1:(${windowDates.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_HOTSPOT[(${windowDates.startUtc}):1:(${endUtc ?? windowDates.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_DHW[(${windowDates.startUtc}):1:(${windowDates.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_BAA[(${windowDates.startUtc}):1:(${windowDates.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_BAA_7D_MAX[(${windowDates.startUtc}):1:(${windowDates.endUtc})][(${coords.latitude})][(${coords.longitude})]`;
+  const pointsMap = new Map<string, ThermalForcingPoint>();
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+  for (const chunk of chunks) {
+    const queryUrl = `https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv?CRW_SST[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_SSTANOMALY[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_HOTSPOT[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_DHW[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_BAA[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})],CRW_BAA_7D_MAX[(${chunk.startUtc}):1:(${chunk.endUtc})][(${coords.latitude})][(${coords.longitude})]`;
 
-    const response = await fetch(queryUrl, {
-      method: 'GET',
-      headers: { Accept: 'text/csv' },
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+    const response = await fetchWithTimeoutAndRetry(queryUrl, 12000, 1);
 
     if (!response.ok) {
-      console.warn(`[NOAA CRW] HTTP ${response.status}. Utilizando snapshot histórico de contingência do setor ${sectorId}.`);
-      return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
+      throw new Error(`Falha no servidor NOAA CoastWatch ERDDAP (HTTP ${response.status} ${response.statusText})`);
     }
 
     const csvText = await response.text();
     const lines = csvText.trim().split('\n');
-    // ERDDAP retorna linha 0 (nomes das colunas) e linha 1 (unidades das colunas)
-    if (lines.length <= 2) return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
+    if (lines.length <= 2) {
+      continue;
+    }
 
     const responseHash = computeSimpleHash(csvText);
-    const points: ThermalForcingPoint[] = [];
     const retrievedAt = new Date().toISOString();
 
     for (let index = 2; index < lines.length; index += 1) {
@@ -316,18 +405,16 @@ export async function fetchBtsThermalForcing(
         const returnedLat = parseFloat(parts[1]);
         const returnedLon = parseFloat(parts[2]);
         const sst = parseFloat(parts[3]);
-        const sstAnomaly = parseFloat(parts[4]); // CRW_SSTANOMALY oficial
-        const hotspot = parseFloat(parts[5]);    // CRW_HOTSPOT oficial
-        const dhw = parseFloat(parts[6]);        // CRW_DHW oficial
-        const baa = parseInt(parts[7], 10);      // CRW_BAA oficial
+        const sstAnomaly = parseFloat(parts[4]);
+        const hotspot = parseFloat(parts[5]);
+        const dhw = parseFloat(parts[6]);
+        const baa = parseInt(parts[7], 10);
         const baa7d = parts[8] ? parseInt(parts[8], 10) : baa;
 
-        // Validação estrita: descarta linhas com SST inválida ou flag de preenchimento (-999, etc.)
         if (timestampUtc && isValidNumber(sst)) {
-          points.push({
+          pointsMap.set(timestampUtc, {
             timestampUtc,
             seaSurfaceTemperatureDegC: sst,
-            // Rejeição rigorosa de valores ausentes sem inventar dados
             sstAnomalyDegC: isValidNumber(sstAnomaly) ? sstAnomaly : null,
             hotSpotDegC: isValidNumber(hotspot) ? hotspot : null,
             degreeHeatingWeeks: isValidNumber(dhw) ? dhw : null,
@@ -341,8 +428,8 @@ export async function fetchBtsThermalForcing(
             spatialResolution: '5 km (0.05° pixel)',
             provenance: {
               ...NOAA_CRW_PROVENANCE_BASE,
-              validTimeStartUtc: windowDates.startUtc,
-              validTimeEndUtc: windowDates.endUtc,
+              validTimeStartUtc: chunk.startUtc,
+              validTimeEndUtc: chunk.endUtc,
               retrievedAtUtc: retrievedAt,
               queryUrl,
               responseHash,
@@ -353,10 +440,9 @@ export async function fetchBtsThermalForcing(
         }
       }
     }
-
-    return points.length > 0 ? points : (BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? []);
-  } catch (error) {
-    console.info(`[NOAA CRW] Conexão remota indisponível ou offline para ${sectorId}. Usando snapshot de contingência setorial.`);
-    return BTS_CRW_SECTOR_FALLBACKS[sectorId] ?? [];
   }
+
+  return Array.from(pointsMap.values()).sort(
+    (a, b) => new Date(a.timestampUtc).getTime() - new Date(b.timestampUtc).getTime(),
+  );
 }

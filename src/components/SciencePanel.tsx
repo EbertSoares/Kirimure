@@ -907,19 +907,32 @@ export function SciencePanel({
               <div className="progressive-card-head">
                 <div>
                   <span className="epistemological-badge" style={{ fontSize: '11px' }}>
-                    {oceanData?.latestCrw?.provenance?.isCachedFallback ? 'Snapshot Histórico de Contingência' : 'Produto de Satélite (NOAA CRW)'}
+                    {oceanData?.noaaStatus?.state === 'error'
+                      ? 'Servidor NOAA Indisponível'
+                      : oceanData?.latestCrw?.provenance?.isCachedFallback
+                        ? 'Snapshot Histórico de Contingência'
+                        : 'Produto de Satélite (NOAA CRW)'}
                   </span>
                   <h3 style={{ marginTop: '4px' }}>1. Satélite NOAA Coral Reef Watch</h3>
                 </div>
                 <div>
-                  <span className="live-notice-pill" title={oceanData?.latestCrw?.provenance?.isCachedFallback ? 'Snapshot de contingência setorial (mar/abr 2024)' : 'Dado obtido de servidor remoto'}>
+                  <span
+                    className="live-notice-pill"
+                    title={
+                      oceanData?.latestCrw?.provenance?.isCachedFallback
+                        ? 'Snapshot de contingência setorial (mar/abr 2024)'
+                        : 'Dado obtido de servidor remoto'
+                    }
+                  >
                     {oceanData?.loading
-                      ? 'Consultando satélite...'
-                      : oceanData?.latestCrw?.provenance?.isCachedFallback
-                        ? 'Snapshot de contingência (mar/2024)'
-                        : oceanData?.latestCrw?.provenance?.fetchStatus === 'online_valid'
-                          ? `Modelo atualizado (${oceanData.latestCrw.timestampUtc ? oceanData.latestCrw.timestampUtc.substring(0, 10) : ''})`
-                          : 'Dados disponíveis'}
+                      ? 'Consultando satélite (timeout 12s)...'
+                      : oceanData?.noaaStatus?.state === 'error'
+                        ? 'Servidor offline / indisponível'
+                        : oceanData?.latestCrw?.provenance?.isCachedFallback
+                          ? 'Snapshot histórico (mar/2024)'
+                          : oceanData?.latestCrw?.provenance?.fetchStatus === 'online_valid'
+                            ? `Modelo atualizado (${oceanData.latestCrw.timestampUtc ? oceanData.latestCrw.timestampUtc.substring(0, 10) : ''})`
+                            : 'Dados disponíveis'}
                   </span>
                 </div>
               </div>
@@ -1026,15 +1039,110 @@ export function SciencePanel({
                           </>
                         )}
                       </p>
-                      <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                        O BAA e o HotSpot da NOAA são calculados sobre a climatologia do pixel (MMM de satélite em grade de 5 km). O Kirimurê adota 28,0 °C como referência didática de bancada para calcular estresse térmico, sem substituir a climatologia oficial do pixel NOAA.
+                      <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
+                        <strong>Diferenciação Metodológica:</strong> O <em>HotSpot Térmico</em> é uma grandeza biofísica oficial da NOAA correspondente à anomalia de temperatura acima da média máxima mensal (MMM). Já o <em>Snapshot de Contingência</em> é um registro arquivado local de eventos pretéritos (mar/2024), utilizado com integridade epistemológica quando o enlace de satélite estiver indisponível.
                       </p>
                     </div>
                   </details>
                 </>
+              ) : sector.id === 'paraguacu' ? (
+                <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                  <p style={{ margin: '0 0 8px' }}>
+                    <strong>Setor Estuarino do Paraguaçu:</strong> Canais interiores estreitos sofrem mascaramento de terra na grade oceânica de 5 km da NOAA (a célula é classificada como continente).
+                  </p>
+                  {oceanData?.loadHistoricalCrwSnapshot && (
+                    <button
+                      type="button"
+                      onClick={() => oceanData.loadHistoricalCrwSnapshot()}
+                      style={{
+                        background: 'rgba(56, 189, 248, 0.15)',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        color: '#38bdf8',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        fontSize: '11.5px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Carregar exemplo histórico de referência da Baía Central (Frades)
+                    </button>
+                  )}
+                </div>
+              ) : oceanData?.noaaStatus?.state === 'error' ? (
+                <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', fontSize: '12px', color: '#fca5a5' }}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 600 }}>
+                    Dados satelitais remotos indisponíveis no momento
+                  </p>
+                  <p style={{ margin: '0 0 10px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.75)' }}>
+                    O servidor CoastWatch ERDDAP da NOAA não respondeu dentro da janela de tolerância (timeout de 12s com repetição). O Kirimurê não mascara quedas de rede forjando dados ao vivo.
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {oceanData?.refresh && (
+                      <button
+                        type="button"
+                        onClick={() => oceanData.refresh()}
+                        disabled={oceanData.loading}
+                        style={{
+                          background: 'rgba(56, 189, 248, 0.15)',
+                          border: '1px solid rgba(56, 189, 248, 0.4)',
+                          color: '#38bdf8',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '11.5px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {oceanData.loading ? 'Reconectando...' : 'Tentar reconectar NOAA'}
+                      </button>
+                    )}
+                    {oceanData?.loadHistoricalCrwSnapshot && (
+                      <button
+                        type="button"
+                        onClick={() => oceanData.loadHistoricalCrwSnapshot()}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.25)',
+                          color: '#e2e8f0',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '11.5px',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                        }}
+                      >
+                        Carregar exemplo histórico (mar/2024)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : oceanData?.loading ? (
+                <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  Consultando satélite NOAA CoastWatch ERDDAP (timeout de 12s)...
+                </div>
               ) : (
-                <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '11.5px', color: 'rgba(255,255,255,0.7)' }}>
-                  Setores estuarinos interiores estreitos sofrem mascaramento de terra na grade oceânica de 5 km da NOAA.
+                <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  Nenhum dado satelital carregado.
+                  {oceanData?.loadHistoricalCrwSnapshot && (
+                    <div style={{ marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => oceanData.loadHistoricalCrwSnapshot()}
+                        style={{
+                          background: 'rgba(56, 189, 248, 0.15)',
+                          border: '1px solid rgba(56, 189, 248, 0.4)',
+                          color: '#38bdf8',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '11.5px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Carregar exemplo histórico (mar/2024)
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </article>
@@ -1044,19 +1152,32 @@ export function SciencePanel({
               <div className="progressive-card-head">
                 <div>
                   <span className="epistemological-badge" style={{ fontSize: '11px' }}>
-                    {oceanData?.latestMeteo?.provenance?.isCachedFallback ? 'Snapshot de Contingência' : 'Produto de Modelo Numérico'}
+                    {oceanData?.meteoStatus?.state === 'error'
+                      ? 'Modelo Numérico Indisponível'
+                      : oceanData?.latestMeteo?.provenance?.isCachedFallback
+                        ? 'Snapshot de Contingência'
+                        : 'Produto de Modelo Numérico'}
                   </span>
                   <h3 style={{ marginTop: '4px' }}>2. Modelo Costeiro Open-Meteo Marine</h3>
                 </div>
                 <div>
-                  <span className="live-notice-pill" title={oceanData?.latestMeteo?.provenance?.isCachedFallback ? 'Snapshot de contingência setorial (março/2024)' : 'Previsão operacional atualizada'}>
+                  <span
+                    className="live-notice-pill"
+                    title={
+                      oceanData?.latestMeteo?.provenance?.isCachedFallback
+                        ? 'Snapshot de contingência setorial (março/2024)'
+                        : 'Previsão operacional atualizada'
+                    }
+                  >
                     {oceanData?.loading
-                      ? 'Consultando modelo...'
-                      : oceanData?.latestMeteo?.provenance?.isCachedFallback
-                        ? 'Snapshot de contingência (mar/2024)'
-                        : oceanData?.latestMeteo?.provenance?.fetchStatus === 'online_valid'
-                          ? `Modelo atualizado (${oceanData.latestMeteo.timestampUtc ? oceanData.latestMeteo.timestampUtc.replace('T', ' ').substring(0, 16) + ' UTC' : ''})`
-                          : 'Dados disponíveis'}
+                      ? 'Consultando modelo (timeout 8s)...'
+                      : oceanData?.meteoStatus?.state === 'error'
+                        ? 'Servidor indisponível'
+                        : oceanData?.latestMeteo?.provenance?.isCachedFallback
+                          ? 'Snapshot de contingência (mar/2024)'
+                          : oceanData?.latestMeteo?.provenance?.fetchStatus === 'online_valid'
+                            ? `Modelo atualizado (${oceanData.latestMeteo.timestampUtc ? oceanData.latestMeteo.timestampUtc.replace('T', ' ').substring(0, 16) + ' UTC' : ''})`
+                            : 'Dados disponíveis'}
                   </span>
                 </div>
               </div>
@@ -1098,12 +1219,64 @@ export function SciencePanel({
                         <strong>Data de Consulta:</strong> {oceanData.latestMeteo.provenance.retrievedAtUtc ? oceanData.latestMeteo.provenance.retrievedAtUtc.replace('T', ' ').substring(0, 19) + ' UTC' : '—'}<br />
                         <strong>Tipo de Registro:</strong> {oceanData.latestMeteo.provenance.isCachedFallback ? 'Snapshot Histórico de Contingência (mar/2024)' : 'Previsão operacional Open-Meteo Marine'}
                       </p>
-                      <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+                      <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
                         Ressalva Hidrodinâmica: Os produtos globais provêem condições de contorno de mar aberto. A hidrodinâmica em canais interiores rasos e estuários da BTS é dominada por forçantes locais e marés semidiurnas, não devendo ser usada como previsão de precisão náutica.
                       </p>
                     </div>
                   </details>
                 </>
+              ) : oceanData?.meteoStatus?.state === 'error' ? (
+                <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', fontSize: '12px', color: '#fca5a5' }}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 600 }}>
+                    Previsão Open-Meteo Marine temporariamente indisponível
+                  </p>
+                  <p style={{ margin: '0 0 10px', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.75)' }}>
+                    Falha na consulta ao modelo oceânico global (timeout de 8s). O snapshot de contingência só é ativado caso solicitado manualmente.
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {oceanData?.refresh && (
+                      <button
+                        type="button"
+                        onClick={() => oceanData.refresh()}
+                        disabled={oceanData.loading}
+                        style={{
+                          background: 'rgba(56, 189, 248, 0.15)',
+                          border: '1px solid rgba(56, 189, 248, 0.4)',
+                          color: '#38bdf8',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '11.5px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {oceanData.loading ? 'Reconectando...' : 'Tentar reconectar Open-Meteo'}
+                      </button>
+                    )}
+                    {oceanData?.loadHistoricalMeteoSnapshot && (
+                      <button
+                        type="button"
+                        onClick={() => oceanData.loadHistoricalMeteoSnapshot()}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.25)',
+                          color: '#e2e8f0',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '11.5px',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                        }}
+                      >
+                        Carregar exemplo histórico
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : oceanData?.loading ? (
+                <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  Consultando modelo costeiro Open-Meteo Marine (timeout 8s)...
+                </div>
               ) : (
                 <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '11.5px', color: 'rgba(255,255,255,0.7)' }}>
                   Modelo global (~8 km) sem resolução em canais interiores estreitos.
