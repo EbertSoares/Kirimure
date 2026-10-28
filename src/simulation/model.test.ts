@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGES, evaluateChallenge } from './challenges';
-import { BASELINE, ITEM_DEFINITIONS, PARAMETERS } from './config';
+import { BASELINE, BTS_SECTORS, ITEM_DEFINITIONS, PARAMETERS } from './config';
 import {
   buildTargets,
   calculateAlgae,
@@ -19,7 +19,7 @@ import {
 } from './model';
 import { formatSimulatedTime } from './time';
 import { evaluateMessages } from './messages';
-import { integrateOxygenKinetics } from './oxygen';
+import { convertBOD5ToPulseDeltaMgL, integrateOxygenKinetics } from './oxygen';
 import type { SimulationState } from './types';
 
 /** Roda a simulação por um número de dias simulados, em passos de `stepSeconds`. */
@@ -304,6 +304,63 @@ describe('modelo de simulação', () => {
     const sewagePlusAlgaeBreakdown = getDissolvedOxygenBreakdown({ ...BASELINE, sewage: 5000 }, 60);
     expect(sewagePlusAlgaeBreakdown.algalDemand).toBeGreaterThan(0);
     expect(sewagePlusAlgaeBreakdown.dissolvedOxygen).toBeLessThan(sewageOnlyBreakdown.dissolvedOxygen);
+  });
+
+  it('projeta prazo crítico em modo pulso de DBO considerando o estado inicial da massa injetada', () => {
+    const pulseMassKg = 1000000;
+    const targets = buildTargets({ ...BASELINE, sewage: pulseMassKg }, 'paraguacu', 'pulse');
+    expect(targets.sewage).toBe(0); // No modo pulso, o alvo contínuo é zero
+
+    const sectorDef = BTS_SECTORS.find((s) => s.id === 'paraguacu')!;
+    const deltaBod = convertBOD5ToPulseDeltaMgL(pulseMassKg, sectorDef.mixingVolumeM3);
+    expect(deltaBod).toBeGreaterThan(10);
+
+    // Sem passar options (bug anterior): targets.sewage é 0, projeta null (recife nunca cruza limiar)
+    const naiveProjection = estimateCriticalDays(targets, 'paraguacu');
+    expect(naiveProjection).toBeNull();
+
+    // Com options contendo o pulso inicial de DBO: projeta dias críticos com precisão
+    const pulseProjection = estimateCriticalDays(targets, 'paraguacu', 3650, {
+      sewageDischargeMode: 'pulse',
+      initialBod: deltaBod,
+      initialControls: { ...BASELINE, sewage: pulseMassKg },
+    });
+    expect(pulseProjection).not.toBeNull();
+    expect(pulseProjection!).toBeGreaterThan(0);
+    expect(pulseProjection!).toBeLessThan(3650);
+  });
+
+  it('diferencia a projeção de tempo crítico entre compartimentos estuarinos e oceânicos', () => {
+    const sewageLoad = 20000;
+    const paraguacuTargets = buildTargets({ ...BASELINE, sewage: sewageLoad }, 'paraguacu', 'continuous');
+    const barraTargets = buildTargets({ ...BASELINE, sewage: sewageLoad }, 'barra', 'continuous');
+
+    const paraguacuDays = estimateCriticalDays(paraguacuTargets, 'paraguacu');
+    const barraDays = estimateCriticalDays(barraTargets, 'barra');
+
+    expect(paraguacuDays).not.toBeNull();
+    // No estuário do Paraguaçu (troca lenta, 35 dias), o esgoto atinge o limiar crítico muito mais rápido que na Barra (5 dias)
+    if (barraDays !== null) {
+      expect(paraguacuDays!).toBeLessThan(barraDays);
+    }
+  });
+
+  it('faz decair o acúmulo de DHW após o encerramento de evento térmico na janela móvel de 84 dias', () => {
+    let state = { ...createInitialState(), paused: false };
+    state.env.temperature = 31.0; // 3 °C acima da MMM
+    state.targets.temperature = 31.0;
+
+    // 14 dias sob onda de calor (HotSpot de 3 °C) acumulam DHW significativo
+    state = run(state, 14);
+    expect(state.degreeHeatingWeeks).toBeGreaterThan(3.0);
+
+    // Encerra a onda de calor retornando a temperatura para o baseline (26.8 °C)
+    state.env.temperature = BASELINE.temperature;
+    state.targets.temperature = BASELINE.temperature;
+
+    // Após 85 dias em temperatura normal, os 14 dias quentes saem da janela móvel de 84 dias da NOAA
+    const recovered = run(state, 86);
+    expect(recovered.degreeHeatingWeeks).toBe(0);
   });
 });
 

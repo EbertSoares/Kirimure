@@ -151,6 +151,8 @@ export interface SimulationState {
   dissolvedOxygen: number;
   /** Concentração de Demanda Bioquímica de Oxigênio (CBOD remanescente) em mg O₂/L. */
   biochemicalOxygenDemand: number;
+  /** Carbono inorgânico dissolvido (DIC) acumulado pela respiração microbiana integrada no tempo (µmol/kg). */
+  respiratoryDicUmolKg?: number;
   /** Compartimento oceanográfico ativo na Baía de Todos-os-Santos. */
   sector: BtsSectorId;
   /** Regime de lançamento de efluente: carga diária contínua ou pulso de massa instantâneo. */

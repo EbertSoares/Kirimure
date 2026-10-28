@@ -49,9 +49,9 @@ function formatMassParts(kg: number, qualifier?: string) {
   return { value, unit: `${tonnes ? 't' : 'kg'}${qualifier ? ` ${qualifier}` : ''}` };
 }
 
-function formatReceivedRange(inputKg: number, qualifier?: string) {
+function formatReceivedRange(inputKg: number, sectorId: BtsSectorId = 'frades', qualifier?: string) {
   if (inputKg === 0) return `0 kg${qualifier ? ` ${qualifier}` : ''}`;
-  const range = receivedLoadRange(inputKg);
+  const range = receivedLoadRange(inputKg, sectorId);
   const minimum = formatMassParts(range.minimumKg, qualifier);
   const maximum = formatMassParts(range.maximumKg, qualifier);
   return minimum.unit === maximum.unit
@@ -96,10 +96,19 @@ interface FactorControlProps {
   value: number;
   onChange: (value: number) => void;
   sewageDischargeMode?: 'continuous' | 'pulse';
+  sectorId?: BtsSectorId;
 }
 
-function FactorControl({ id, active, value, onChange, sewageDischargeMode = 'continuous' }: FactorControlProps) {
+function FactorControl({
+  id,
+  active,
+  value,
+  onChange,
+  sewageDischargeMode = 'continuous',
+  sectorId = 'frades',
+}: FactorControlProps) {
   const item = ITEM_DEFINITIONS[id];
+  const sectorDef = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const massLoad = isMassLoadId(id);
   const massOptions = item.massOptionsKg;
   const qualifier = id === 'sewage'
@@ -157,9 +166,15 @@ function FactorControl({ id, active, value, onChange, sewageDischargeMode = 'con
         {item.warning !== undefined && <i className="factor-threshold" aria-hidden="true" />}
       </div>
       <footer className={`factor-meta ${massLoad ? 'mass-meta' : ''}`}>
-        {massLoad ? (
-          <small title="Faixa sazonal estimada, não medição de campo">
-            Recebido · 30 d: {formatReceivedRange(value, qualifier)}
+        {id === 'sewage' ? (
+          <small title={sewageDischargeMode === 'pulse' ? 'Pulso instantâneo aplicado ao volume de mistura da bacia' : 'Aporte contínuo diário na baía'}>
+            {sewageDischargeMode === 'pulse'
+              ? `Pulso pontual: ${formatMassParts(value).value} ${formatMassParts(value).unit} (Vol: ${(sectorDef.mixingVolumeM3 / 1e6).toFixed(0)}M m³)`
+              : `Taxa diária: ${formatMassParts(value).value} ${formatMassParts(value).unit}/dia · Entrada contínua`}
+          </small>
+        ) : massLoad ? (
+          <small title="Faixa sazonal estimada que permanece após 30 dias neste compartimento">
+            Recebido · 30 d: {formatReceivedRange(value, sectorId, qualifier)}
           </small>
         ) : (
           <>
@@ -180,6 +195,7 @@ interface TeachingConsoleProps {
   missionFocusFactor?: ItemId | null;
   sewageDischargeMode?: 'continuous' | 'pulse';
   onSewageDischargeModeChange?: (mode: 'continuous' | 'pulse') => void;
+  sectorId?: BtsSectorId;
 }
 
 /**
@@ -198,6 +214,7 @@ function TeachingConsole({
   missionFocusFactor,
   sewageDischargeMode = 'continuous',
   onSewageDischargeModeChange,
+  sectorId = 'frades',
 }: TeachingConsoleProps) {
   const [controls, setControls] = useState<Environment>(() => ({ ...initialControls }));
   // O que já está valendo na simulação: serve para saber se há mudança pendente.
@@ -319,6 +336,7 @@ function TeachingConsole({
             active={isFactorActive(id, controls[id])}
             value={controls[id]}
             sewageDischargeMode={sewageDischargeMode}
+            sectorId={sectorId}
             onChange={(value) => setControls((current) => ({ ...current, [id]: value }))}
           />
         ))}
@@ -361,7 +379,7 @@ export function App() {
       case 'temperature':
         return `${simulation.env.temperature.toFixed(1).replace('.', ',')} °C`;
       case 'ph':
-        return `${effectivePh(simulation.env, simulation.biochemicalOxygenDemand, simulation.sector, simulation.dissolvedOxygen).toFixed(2).replace('.', ',')}`;
+        return `${effectivePh(simulation.env, simulation.biochemicalOxygenDemand, simulation.sector, simulation.respiratoryDicUmolKg).toFixed(2).replace('.', ',')}`;
       case 'dhw':
         return `${simulation.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem.`;
       case 'dissolvedOxygen':
@@ -448,7 +466,7 @@ export function App() {
   const challengeProgress = challenge ? evaluateChallenge(challenge, simulation) : null;
 
   const applyChanges = (controls: Environment) => {
-    const targets = buildTargets(controls, simulation.sector);
+    const targets = buildTargets(controls, simulation.sector, simulation.sewageDischargeMode);
     let nextBod = simulation.biochemicalOxygenDemand ?? 0;
 
     if (simulation.sewageDischargeMode === 'pulse' && controls.sewage > 0) {
@@ -468,7 +486,15 @@ export function App() {
       // Primeiro marco aparece logo depois de aplicar.
       messageCooldown: 0,
     }));
-    setCriticalDays(estimateCriticalDays(targets, simulation.sector));
+    setCriticalDays(
+      estimateCriticalDays(targets, simulation.sector, 3650, {
+        sewageDischargeMode: simulation.sewageDischargeMode,
+        initialBod: nextBod,
+        initialDo: simulation.dissolvedOxygen,
+        initialControls: controls,
+        initialEnv: simulation.env,
+      }),
+    );
     if (!missionState) {
       setPanelTab('now');
     }
@@ -477,15 +503,28 @@ export function App() {
   const handleSectorChange = (sectorId: BtsSectorId) => {
     const sectorDef = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
     const newSat = calculateWeissOxygenSaturation(simulation.env.temperature, sectorDef.baselineSalinity);
+    const newDo = Math.min(newSat * 1.25, Math.max(0.05, simulation.dissolvedOxygen));
+
     setSimulation((curr) => {
-      const nextTargets = buildTargets(curr.controls, sectorId);
+      const nextTargets = buildTargets(curr.controls, sectorId, curr.sewageDischargeMode);
       return {
         ...curr,
         sector: sectorId,
         targets: nextTargets,
-        dissolvedOxygen: Math.min(newSat * 1.25, Math.max(0.05, curr.dissolvedOxygen)),
+        dissolvedOxygen: newDo,
       };
     });
+
+    const nextTargets = buildTargets(simulation.controls, sectorId, simulation.sewageDischargeMode);
+    setCriticalDays(
+      estimateCriticalDays(nextTargets, sectorId, 3650, {
+        sewageDischargeMode: simulation.sewageDischargeMode,
+        initialBod: simulation.biochemicalOxygenDemand,
+        initialDo: newDo,
+        initialControls: simulation.controls,
+        initialEnv: simulation.env,
+      }),
+    );
   };
 
   const handleApplySatelliteConditions = (sst: number) => {
@@ -659,7 +698,7 @@ export function App() {
                 title="pH da água [Clique para detalhes pedagógicos]"
               >
                 <small>pH</small>
-                <strong>{effectivePh(simulation.env, simulation.biochemicalOxygenDemand, simulation.sector, simulation.dissolvedOxygen).toFixed(2).replace('.', ',')}</strong>
+                <strong>{effectivePh(simulation.env, simulation.biochemicalOxygenDemand, simulation.sector, simulation.respiratoryDicUmolKg).toFixed(2).replace('.', ',')}</strong>
               </button>
 
               {!missionState && (
@@ -780,6 +819,7 @@ export function App() {
           missionFocusFactor={missionState ? MISSION_01_OXYGEN.focusFactor : null}
           sewageDischargeMode={simulation.sewageDischargeMode}
           onSewageDischargeModeChange={handleSewageDischargeModeChange}
+          sectorId={simulation.sector}
         />
       </main>
 

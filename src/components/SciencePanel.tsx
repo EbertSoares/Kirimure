@@ -129,13 +129,14 @@ export function SciencePanel({
   const scaledAlkalinity = 2350 * (sectorSalinity / 35.0);
   const respirationImpact = calculateRespirationPhImpact(
     state.env.ph,
-    state.biochemicalOxygenDemand ?? 0,
+    state.respiratoryDicUmolKg ?? 0,
     scaledAlkalinity,
     state.env.temperature,
     sectorSalinity,
   );
   const carbonate = respirationImpact.carbonateSystem;
-  const oilBudget = state.env.oil > 0 ? calculateOilFateBudget(state.env.oil, state.sector, state.elapsedDays) : null;
+  const spilledOilMassKg = state.controls.oil > 0 ? state.controls.oil : state.env.oil;
+  const oilBudget = spilledOilMassKg > 0 ? calculateOilFateBudget(spilledOilMassKg, state.sector, state.elapsedDays) : null;
   const oilEcotox = oilBudget ? evaluateOilEcotoxicity(oilBudget.dissolvedPahConcentrationUgL) : null;
   const isIntro = message.id === 'intro';
   const messageStatus = message.tone === 'alert'

@@ -9,7 +9,7 @@ import {
   type MassLoadId,
 } from './config';
 import { calculateCarbonateSystem, calculateRespirationPhImpact } from './carbonate';
-import { calculateDeoxygenationRate, calculateEquilibriumOxygen, calculateWeissOxygenSaturation, convertBOD5ToUltimateBOD, integrateOxygenKinetics } from './oxygen';
+import { calculateDeoxygenationRate, calculateEquilibriumOxygen, calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL, convertBOD5ToUltimateBOD, integrateOxygenKinetics } from './oxygen';
 import type {
   BtsSectorId,
   Environment,
@@ -65,43 +65,46 @@ export function normalizedReceivedLoad(id: MassLoadId, valueKg: number) {
 }
 
 /**
- * pH que o recife sente: pH de contorno ajustado termodinamicamente pelo consumo
- * de oxigênio da respiração microbiana que oxida a matéria orgânica e libera CO2 (Lueker et al., 2000).
+ * pH que o recife sente: pH de contorno ajustado termodinamicamente pelo fluxo
+ * respiratório microbiano integrado que oxida a matéria orgânica e libera CO2 (Lueker et al., 2000).
  *
- * Unifica o visor da interface, os pontos do histórico e o cálculo de estresse sobre corais e peixes.
+ * Não utiliza o déficit instantâneo de OD (que confunde reaeração com respiração),
+ * mas sim a produção acumulada de DIC por oxidação heterotrófica da DBO.
  */
 export function effectivePh(
   env: Environment,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
-  dissolvedOxygenMgL?: number,
+  respiratoryDicUmolKg?: number,
 ): number {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
-  const satO2 = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
 
-  let consumedO2MgL = 0;
-  if (dissolvedOxygenMgL !== undefined) {
-    // Quando o OD simulado está disponível, o oxigênio efetivamente consumido é (satO2 - dissolvedOxygenMgL)
-    consumedO2MgL = Math.max(0, satO2 - dissolvedOxygenMgL);
+  let addedDic = 0;
+  if (respiratoryDicUmolKg !== undefined) {
+    // Quando o DIC respiratório integrado no tempo está disponível no estado da simulação
+    addedDic = Math.max(0, respiratoryDicUmolKg);
   } else if (bodConcentrationMgL > 0) {
-    // Estimativa cinética do oxigênio consumido por respiração da DBO ativa
+    // Estimativa cinética de caixa para testes ou cálculo pontual
     const kd = calculateDeoxygenationRate(env.temperature);
-    consumedO2MgL = bodConcentrationMgL * (1 - Math.exp(-kd * Math.min(sector.dischargeDays, 5)));
+    const tau = Math.min(sector.dischargeDays, 5);
+    const consumedO2 = bodConcentrationMgL * (1 - Math.exp(-kd * tau));
+    addedDic = (consumedO2 / 32) * 1000 * 0.98;
   } else if (env.sewage > 0) {
-    // Carga contínua convertida no volume de mistura
     const kd = calculateDeoxygenationRate(env.temperature);
     const continuousBodMgL = (convertBOD5ToUltimateBOD(env.sewage) * 1000) / sector.mixingVolumeM3;
-    consumedO2MgL = continuousBodMgL * (1 - Math.exp(-kd * Math.min(sector.dischargeDays, 5)));
+    const tau = Math.min(sector.dischargeDays, 5);
+    const consumedO2 = continuousBodMgL * (1 - Math.exp(-kd * tau));
+    addedDic = (consumedO2 / 32) * 1000 * 0.98;
   }
 
-  if (consumedO2MgL <= 0.001) {
+  if (addedDic <= 0.01) {
     return env.ph;
   }
 
   const scaledTa = 2350 * (sector.baselineSalinity / 35.0);
   const impact = calculateRespirationPhImpact(
     env.ph,
-    consumedO2MgL,
+    addedDic,
     scaledTa,
     env.temperature,
     sector.baselineSalinity,
@@ -115,9 +118,9 @@ export function calculatePressures(
   dhw = 0,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
-  dissolvedOxygenMgL?: number,
+  respiratoryDicUmolKg?: number,
 ): Pressures {
-  const ph = effectivePh(env, bodConcentrationMgL, sectorId, dissolvedOxygenMgL);
+  const ph = effectivePh(env, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
   const currentHeat = stressAbove(
     env.temperature,
     PARAMETERS.temperature.bleachingThreshold,
@@ -161,13 +164,14 @@ export function calculateFishPressures(
   dissolvedOxygen = 7.12,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
+  respiratoryDicUmolKg?: number,
 ): Pressures {
-  const base = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, dissolvedOxygen);
+  const base = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
   const hypoxia = hypoxiaStress(dissolvedOxygen);
   return {
     ...base,
     thermal: stressAbove(env.temperature, PARAMETERS.temperature.fishStart, PARAMETERS.temperature.fishMax),
-    acidification: stressBelow(effectivePh(env, bodConcentrationMgL, sectorId, dissolvedOxygen), PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
+    acidification: stressBelow(effectivePh(env, bodConcentrationMgL, sectorId, respiratoryDicUmolKg), PARAMETERS.ph.fishStart, PARAMETERS.ph.fishMax),
     // A hipóxia acopla-se à pressão de efluentes/esgoto, expressando o mecanismo biológico de asfixia
     sewage: combine([base.sewage, hypoxia]),
   };
@@ -201,9 +205,10 @@ export function calculateStress(
   dissolvedOxygen = 7.12,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
+  respiratoryDicUmolKg?: number,
 ) {
-  const pressures = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, dissolvedOxygen);
-  const fishPressures = calculateFishPressures(env, dhw, dissolvedOxygen, bodConcentrationMgL, sectorId);
+  const pressures = calculatePressures(env, dhw, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
+  const fishPressures = calculateFishPressures(env, dhw, dissolvedOxygen, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
   const species = Object.fromEntries(
     FISH_SPECIES.map((item) => [item.id, speciesStress(fishPressures, item.id)]),
   ) as Record<FishSpeciesId, number>;
@@ -298,6 +303,7 @@ export function createInitialState(sectorId: BtsSectorId = 'frades'): Simulation
     initialConditionSource: 'PADRAO_CALIBRADO',
     dissolvedOxygen: initialDo,
     biochemicalOxygenDemand: 0,
+    respiratoryDicUmolKg: 0,
   };
 }
 
@@ -340,7 +346,7 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
     overall: next.overall,
     algae: calculateAlgae(next.env, next.health),
     temperature: next.env.temperature,
-    ph: effectivePh(next.env, next.biochemicalOxygenDemand, next.sector, next.dissolvedOxygen),
+    ph: effectivePh(next.env, next.biochemicalOxygenDemand, next.sector, next.respiratoryDicUmolKg),
     dhw: next.degreeHeatingWeeks,
     dissolvedOxygen: next.dissolvedOxygen,
     bod: next.biochemicalOxygenDemand,
@@ -412,8 +418,17 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
   const oxygen = oxygenKinetics.nextDo;
   const bod = oxygenKinetics.nextBod;
 
+  // Integração do fluxo de respiração microbiana para acréscimo de DIC (estequiometria RQ = 1,0)
+  const sector = BTS_SECTORS.find((s) => s.id === state.sector) ?? BTS_SECTORS[0];
+  const kFlush = 1 / Math.max(1, sector.dischargeDays);
+  const respiratoryDicFluxUmolKg = (oxygenKinetics.bodDeoxFlux / 32) * 1000 * 0.98;
+  const nextRespiratoryDic = Math.max(
+    0,
+    (state.respiratoryDicUmolKg ?? 0) * Math.exp(-kFlush * dtDays) + respiratoryDicFluxUmolKg * dtDays,
+  );
+
   const thermal = updateThermalDose(state, env.temperature, dtDays);
-  const stress = calculateStress(env, thermal.degreeHeatingWeeks, oxygen, bod, state.sector);
+  const stress = calculateStress(env, thermal.degreeHeatingWeeks, oxygen, bod, state.sector, nextRespiratoryDic);
   const protection = clamp(env.recovery / 100);
   const exposure = PRESSURE_IDS.reduce(
     (result, id) => {
@@ -459,22 +474,55 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
     everDegraded,
     dissolvedOxygen: oxygen,
     biochemicalOxygenDemand: bod,
+    respiratoryDicUmolKg: nextRespiratoryDic,
     elapsedDays: state.elapsedDays + dtDays,
     // A pausa entre marcos conta em segundos reais (ver messages.ts).
     messageCooldown: Math.max(0, state.messageCooldown - realDtSeconds),
   });
 }
 
+export interface EstimateCriticalDaysOptions {
+  sewageDischargeMode?: 'continuous' | 'pulse';
+  initialBod?: number;
+  initialDo?: number;
+  initialControls?: Environment;
+  initialEnv?: Environment;
+}
+
 /**
  * Projeta, a partir de um recife saudável, quando a saúde geral cruza a faixa
- * crítica caso as condições aplicadas permaneçam constantes. O resultado é
- * determinístico, mas continua sendo uma estimativa do cenário calibrado — não
- * uma previsão de campo para um ponto específico da baía.
+ * crítica caso as condições aplicadas permaneçam constantes.
+ *
+ * Considera o estado completo, incluindo DBO inicial de pulsos e renovação do setor.
  */
-export function estimateCriticalDays(targets: Environment, sectorId: BtsSectorId = 'frades', maxDays = 3650) {
+export function estimateCriticalDays(
+  targets: Environment,
+  sectorId: BtsSectorId = 'frades',
+  maxDays = 3650,
+  options?: EstimateCriticalDaysOptions,
+) {
+  const isPulse = options?.sewageDischargeMode === 'pulse';
+  const sectorDef = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+
+  let initialBod = options?.initialBod ?? 0;
+  const controlsSewage = options?.initialControls?.sewage ?? targets.sewage;
+  if (isPulse && controlsSewage > 0 && initialBod === 0) {
+    initialBod = convertBOD5ToPulseDeltaMgL(controlsSewage, sectorDef.mixingVolumeM3);
+  }
+
+  const baseState = createInitialState(sectorId);
   let projected: SimulationState = {
-    ...createInitialState(sectorId),
-    targets: { ...targets },
+    ...baseState,
+    env: options?.initialEnv ? { ...options.initialEnv } : baseState.env,
+    controls: options?.initialControls ? { ...options.initialControls } : { ...targets },
+    targets: {
+      ...targets,
+      sewage: isPulse ? 0 : targets.sewage,
+    },
+    sewageDischargeMode: options?.sewageDischargeMode ?? 'continuous',
+    biochemicalOxygenDemand: initialBod,
+    dissolvedOxygen: options?.initialDo ?? baseState.dissolvedOxygen,
+    respiratoryDicUmolKg: 0,
     paused: false,
     history: [],
   };

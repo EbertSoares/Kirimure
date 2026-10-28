@@ -42,6 +42,34 @@ describe('módulo do sistema carbonato marinho e saturação de aragonita', () =
     expect(paraguacu.omegaAragonite).toBeLessThan(barra.omegaAragonite);
   });
 
+  it('valida contra referências padrão CO2SYS / Dickson & Goyet (1994) / Orr et al. (2018)', () => {
+    // Condições padrão de água do mar: T = 25 °C, S = 35, pH = 8.10, TA = 2300 µmol/kg
+    const std = calculateCarbonateSystem(8.10, 2300, 25.0, 35.0);
+
+    // DIC esperado entre 1960 e 2030 µmol/kg (para TA = 2300 µmol/kg em água do mar a pH 8.10)
+    expect(std.dissolvedInorganicCarbonUmolKg).toBeGreaterThan(1960);
+    expect(std.dissolvedInorganicCarbonUmolKg).toBeLessThan(2030);
+
+    // pCO2 esperado em torno de 320 - 430 µatm (na escala total de pH)
+    expect(std.pCO2Uatm).toBeGreaterThan(320);
+    expect(std.pCO2Uatm).toBeLessThan(430);
+
+    // Bicarbonato como espécie carbonatada dominante (~1700 - 1850 µmol/kg)
+    expect(std.bicarbonateIonUmolKg).toBeGreaterThan(1700);
+    expect(std.bicarbonateIonUmolKg).toBeLessThan(1850);
+
+    // Íon carbonato livre (~190 - 240 µmol/kg)
+    expect(std.carbonateIonUmolKg).toBeGreaterThan(190);
+    expect(std.carbonateIonUmolKg).toBeLessThan(240);
+
+    // Omega aragonita (~3.6 a 4.3) e calcita (~5.5 a 6.5)
+    expect(std.omegaAragonite).toBeGreaterThan(3.6);
+    expect(std.omegaAragonite).toBeLessThan(4.3);
+    expect(std.omegaCalcite).toBeGreaterThan(5.5);
+    expect(std.omegaCalcite).toBeLessThan(6.5);
+    expect(std.calcificationStatus).toBe('optimum');
+  });
+
   it('conecta respiração de DBO com liberação estequiométrica de CO2 e redução de pH', () => {
     const result = calculateRespirationPhImpact(8.10, 5.0, 2350, 26.8, 35.0);
     expect(result.effectivePh).toBeLessThanOrEqual(8.10);

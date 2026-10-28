@@ -143,43 +143,37 @@ export function calculateCarbonateSystem(
 }
 
 /**
- * Converte o consumo de oxigênio por respiração microbiana da matéria orgânica
- * em acréscimo estequiométrico de DIC (1 mol O2 consumido -> ~1 mol CO2 liberado, RQ = 1.0)
- * e resolve o novo equilíbrio termodinâmico do sistema carbonato marinho (Lueker et al., 2000).
+ * Resolve o impacto termodinâmico da adição de carbono respiratório (DIC)
+ * no equilíbrio do sistema carbonato marinho (Lueker et al., 2000; Dickson, 1990).
  *
  * Classificação Epistemológica: Estimativa de Modelo Acoplado Didático / Teórico.
- * Ressalva científica: a DBO representa demanda potencial de oxigênio; o acréscimo de
- * carbono inorgânico decorre do oxigênio efetivamente consumido na respiração microbiana.
+ * O carbono inorgânico dissolvido (DIC) aumenta com o fluxo de respiração microbiana
+ * integrado ao longo do tempo (estequiometria RQ = 1,0 mol CO2 por mol O2 consumido).
  */
 export function calculateRespirationPhImpact(
   baselinePh: number,
-  consumedO2MgL: number,
+  addedDicUmolKg: number,
   totalAlkalinity = 2350,
   temperature = 26.8,
   salinity = 35.0,
 ): { effectivePh: number; carbonateSystem: CarbonateSystemState } {
-  if (consumedO2MgL <= 0) {
+  if (addedDicUmolKg <= 0.001) {
     return {
       effectivePh: baselinePh,
       carbonateSystem: calculateCarbonateSystem(baselinePh, totalAlkalinity, temperature, salinity),
     };
   }
 
-  // 1 mol de O2 consumido na respiração heterotrófica libera aproximadamente 1 mol de CO2
-  // 32 g O2 -> 1 mol CO2 (razão respiratória 1.0)
-  // consumedO2 em mg/L -> mmol/m^3 -> umol/kg (~dividido por densidade 1.024)
-  const addedDicUmolKg = Math.max(0, (consumedO2MgL / 32) * 1000 * 0.98);
-
   // Calculamos o estado baseline de DIC
   const baseSystem = calculateCarbonateSystem(baselinePh, totalAlkalinity, temperature, salinity);
   const targetDic = baseSystem.dissolvedInorganicCarbonUmolKg + addedDicUmolKg;
 
   // Bisseção rápida para encontrar o novo pH termodinâmico que equilibra (TA, targetDic)
-  let lowPh = 7.0;
+  let lowPh = 6.5;
   let highPh = baselinePh;
   let estimatedPh = baselinePh;
 
-  for (let iter = 0; iter < 12; iter += 1) {
+  for (let iter = 0; iter < 14; iter += 1) {
     const midPh = (lowPh + highPh) / 2;
     const testSystem = calculateCarbonateSystem(midPh, totalAlkalinity, temperature, salinity);
     if (testSystem.dissolvedInorganicCarbonUmolKg > targetDic) {
