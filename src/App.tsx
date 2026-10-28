@@ -805,7 +805,9 @@ export function App() {
           onClick={() => setMobileView('scene')}
           aria-current={mobileView === 'scene' ? 'page' : undefined}
         >
-          <span className="mobile-nav-icon">🌊</span>
+          <span className="mobile-nav-icon">
+            <Icon name="waves" />
+          </span>
           <span>Recife 3D</span>
         </button>
         <button
@@ -814,7 +816,9 @@ export function App() {
           onClick={() => setMobileView('console')}
           aria-current={mobileView === 'console' ? 'page' : undefined}
         >
-          <span className="mobile-nav-icon">⚙️</span>
+          <span className="mobile-nav-icon">
+            <Icon name="sliders" />
+          </span>
           <span>Bancada</span>
         </button>
         <button
@@ -823,7 +827,9 @@ export function App() {
           onClick={() => setMobileView('science')}
           aria-current={mobileView === 'science' ? 'page' : undefined}
         >
-          <span className="mobile-nav-icon">📊</span>
+          <span className="mobile-nav-icon">
+            <Icon name="chart" />
+          </span>
           <span>Ciência</span>
         </button>
       </nav>

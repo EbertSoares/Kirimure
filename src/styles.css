@@ -1604,12 +1604,17 @@ button:focus-visible, input:focus-visible {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .tier-name {
   font-size: 11px;
   font-weight: 750;
   color: #dcf2ff;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tier-name small {
@@ -3310,66 +3315,66 @@ input[type="range"]::-moz-range-thumb {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: 4px 10px 24px;
+    padding: 2px 0 28px;
     width: 100%;
     box-sizing: border-box;
     gap: 8px;
   }
 
   .map-selection h1 {
-    margin: 4px 0 2px;
+    margin: 4px 0 6px;
     font-size: clamp(17px, 4.8vw, 22px);
     text-align: center;
+    padding: 0 16px;
   }
 
   .brazil-map {
     height: auto;
-    width: min(96vw, 560px);
-    max-width: 98vw;
+    width: 100%;
+    max-width: min(100vw, 520px);
     aspect-ratio: 1100 / 1000;
-    margin: 2px auto;
+    margin: 4px auto 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: visible;
   }
 
   .brazil-map-svg {
     display: block;
     width: 100%;
     height: auto;
-    max-height: 58vh;
-    object-fit: contain;
     overflow: visible;
+    transform: scale(1.08) translateX(2.2%);
+    transform-origin: center center;
   }
 
   .map-legend {
     position: static;
     transform: none;
     display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 8px 16px;
-    margin: 10px auto 16px;
-    padding: 8px 16px;
-    background: rgba(6, 24, 38, 0.75);
-    border: 1px solid rgba(56, 189, 248, 0.22);
-    border-radius: 999px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 32px auto 28px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
     width: fit-content;
-    max-width: calc(100vw - 32px);
-    box-sizing: border-box;
     z-index: 2;
   }
 
   .map-legend li {
-    font-size: 12px;
+    font-size: 13.5px;
     color: var(--muted);
     font-weight: 600;
+    letter-spacing: .01em;
     white-space: nowrap;
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
   }
 
   .topbar { padding: 9px 14px; }
@@ -3417,8 +3422,24 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .mobile-nav-icon {
-    font-size: 16px;
-    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+  }
+
+  .mobile-nav-icon svg {
+    width: 19px;
+    height: 19px;
+    stroke: currentColor;
+    stroke-width: 2;
+    transition: transform 0.15s ease, stroke 0.15s ease;
+  }
+
+  .mobile-nav-btn.active .mobile-nav-icon svg {
+    transform: scale(1.1);
+    stroke: #38bdf8;
   }
 
   .simulation-workspace {
@@ -3544,7 +3565,7 @@ input[type="range"]::-moz-range-thumb {
     margin-left: 0;
   }
 
-  .map-selection { padding: 4px 8px 18px; }
+  .map-selection { padding: 2px 0 28px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

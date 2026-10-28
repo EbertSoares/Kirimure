@@ -40,7 +40,7 @@ export function TrophicPyramid({
 
       <div className="pyramid-visual-container">
         {/* Nível 4: Apex Predators */}
-        <div className="pyramid-tier tier-apex" style={{ width: '42%' }}>
+        <div className="pyramid-tier tier-apex" style={{ width: '52%', minWidth: '175px' }}>
           <div className="tier-content">
             <span className="tier-name">Topo · Tubarão-lixa <small>(Ginglymostoma)</small></span>
             <strong className="tier-val">{Math.round(apexHealth)}%</strong>
@@ -49,7 +49,7 @@ export function TrophicPyramid({
         </div>
 
         {/* Nível 3: Carnívoros e Onívoros */}
-        <div className="pyramid-tier tier-carnivores" style={{ width: '60%' }}>
+        <div className="pyramid-tier tier-carnivores" style={{ width: '68%', minWidth: '220px' }}>
           <div className="tier-content">
             <span className="tier-name">Carnívoros & Onívoros <small>(Frade, Biquara)</small></span>
             <strong className="tier-val">{Math.round(carnivoreHealth)}%</strong>
@@ -58,7 +58,7 @@ export function TrophicPyramid({
         </div>
 
         {/* Nível 2: Herbívoros Raspadores */}
-        <div className="pyramid-tier tier-herbivores" style={{ width: '78%' }}>
+        <div className="pyramid-tier tier-herbivores" style={{ width: '84%' }}>
           <div className="tier-content">
             <span className="tier-name">Herbívoros Raspadores <small>(Cirurgião, Papagaio)</small></span>
             <strong className="tier-val">{Math.round(herbivoreVal)}%</strong>
@@ -67,7 +67,7 @@ export function TrophicPyramid({
         </div>
 
         {/* Nível 1: Base de Produtores e Construtores */}
-        <div className="pyramid-tier tier-producers" style={{ width: '96%' }}>
+        <div className="pyramid-tier tier-producers" style={{ width: '98%' }}>
           <div className="tier-content">
             <span className="tier-name">Produtores & Construtores <small>(Zooxantelas / Corais)</small></span>
             <strong className="tier-val">{Math.round(producersVal)}%</strong>
