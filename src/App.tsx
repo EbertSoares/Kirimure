@@ -434,34 +434,93 @@ export function App() {
       sector.baselineSalinity,
     ).carbonateSystem;
 
+    // 1. Oxigênio (OD em mg/L): >= 6.0 ideal (azul); 3.5 a 6.0 alerta (amarelo); < 3.5 hipóxia (vermelho)
     const doVal = simulation.dissolvedOxygen;
-    const doTone = doVal >= 5 ? 'good' : doVal >= 3 ? 'watch' : 'critical';
+    let oxHealth = 100;
+    if (doVal >= 6.0) {
+      oxHealth = Math.min(100, 67 + ((doVal - 6.0) / 2.0) * 33);
+    } else if (doVal >= 3.5) {
+      oxHealth = 34 + ((doVal - 3.5) / (6.0 - 3.5)) * 32;
+    } else {
+      oxHealth = Math.max(0, (doVal / 3.5) * 33);
+    }
+    const oxPercent = Math.max(0, Math.min(100, Math.round(oxHealth)));
+    const doTone: 'good' | 'watch' | 'critical' = oxPercent >= 67 ? 'good' : oxPercent >= 34 ? 'watch' : 'critical';
 
+    // 2. Temperatura (°C): 25.0°C a 27.5°C conforto (100% azul); 27.5°C a 29.5°C aquecimento (amarelo); >= 29.5°C estresse agudo (vermelho)
     const tempVal = simulation.env.temperature;
-    const tempTone = tempVal >= 30 ? 'critical' : tempVal >= 29 ? 'watch' : 'good';
+    let tempHealth = 100;
+    if (tempVal <= 27.5) {
+      tempHealth = 100;
+    } else if (tempVal <= 29.5) {
+      tempHealth = 66 - ((tempVal - 27.5) / (29.5 - 27.5)) * 32;
+    } else {
+      tempHealth = Math.max(0, 33 - ((tempVal - 29.5) / (32.5 - 29.5)) * 33);
+    }
+    const tempPercent = Math.max(0, Math.min(100, Math.round(tempHealth)));
+    const tempTone: 'good' | 'watch' | 'critical' = tempPercent >= 67 ? 'good' : tempPercent >= 34 ? 'watch' : 'critical';
 
+    // 3. Estresse térmico (DHW): 0.0 a 0.2 °C-sem ideal (100% azul); 0.2 a 4.0 alerta (amarelo); >= 4.0 crítico (vermelho)
     const dhwVal = simulation.degreeHeatingWeeks;
-    const dhwTone = dhwVal >= 8 ? 'critical' : dhwVal > 0.2 ? 'watch' : 'good';
+    let dhwHealth = 100;
+    if (dhwVal <= 0.2) {
+      dhwHealth = 100;
+    } else if (dhwVal <= 4.0) {
+      dhwHealth = 66 - ((dhwVal - 0.2) / 3.8) * 32;
+    } else {
+      dhwHealth = Math.max(0, 33 - ((dhwVal - 4.0) / 8.0) * 33);
+    }
+    const dhwPercent = Math.max(0, Math.min(100, Math.round(dhwHealth)));
+    const dhwTone: 'good' | 'watch' | 'critical' = dhwPercent >= 67 ? 'good' : dhwPercent >= 34 ? 'watch' : 'critical';
 
-    const phTone = ph <= 7.8 ? 'critical' : ph < 8.0 ? 'watch' : 'good';
+    // 4. pH da água: >= 8.10 ideal (100% azul); 7.90 a 8.10 alerta (amarelo); < 7.90 acidificação aguda (vermelho)
+    let phHealth = 100;
+    if (ph >= 8.10) {
+      phHealth = 100;
+    } else if (ph >= 7.90) {
+      phHealth = 34 + ((ph - 7.90) / (8.10 - 7.90)) * 32;
+    } else {
+      phHealth = Math.max(0, ((ph - 7.50) / (7.90 - 7.50)) * 33);
+    }
+    const phPercent = Math.max(0, Math.min(100, Math.round(phHealth)));
+    const phTone: 'good' | 'watch' | 'critical' = phPercent >= 67 ? 'good' : phPercent >= 34 ? 'watch' : 'critical';
 
+    // 5. Aragonita (Ωarag): >= 3.5 ideal (100% azul); 2.5 a 3.5 moderado (amarelo); < 2.5 crítico (vermelho)
     const aragVal = carbonate.omegaAragonite;
-    const aragTone = aragVal < 2.0 ? 'critical' : aragVal < 3.0 ? 'watch' : 'good';
+    let aragHealth = 100;
+    if (aragVal >= 3.5) {
+      aragHealth = 100;
+    } else if (aragVal >= 2.5) {
+      aragHealth = 34 + ((aragVal - 2.5) / 1.0) * 32;
+    } else {
+      aragHealth = Math.max(0, ((aragVal - 1.0) / 1.5) * 33);
+    }
+    const aragPercent = Math.max(0, Math.min(100, Math.round(aragHealth)));
+    const aragTone: 'good' | 'watch' | 'critical' = aragPercent >= 67 ? 'good' : aragPercent >= 34 ? 'watch' : 'critical';
 
+    // 6. Corais (0 a 100%)
     const coralVal = Math.max(0, Math.min(100, Math.round(simulation.health.coral)));
-    const coralTone = coralVal >= 67 ? 'good' : coralVal >= 34 ? 'watch' : 'critical';
+    const coralTone: 'good' | 'watch' | 'critical' = coralVal >= 67 ? 'good' : coralVal >= 34 ? 'watch' : 'critical';
 
+    // 7. Peixes (0 a 100%)
     const fishVal = Math.max(0, Math.min(100, Math.round(simulation.health.fish)));
-    const fishTone = fishVal >= 67 ? 'good' : fishVal >= 34 ? 'watch' : 'critical';
+    const fishTone: 'good' | 'watch' | 'critical' = fishVal >= 67 ? 'good' : fishVal >= 34 ? 'watch' : 'critical';
 
+    // 8. Algas: cobertura baixa (< 25%) é saudável (azul); 25% a 55% proliferação (amarelo); > 55% sufocamento (vermelho)
     const algaeVal = Math.max(0, Math.min(100, Math.round(algae)));
-    const algaeTone = algaeVal <= 33 ? 'good' : algaeVal <= 62 ? 'watch' : 'critical';
+    const algaeHealth = Math.max(0, 100 - algaeVal);
+    const algaePercent = Math.max(0, Math.min(100, Math.round(algaeHealth)));
+    const algaeTone: 'good' | 'watch' | 'critical' = algaePercent >= 67 ? 'good' : algaePercent >= 34 ? 'watch' : 'critical';
 
+    // 9. Equilíbrio trófico (0 a 100%)
     const trophicVal = Math.max(0, Math.min(100, Math.round(trophic)));
-    const trophicTone = trophicVal >= 67 ? 'good' : trophicVal >= 45 ? 'watch' : 'critical';
+    const trophicTone: 'good' | 'watch' | 'critical' = trophicVal >= 67 ? 'good' : trophicVal >= 34 ? 'watch' : 'critical';
 
+    // 10. Turbidez: 0 a 15% índice é água cristalina (azul); 15 a 50% moderada (amarelo); > 50% turva (vermelho)
     const turbVal = Math.max(0, Math.min(100, Math.round(simulation.env.turbidity)));
-    const turbTone = turbVal >= 60 ? 'critical' : turbVal >= 30 ? 'watch' : 'good';
+    const turbHealth = Math.max(0, 100 - turbVal);
+    const turbPercent = Math.max(0, Math.min(100, Math.round(turbHealth)));
+    const turbTone: 'good' | 'watch' | 'critical' = turbPercent >= 67 ? 'good' : turbPercent >= 34 ? 'watch' : 'critical';
 
     return {
       oxygen: {
@@ -469,44 +528,44 @@ export function App() {
         label: 'Oxigênio',
         valueText: doVal.toFixed(1).replace('.', ','),
         unitText: 'mg/L',
-        progressPercent: Math.max(0, Math.min(100, Math.round((doVal / 8) * 100))),
+        progressPercent: oxPercent,
         tone: doTone,
-        tooltip: 'Oxigênio dissolvido na água.',
+        tooltip: 'Oxigênio dissolvido na água (meta saudável: ≥ 6,0 mg/L).',
       },
       temperature: {
         id: 'temperature',
         label: 'Temperatura',
         valueText: tempVal.toFixed(1).replace('.', ','),
         unitText: '°C',
-        progressPercent: Math.max(0, Math.min(100, Math.round(((tempVal - 22) / (32 - 22)) * 100))),
+        progressPercent: tempPercent,
         tone: tempTone,
-        tooltip: 'Temperatura superficial da água.',
+        tooltip: 'Temperatura da água (faixa ideal: 25–27,5 °C).',
       },
       thermalStress: {
         id: 'thermalStress',
         label: 'Estresse térmico',
         valueText: dhwVal.toFixed(1).replace('.', ','),
         unitText: '°C-sem',
-        progressPercent: Math.max(0, Math.min(100, Math.round((dhwVal / 12) * 100))),
+        progressPercent: dhwPercent,
         tone: dhwTone,
-        tooltip: 'Calor acumulado no recife (DHW).',
+        tooltip: 'Acúmulo de calor térmico no recife (DHW).',
       },
       ph: {
         id: 'ph',
         label: 'pH da água',
         valueText: ph.toFixed(2).replace('.', ','),
-        progressPercent: Math.max(0, Math.min(100, Math.round(((ph - 7.4) / (8.4 - 7.4)) * 100))),
+        progressPercent: phPercent,
         tone: phTone,
-        tooltip: 'Acidez da coluna d’água.',
+        tooltip: 'Acidez da água marinha (ótimo: ≥ 8,10).',
       },
       aragonite: {
         id: 'aragonite',
         label: 'Carbono / Aragonita',
         valueText: aragVal.toFixed(2).replace('.', ','),
         unitText: 'Ωarag',
-        progressPercent: Math.max(0, Math.min(100, Math.round((aragVal / 4.0) * 100))),
+        progressPercent: aragPercent,
         tone: aragTone,
-        tooltip: 'Saturação do sistema de carbonatos.',
+        tooltip: 'Saturação de carbonatos para esqueletos de corais (ótimo: ≥ 3,5).',
       },
       coral: {
         id: 'coral',
@@ -528,7 +587,7 @@ export function App() {
         id: 'algae',
         label: 'Algas',
         valueText: `${algaeVal}%`,
-        progressPercent: algaeVal,
+        progressPercent: algaePercent,
         tone: algaeTone,
         tooltip: 'Cobertura macroalgal competitiva.',
       },
@@ -545,7 +604,7 @@ export function App() {
         label: 'Turbidez',
         valueText: `${turbVal}`,
         unitText: '% índice',
-        progressPercent: turbVal,
+        progressPercent: turbPercent,
         tone: turbTone,
         tooltip: 'Partículas em suspensão e penetração de luz.',
       },
