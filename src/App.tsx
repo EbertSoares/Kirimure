@@ -3,6 +3,7 @@ import { BrandLogo } from './components/BrandLogo';
 import { BrazilMapScreen } from './components/BrazilMapScreen';
 import { EnvironmentDrawer } from './components/EnvironmentDrawer';
 import { EvidenceDrawer, type EvidenceTab } from './components/EvidenceDrawer';
+import { FpsCounter } from './components/FpsCounter';
 import { Icon } from './components/Icons';
 import { IndicatorProgress } from './components/IndicatorProgress';
 import { RegionSelector } from './components/RegionSelector';
@@ -53,7 +54,18 @@ export type ContextualIndicatorId =
   | 'trophic'
   | 'turbidity';
 
-const MAIN_PROGRESS_INDICATORS = ['coral', 'fish'] as const;
+export const ALL_INDICATOR_OPTIONS: { id: ContextualIndicatorId; label: string; desc: string }[] = [
+  { id: 'coral', label: 'Corais', desc: 'Saúde integrada da estrutura recifal' },
+  { id: 'fish', label: 'Peixes', desc: 'Biomassa e diversidade da ictiofauna' },
+  { id: 'oxygen', label: 'Oxigênio', desc: 'Concentração de oxigênio dissolvido' },
+  { id: 'temperature', label: 'Temperatura', desc: 'Temperatura superficial da água marinha' },
+  { id: 'ph', label: 'pH da água', desc: 'Acidez da coluna d’água' },
+  { id: 'aragonite', label: 'Carbono / Aragonita', desc: 'Saturação do sistema de carbonatos' },
+  { id: 'thermalStress', label: 'Estresse térmico', desc: 'Graus-semanas de aquecimento (DHW)' },
+  { id: 'turbidity', label: 'Turbidez', desc: 'Partículas em suspensão e penetração luminosa' },
+  { id: 'algae', label: 'Algas', desc: 'Cobertura macroalgal competitiva' },
+  { id: 'trophic', label: 'Equilíbrio trófico', desc: 'Balanço ecológico e cadeias alimentares' },
+];
 
 interface ContextualIndicatorView {
   id: ContextualIndicatorId;
@@ -127,6 +139,15 @@ export function App() {
 
   const [timelineMilestones, setTimelineMilestones] = useState<ImpactMilestone[]>([]);
   const [focusedInterventionId, setFocusedInterventionId] = useState<InterventionId | null>(null);
+
+  const [selectedIndicatorIds, setSelectedIndicatorIds] = useState<ContextualIndicatorId[]>([
+    'coral',
+    'fish',
+    'oxygen',
+    'temperature',
+    'ph',
+  ]);
+  const [metricsSelectorOpen, setMetricsSelectorOpen] = useState(false);
 
   const oceanData = useOceanData(simulation.sector, screen === 'simulation');
 
@@ -448,6 +469,7 @@ export function App() {
         label: 'Oxigênio',
         valueText: doVal.toFixed(1).replace('.', ','),
         unitText: 'mg/L',
+        progressPercent: Math.max(0, Math.min(100, Math.round((doVal / 8) * 100))),
         tone: doTone,
         tooltip: 'Oxigênio dissolvido na água.',
       },
@@ -456,31 +478,35 @@ export function App() {
         label: 'Temperatura',
         valueText: tempVal.toFixed(1).replace('.', ','),
         unitText: '°C',
+        progressPercent: Math.max(0, Math.min(100, Math.round(((tempVal - 22) / (32 - 22)) * 100))),
         tone: tempTone,
-        tooltip: 'Temperatura da água.',
+        tooltip: 'Temperatura superficial da água.',
       },
       thermalStress: {
         id: 'thermalStress',
         label: 'Estresse térmico',
         valueText: dhwVal.toFixed(1).replace('.', ','),
-        unitText: '°C-semanas',
+        unitText: '°C-sem',
+        progressPercent: Math.max(0, Math.min(100, Math.round((dhwVal / 12) * 100))),
         tone: dhwTone,
-        tooltip: 'Calor acumulado no cenário.',
+        tooltip: 'Calor acumulado no recife (DHW).',
       },
       ph: {
         id: 'ph',
-        label: 'pH',
+        label: 'pH da água',
         valueText: ph.toFixed(2).replace('.', ','),
+        progressPercent: Math.max(0, Math.min(100, Math.round(((ph - 7.4) / (8.4 - 7.4)) * 100))),
         tone: phTone,
-        tooltip: 'Acidez da água.',
+        tooltip: 'Acidez da coluna d’água.',
       },
       aragonite: {
         id: 'aragonite',
-        label: 'Aragonita',
+        label: 'Carbono / Aragonita',
         valueText: aragVal.toFixed(2).replace('.', ','),
         unitText: 'Ωarag',
+        progressPercent: Math.max(0, Math.min(100, Math.round((aragVal / 4.0) * 100))),
         tone: aragTone,
-        tooltip: 'Saturação de aragonita na água.',
+        tooltip: 'Saturação do sistema de carbonatos.',
       },
       coral: {
         id: 'coral',
@@ -488,7 +514,7 @@ export function App() {
         valueText: `${coralVal}%`,
         progressPercent: coralVal,
         tone: coralTone,
-        tooltip: 'Saúde dos corais no modelo.',
+        tooltip: 'Saúde integrada da estrutura recifal.',
       },
       fish: {
         id: 'fish',
@@ -496,44 +522,49 @@ export function App() {
         valueText: `${fishVal}%`,
         progressPercent: fishVal,
         tone: fishTone,
-        tooltip: 'Saúde dos peixes no modelo.',
+        tooltip: 'Biomassa e integridade da ictiofauna.',
       },
       algae: {
         id: 'algae',
         label: 'Algas',
         valueText: `${algaeVal}%`,
+        progressPercent: algaeVal,
         tone: algaeTone,
-        tooltip: 'Cobertura de algas no modelo.',
+        tooltip: 'Cobertura macroalgal competitiva.',
       },
       trophic: {
         id: 'trophic',
         label: 'Equilíbrio trófico',
         valueText: `${trophicVal}%`,
+        progressPercent: trophicVal,
         tone: trophicTone,
-        tooltip: 'Equilíbrio alimentar no modelo.',
+        tooltip: 'Equilíbrio das teias tróficas.',
       },
       turbidity: {
         id: 'turbidity',
         label: 'Turbidez',
         valueText: `${turbVal}`,
         unitText: '% índice',
+        progressPercent: turbVal,
         tone: turbTone,
-        tooltip: 'Partículas em suspensão e transparência da água.',
+        tooltip: 'Partículas em suspensão e penetração de luz.',
       },
     };
   }, [simulation]);
 
   const visibleIndicatorIds = useMemo<readonly ContextualIndicatorId[]>(() => {
+    const list = new Set<ContextualIndicatorId>(selectedIndicatorIds);
     const driverFactor = focusedFactor && isFactorActive(focusedFactor, simulation.controls[focusedFactor])
       ? focusedFactor
       : (activeFactorIds[activeFactorIds.length - 1] ?? focusedFactor);
     if (driverFactor) {
-      const primary = (ITEM_DEFINITIONS[driverFactor].primaryIndicators as readonly ContextualIndicatorId[])
-        .filter((id) => id !== 'coral' && id !== 'fish');
-      return ['coral', 'fish', ...(primary.slice(0, 2) as ContextualIndicatorId[])];
+      const primary = ITEM_DEFINITIONS[driverFactor].primaryIndicators as readonly ContextualIndicatorId[];
+      for (const p of primary) {
+        list.add(p);
+      }
     }
-    return ['coral', 'fish', 'oxygen'];
-  }, [focusedFactor, simulation.controls, activeFactorIds]);
+    return Array.from(list);
+  }, [selectedIndicatorIds, focusedFactor, simulation.controls, activeFactorIds]);
 
   const toggleEnvDrawer = () => {
     setEnvDrawerOpen((open) => {
@@ -687,11 +718,11 @@ export function App() {
             aria-haspopup="dialog"
             aria-expanded={envDrawerOpen}
             aria-pressed={envDrawerOpen}
-            title="Ajustar condições ambientais"
+            title="Manipular condições ambientais"
             onClick={toggleEnvDrawer}
           >
             <Icon name="sliders" />
-            <span>Ajustar</span>
+            <span>Manipular</span>
             {activeFactorIds.length > 0 && (
               <em className="drawer-count-badge">{activeFactorIds.length}</em>
             )}
@@ -734,43 +765,39 @@ export function App() {
               <MarineScene state={simulation} resetToken={resetToken} />
             </Suspense>
 
+            <div className="fps-counter-overlay" aria-label="Desempenho da cena 3D">
+              <FpsCounter />
+            </div>
+
             <div className="contextual-telemetry-bar" aria-label="Indicadores do ecossistema">
               <div className="telemetry-pills">
                 {visibleIndicatorIds.map((indId) => {
                   const view = indicatorViews[indId];
                   if (!view) return null;
-                  const isMainProgress = (MAIN_PROGRESS_INDICATORS as readonly string[]).includes(view.id) && view.progressPercent !== undefined;
-                  if (isMainProgress) {
-                    return (
-                      <IndicatorProgress
-                        key={view.id}
-                        label={view.label}
-                        value={view.progressPercent!}
-                        tone={view.tone}
-                        tooltip={view.tooltip}
-                        onClick={openIndicatorDetails}
-                      />
-                    );
-                  }
                   return (
-                    <button
+                    <IndicatorProgress
                       key={view.id}
-                      type="button"
-                      className={`indicator-metric tone-${view.tone}`}
-                      title={view.tooltip}
-                      aria-label={`${view.label}: ${view.valueText}${view.unitText ? ` ${view.unitText}` : ''}. Abrir detalhes`}
+                      label={view.label}
+                      value={view.progressPercent ?? 0}
+                      displayValue={view.valueText}
+                      unit={view.unitText}
+                      tone={view.tone}
+                      tooltip={view.tooltip}
                       onClick={openIndicatorDetails}
-                    >
-                      <span className="indicator-metric__label">{view.label}</span>
-                      <span className="indicator-metric__reading">
-                        <strong className="indicator-metric__value">{view.valueText}</strong>
-                        {view.unitText && (
-                          <span className="indicator-metric__unit">{view.unitText}</span>
-                        )}
-                      </span>
-                    </button>
+                    />
                   );
                 })}
+
+                <button
+                  type="button"
+                  className="btn-customize-metrics"
+                  onClick={() => setMetricsSelectorOpen(true)}
+                  title="Editar métricas exibidas no visualizador"
+                  aria-label="Editar métricas exibidas"
+                >
+                  <Icon name="sliders" />
+                  <span>Editar</span>
+                </button>
               </div>
             </div>
           </div>
@@ -821,11 +848,11 @@ export function App() {
             aria-haspopup="dialog"
             aria-expanded={envDrawerOpen}
             aria-pressed={envDrawerOpen}
-            title="Ajustar condições ambientais"
+            title="Manipular condições ambientais"
             onClick={toggleEnvDrawer}
           >
             <Icon name="sliders" />
-            <span>Ajustar</span>
+            <span>Manipular</span>
             {activeFactorIds.length > 0 && (
               <em className="drawer-count-badge">{activeFactorIds.length}</em>
             )}
@@ -887,6 +914,97 @@ export function App() {
           focusedInterventionId={focusedInterventionId}
           timelineMilestones={timelineMilestones}
         />
+
+        {metricsSelectorOpen && (
+          <div
+            className="limits-modal-overlay"
+            role="presentation"
+            onClick={() => setMetricsSelectorOpen(false)}
+          >
+            <div
+              className="floating-metrics-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="metrics-modal-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <header className="limits-modal-header">
+                <div className="limits-modal-title-row">
+                  <Icon name="sliders" className="limits-modal-icon" />
+                  <div>
+                    <h3 id="metrics-modal-title" className="limits-modal-title">Métricas no Visualizador</h3>
+                    <span className="limits-modal-target">Selecione quais indicadores exibir com barra sobre o recife</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--quiet btn--icon"
+                  onClick={() => setMetricsSelectorOpen(false)}
+                  aria-label="Fechar personalização de métricas"
+                  title="Fechar"
+                >
+                  <Icon name="close" />
+                </button>
+              </header>
+
+              <div className="metrics-modal-list">
+                {ALL_INDICATOR_OPTIONS.map((opt) => {
+                  const checked = selectedIndicatorIds.includes(opt.id);
+                  return (
+                    <label key={opt.id} className={`metric-option-row ${checked ? 'is-checked' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setSelectedIndicatorIds((prev) => {
+                            if (isChecked) {
+                              return [...prev, opt.id];
+                            }
+                            if (prev.length <= 1) return prev; // Garante ao menos 1
+                            return prev.filter((id) => id !== opt.id);
+                          });
+                        }}
+                      />
+                      <div className="metric-option-info">
+                        <strong>{opt.label}</strong>
+                        <small>{opt.desc}</small>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <footer className="limits-modal-footer">
+                <button
+                  type="button"
+                  className="btn btn--quiet btn--compact"
+                  onClick={() => {
+                    setSelectedIndicatorIds(ALL_INDICATOR_OPTIONS.map((o) => o.id));
+                  }}
+                >
+                  Marcar todas
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--quiet btn--compact"
+                  onClick={() => {
+                    setSelectedIndicatorIds(['coral', 'fish', 'oxygen', 'temperature', 'ph']);
+                  }}
+                >
+                  Padrão (5)
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--compact"
+                  onClick={() => setMetricsSelectorOpen(false)}
+                >
+                  Concluir
+                </button>
+              </footer>
+            </div>
+          </div>
+        )}
       </main>
 
       <div

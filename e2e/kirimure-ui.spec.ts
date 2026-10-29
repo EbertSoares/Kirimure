@@ -35,8 +35,17 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await expect(telemetry).not.toContainText('Comunidade ativa');
 
     const progressBars = telemetry.locator('[role="progressbar"]');
-    await expect(progressBars).toHaveCount(2);
+    await expect(progressBars).toHaveCount(5);
     await expect(progressBars.first()).toHaveAttribute('aria-valuenow', '100');
+
+    // Contador de FPS 100% preciso visível no canto superior direito do visualizador
+    const fpsBadge = page.locator('.fps-counter-badge');
+    await expect(fpsBadge).toBeVisible();
+    await expect(fpsBadge).toContainText('FPS');
+
+    // Botão de editar métricas presente e funcional
+    const editMetricsBtn = telemetry.locator('.btn-customize-metrics');
+    await expect(editMetricsBtn).toBeVisible();
 
     // 4. Seletor de região alimentado por BTS_SECTORS + fechamento e foco via Escape
     await regionTrigger.click();
@@ -55,8 +64,8 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await expect(regionPopover).toBeHidden();
     await expect(regionTrigger).toBeFocused();
 
-    // 5. Painel Ajustar: atualização contextual e rolagem real do menu suspenso
-    const adjustBtn = topbar.getByRole('button', { name: 'Ajustar', exact: true });
+    // 5. Painel Manipular: atualização contextual e rolagem real do menu suspenso
+    const adjustBtn = topbar.getByRole('button', { name: /Manipular|Ajustar/i });
     await adjustBtn.click();
     const envDrawer = page.locator('.env-drawer');
     await expect(envDrawer).toBeVisible();
@@ -157,7 +166,7 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     // Dock inferior flutuante com 2 ações principais >= 48 px de altura
     const mobileDock = page.locator('.mobile-panel-dock');
     await expect(mobileDock).toBeVisible();
-    const dockAdjustBtn = mobileDock.getByRole('button', { name: /Ajustar/i });
+    const dockAdjustBtn = mobileDock.getByRole('button', { name: /Manipular|Ajustar/i });
     const dockDataBtn = mobileDock.getByRole('button', { name: /Dados/i });
 
     const adjustBox = await dockAdjustBtn.boundingBox();

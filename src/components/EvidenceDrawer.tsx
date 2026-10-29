@@ -140,8 +140,8 @@ function MultiMetricChart({
           <text x={getX(maxDay)} y={height - 7} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">Dia {maxDay}</text>
 
           {algaePath && <path d={algaePath} fill="none" stroke="#D7BD80" strokeWidth="1.6" strokeDasharray="3 2" />}
-          {fishPath && <path d={fishPath} fill="none" stroke="#BEDBC7" strokeWidth="2" />}
-          {coralPath && <path d={coralPath} fill="none" stroke="#86C49A" strokeWidth="2.2" />}
+          {fishPath && <path d={fishPath} fill="none" stroke="#6b7bfb" strokeWidth="2" />}
+          {coralPath && <path d={coralPath} fill="none" stroke="#1424f7" strokeWidth="2.2" />}
         </svg>
       </div>
     );
@@ -179,7 +179,7 @@ function MultiMetricChart({
         <text x={getX(0)} y={height - 7} textAnchor="start" fill="rgba(242,244,238,0.62)" fontSize="9">Dia 0</text>
         <text x={getX(maxDay)} y={height - 7} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">Dia {maxDay}</text>
 
-        {tempPath && <path d={tempPath} fill="none" stroke="#BEDBC7" strokeWidth="1.6" strokeDasharray="4 2" />}
+        {tempPath && <path d={tempPath} fill="none" stroke="#6b7bfb" strokeWidth="1.6" strokeDasharray="4 2" />}
         {dhwPath && <path d={dhwPath} fill="none" stroke="#D7867D" strokeWidth="2.2" />}
       </svg>
     </div>
@@ -559,7 +559,7 @@ export function EvidenceDrawer({
                         max={100}
                         width={84}
                         height={24}
-                        stroke={val >= 67 ? '#86C49A' : val >= 34 ? '#D7BD80' : '#D7867D'}
+                        stroke={val >= 67 ? '#1424f7' : val >= 34 ? '#D7BD80' : '#D7867D'}
                       />
                       <span className={`species-score ${val >= 67 ? 'tone-healthy' : val >= 34 ? 'tone-watch' : 'tone-critical'}`}>
                         {val}%

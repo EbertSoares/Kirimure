@@ -8,6 +8,7 @@ import {
 } from '../simulation/config';
 import {
   INTERVENTIONS,
+  type InterventionDefinition,
   type InterventionId,
 } from '../simulation/interventions';
 import {
@@ -165,6 +166,8 @@ export function EnvironmentDrawer({
   }));
 
   const [showAllInterventions, setShowAllInterventions] = useState(false);
+  const [recoveryExpanded, setRecoveryExpanded] = useState<boolean>(true);
+  const [selectedLimitIntervention, setSelectedLimitIntervention] = useState<InterventionDefinition | null>(null);
 
   const toggleGroup = (groupId: ControlCategoryId) => {
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -184,6 +187,7 @@ export function EnvironmentDrawer({
     : (recommended.length > 0 ? recommended : INTERVENTIONS.slice(0, 3));
 
   const hasActiveInterventions = (simulation.activeInterventions?.length ?? 0) > 0;
+  const activeInterventionsCount = simulation.activeInterventions?.length ?? 0;
   const firstMilestoneCrossing = timelineMilestones?.find((m) => m.firstCrossingDay !== null && m.firstCrossingDay > 0);
 
   if (!open) return null;
@@ -192,11 +196,11 @@ export function EnvironmentDrawer({
     <aside
       className="env-drawer"
       role="dialog"
-      aria-label="Ajustar condições ambientais"
+      aria-label="Manipular condições ambientais"
     >
       <header className="env-drawer-header">
         <div>
-          <h2 className="env-drawer-title">Condições ambientais</h2>
+          <h2 className="env-drawer-title">Manipular condições</h2>
           <p className="env-drawer-subtitle">{sectorDef.label}</p>
         </div>
         <button
@@ -416,95 +420,209 @@ export function EnvironmentDrawer({
           );
         })}
 
-        <section className="recovery-section" aria-label="Ações de recuperação ambiental">
-          <div className="recovery-section-header">
-            <div className="recovery-title-group">
-              <h3 className="recovery-section-title">Recuperação</h3>
-              <p className="recovery-section-desc">Ações de mitigação para conter e reduzir impactos</p>
+        <section className={`control-group recovery-group recovery-section ${recoveryExpanded ? 'is-open' : 'is-collapsed'}`} aria-label="Ações de recuperação ambiental">
+          <button
+            type="button"
+            className="control-group-trigger"
+            aria-expanded={recoveryExpanded}
+            aria-controls="group-panel-recovery"
+            onClick={() => setRecoveryExpanded((prev) => !prev)}
+          >
+            <div className="control-group-heading">
+              <span className="control-group-title">Recuperação</span>
+              <span className="control-group-desc">Ações de mitigação para conter e reduzir impactos</span>
             </div>
-            <button
-              type="button"
-              className="btn btn--quiet btn--compact see-all-toggle-btn"
-              onClick={() => setShowAllInterventions((prev) => !prev)}
-            >
-              {showAllInterventions ? 'Ver recomendadas' : `Ver todas (${INTERVENTIONS.length})`}
-            </button>
-          </div>
+            <div className="control-group-right">
+              {activeInterventionsCount > 0 && (
+                <span className="group-active-pill">
+                  {activeInterventionsCount}
+                </span>
+              )}
+              <span className={`group-chevron ${recoveryExpanded ? 'rotated' : ''}`} aria-hidden="true">
+                <Icon name="chevronDown" />
+              </span>
+            </div>
+          </button>
 
-          <div className="interventions-grid">
-            {displayedInterventions.map((item) => {
-              const active = isInterventionActive(simulation.activeInterventions, item.id);
-              return (
-                <article
-                  key={item.id}
-                  className={`intervention-card ${active ? 'is-active' : ''} ${!item.modeled ? 'is-conceptual' : ''}`}
+          {recoveryExpanded && (
+            <div id="group-panel-recovery" className="control-group-items">
+              <div className="recovery-section-subhead">
+                <span className="recovery-filter-note">
+                  {showAllInterventions ? `Todas as intervenções (${INTERVENTIONS.length})` : 'Recomendadas para as pressões ativas'}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn--quiet btn--compact see-all-toggle-btn"
+                  onClick={() => setShowAllInterventions((prev) => !prev)}
                 >
-                  <div className="intervention-card-top">
-                    <div className="intervention-title-row">
-                      <Icon name={item.icon as any} className="intervention-icon" />
-                      <h4 className="intervention-title">{item.title}</h4>
-                    </div>
-                    <div className="intervention-badges">
-                      {active && <span className="intervention-badge is-active">Ativa</span>}
-                      {!item.modeled && (
-                        <span
-                          className="intervention-badge is-conceptual"
-                          title="Ação para reflexão pedagógica; não altera numericamente o modelo no momento"
+                  {showAllInterventions ? 'Ver recomendadas' : `Ver todas (${INTERVENTIONS.length})`}
+                </button>
+              </div>
+
+              <div className="interventions-grid">
+                {displayedInterventions.map((item) => {
+                  const active = isInterventionActive(simulation.activeInterventions, item.id);
+                  return (
+                    <article
+                      key={item.id}
+                      className={`intervention-card ${active ? 'is-active' : ''} ${!item.modeled ? 'is-conceptual' : ''}`}
+                    >
+                      <div className="intervention-card-top">
+                        <div className="intervention-title-row">
+                          <Icon name={item.icon as any} className="intervention-icon" />
+                          <h4 className="intervention-title">{item.title}</h4>
+                        </div>
+                        <div className="intervention-badges">
+                          {active && <span className="intervention-badge is-active">Ativa</span>}
+                          {!item.modeled && (
+                            <span
+                              className="intervention-badge is-conceptual"
+                              title="Ação para reflexão pedagógica; não altera numericamente o modelo no momento"
+                            >
+                              Exploração conceitual
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="intervention-desc">{item.description}</p>
+                      <p className="intervention-effect-line">
+                        <strong>Efeito:</strong> {item.effectLabel}
+                      </p>
+
+                      <div className="intervention-actions">
+                        <button
+                          type="button"
+                          className={`btn btn--compact ${active ? 'btn--primary' : 'btn--quiet'}`}
+                          onClick={() => onToggleIntervention(item.id)}
+                          aria-pressed={active}
                         >
-                          Exploração conceitual
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                          {active ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--quiet btn--compact"
+                          onClick={() => setSelectedLimitIntervention(item)}
+                          title="Ver limite biofísico e operacional desta recuperação"
+                        >
+                          Ver limites
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
 
-                  <p className="intervention-desc">{item.description}</p>
-                  <p className="intervention-effect-line">
-                    <strong>Efeito:</strong> {item.effectLabel}
-                  </p>
-
-                  <div className="intervention-actions">
-                    <button
-                      type="button"
-                      className={`btn btn--compact ${active ? 'btn--primary' : 'btn--quiet'}`}
-                      onClick={() => onToggleIntervention(item.id)}
-                      aria-pressed={active}
-                    >
-                      {active ? 'Desativar' : 'Ativar'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--quiet btn--compact"
-                      onClick={() => onOpenInterventionLimits(item.id)}
-                      title="Ver limites científicos e evidências no painel de Dados"
-                    >
-                      Ver limites
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="timeline-preview-strip">
-            <div className="timeline-preview-row">
-              <span className="timeline-preview-label">Primeiro efeito no modelo:</span>
-              <span className="timeline-preview-val">
-                {hasActiveInterventions
-                  ? 'Imediato sobre o fluxo de novas entradas (~0–3 dias)'
-                  : 'Sem intervenção ativa'}
-              </span>
+              <div className="timeline-preview-strip">
+                <div className="timeline-preview-row">
+                  <span className="timeline-preview-label">Primeiro efeito no modelo:</span>
+                  <span className="timeline-preview-val">
+                    {hasActiveInterventions
+                      ? 'Imediato sobre o fluxo de novas entradas (~0–3 dias)'
+                      : 'Sem intervenção ativa'}
+                  </span>
+                </div>
+                <div className="timeline-preview-row">
+                  <span className="timeline-preview-label">Recuperação do indicador:</span>
+                  <span className="timeline-preview-val">
+                    {firstMilestoneCrossing
+                      ? `~${formatSimulatedDuration(firstMilestoneCrossing.firstCrossingDay!)} (${firstMilestoneCrossing.label})`
+                      : 'Depuração gradual conforme hidrodinâmica'}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="timeline-preview-row">
-              <span className="timeline-preview-label">Recuperação do indicador:</span>
-              <span className="timeline-preview-val">
-                {firstMilestoneCrossing
-                  ? `~${formatSimulatedDuration(firstMilestoneCrossing.firstCrossingDay!)} (${firstMilestoneCrossing.label})`
-                  : 'Depuração gradual conforme hidrodinâmica'}
-              </span>
-            </div>
-          </div>
+          )}
         </section>
       </div>
+
+      {selectedLimitIntervention && (
+        <div
+          className="limits-modal-overlay"
+          role="presentation"
+          onClick={() => setSelectedLimitIntervention(null)}
+        >
+          <div
+            className="floating-limits-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="limits-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="limits-modal-header">
+              <div className="limits-modal-title-row">
+                <Icon name={selectedLimitIntervention.icon as any} className="limits-modal-icon" />
+                <div>
+                  <h3 id="limits-modal-title" className="limits-modal-title">{selectedLimitIntervention.title}</h3>
+                  <span className="limits-modal-target">Fator associado: {selectedLimitIntervention.targets.join(', ')} · Evidência: {selectedLimitIntervention.evidenceLabel}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn--quiet btn--icon"
+                onClick={() => setSelectedLimitIntervention(null)}
+                aria-label="Fechar limites"
+                title="Fechar"
+              >
+                <Icon name="close" />
+              </button>
+            </header>
+
+            <div className="limits-modal-body">
+              <div className="limits-info-block">
+                <h4>Efeito e mecanismo de mitigação</h4>
+                <p><strong>{selectedLimitIntervention.effectLabel}:</strong> {selectedLimitIntervention.activeStatusLabel}</p>
+              </div>
+
+              <div className="limits-info-block highlight">
+                <h4>Limite biológico e operacional</h4>
+                <p>{selectedLimitIntervention.limitation}</p>
+              </div>
+
+              <div className="limits-info-grid">
+                <div className="limits-mini-card">
+                  <small>Dinâmica temporal</small>
+                  <strong>{selectedLimitIntervention.timeframeNote}</strong>
+                </div>
+                <div className="limits-mini-card">
+                  <small>Status nesta simulação</small>
+                  <strong className={isInterventionActive(simulation.activeInterventions, selectedLimitIntervention.id) ? 'is-active-text' : ''}>
+                    {isInterventionActive(simulation.activeInterventions, selectedLimitIntervention.id)
+                      ? '✓ Ativa no recife'
+                      : 'Inativa'}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="limits-info-block ref">
+                <h4>Evidência científica e literatura</h4>
+                <p className="limits-ref-text">{selectedLimitIntervention.scientificBasis}</p>
+              </div>
+            </div>
+
+            <footer className="limits-modal-footer">
+              <button
+                type="button"
+                className={`btn ${isInterventionActive(simulation.activeInterventions, selectedLimitIntervention.id) ? 'btn--quiet' : 'btn--primary'}`}
+                onClick={() => {
+                  onToggleIntervention(selectedLimitIntervention.id);
+                }}
+              >
+                {isInterventionActive(simulation.activeInterventions, selectedLimitIntervention.id)
+                  ? 'Desativar recuperação'
+                  : 'Ativar recuperação'}
+              </button>
+              <button
+                type="button"
+                className="btn btn--quiet"
+                onClick={() => setSelectedLimitIntervention(null)}
+              >
+                Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

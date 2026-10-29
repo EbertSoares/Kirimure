@@ -318,7 +318,7 @@ export function SciencePanel({
                           min={0}
                           max={item.id === 'oxygen' ? 8 : 100}
                           label={item.label}
-                          stroke={item.tone === 'healthy' ? '#86C49A' : item.tone === 'watch' ? '#D7BD80' : '#D7867D'}
+                          stroke={item.tone === 'healthy' ? '#1424f7' : item.tone === 'watch' ? '#D7BD80' : '#D7867D'}
                         />
                         <strong>{item.display}</strong>
                       </div>
@@ -364,7 +364,7 @@ export function SciencePanel({
                     min={0}
                     max={100}
                     label="Corais"
-                    stroke={levelTone(state.health.coral) === 'healthy' ? '#86C49A' : '#D7BD80'}
+                    stroke={levelTone(state.health.coral) === 'healthy' ? '#1424f7' : '#D7BD80'}
                   />
                   <strong className={levelTone(state.health.coral)}>{Math.round(state.health.coral)}/100</strong>
                 </div>
@@ -408,7 +408,7 @@ export function SciencePanel({
                         min={0}
                         max={100}
                         label={species.label}
-                        stroke={levelTone(health) === 'healthy' ? '#86C49A' : levelTone(health) === 'watch' ? '#D7BD80' : '#D7867D'}
+                        stroke={levelTone(health) === 'healthy' ? '#1424f7' : levelTone(health) === 'watch' ? '#D7BD80' : '#D7867D'}
                       />
                       <strong className={levelTone(health)}>{Math.round(health)}/100</strong>
                     </div>

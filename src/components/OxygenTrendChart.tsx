@@ -83,8 +83,8 @@ export function OxygenTrendChart({
       >
         <defs>
           <linearGradient id="oxygenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#86C49A" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#86C49A" stopOpacity="0.0" />
+            <stop offset="0%" stopColor="#1424f7" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#1424f7" stopOpacity="0.0" />
           </linearGradient>
         </defs>
 
@@ -110,7 +110,7 @@ export function OxygenTrendChart({
           y1={yAdequate}
           x2={width - paddingRight}
           y2={yAdequate}
-          stroke="rgba(134, 196, 154, 0.55)"
+          stroke="rgba(20, 36, 247, 0.55)"
           strokeDasharray="3 3"
           strokeWidth="1"
         />
@@ -118,7 +118,7 @@ export function OxygenTrendChart({
           x={width - paddingRight}
           y={yAdequate - 3}
           textAnchor="end"
-          fill="#86C49A"
+          fill="#1424f7"
           fontSize="9"
           fontWeight="600"
         >
@@ -164,7 +164,7 @@ export function OxygenTrendChart({
           <path
             d={fishPath}
             fill="none"
-            stroke="#BEDBC7"
+            stroke="#6b7bfb"
             strokeWidth="1.6"
             strokeDasharray="4 2"
             opacity="0.88"
@@ -175,7 +175,7 @@ export function OxygenTrendChart({
           <path
             d={oxygenPath}
             fill="none"
-            stroke="#86C49A"
+            stroke="#1424f7"
             strokeWidth="2.2"
             strokeLinecap="round"
           />
@@ -183,7 +183,7 @@ export function OxygenTrendChart({
 
         {points.length > 0 && (
           <g transform={`translate(${getX(currentDay)}, ${getY(currentOxygen)})`}>
-            <circle r="4" fill="#86C49A" stroke="#151815" strokeWidth="1.5" />
+            <circle r="4" fill="#1424f7" stroke="#151815" strokeWidth="1.5" />
           </g>
         )}
       </svg>

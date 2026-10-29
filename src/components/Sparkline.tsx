@@ -20,7 +20,7 @@ export function Sparkline({
   height = 26,
   min: userMin,
   max: userMax,
-  stroke = '#86C49A',
+  stroke = '#1424f7',
   label,
 }: SparklineProps) {
   const gradId = useId();

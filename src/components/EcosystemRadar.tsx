@@ -78,8 +78,8 @@ export function EcosystemRadar({ state, trophic }: EcosystemRadarProps) {
   const statusTone = meanVitality >= 67 ? 'healthy' : meanVitality >= 34 ? 'watch' : 'critical';
 
   // Cores dinâmicas
-  const strokeColor = statusTone === 'healthy' ? '#86C49A' : statusTone === 'watch' ? '#D7BD80' : '#D7867D';
-  const fillColor = statusTone === 'healthy' ? 'rgba(134, 196, 154, 0.22)' : statusTone === 'watch' ? 'rgba(215, 189, 128, 0.22)' : 'rgba(215, 134, 125, 0.25)';
+  const strokeColor = statusTone === 'healthy' ? '#1424f7' : statusTone === 'watch' ? '#D7BD80' : '#D7867D';
+  const fillColor = statusTone === 'healthy' ? 'rgba(20, 36, 247, 0.22)' : statusTone === 'watch' ? 'rgba(215, 189, 128, 0.22)' : 'rgba(215, 134, 125, 0.25)';
 
   return (
     <article className="ecosystem-radar-card" aria-label="Radar de Vitalidade Ecosistêmica">

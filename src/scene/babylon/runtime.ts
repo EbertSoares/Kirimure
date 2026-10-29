@@ -3472,6 +3472,10 @@ export class BabylonOceanRuntime {
     this.engine.dispose();
   }
 
+  getFps(): number {
+    return Math.round(this.engine.getFps());
+  }
+
   private render() {
     if (this.disposed) return;
 
