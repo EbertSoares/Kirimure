@@ -32,13 +32,21 @@ export interface ThermalForcingPoint {
   sstAnomalyDegC: number | null;
   hotSpotDegC: number | null;
   degreeHeatingWeeks: number | null;
-  /** Nível ordinal de estresse térmico NOAA CRW (0 = Nenhum, 1 = Atenção, 2 = Aviso, 3 = Alerta 1, 4 = Alerta 2, 5 = Alerta 3, 6 = Alerta 4, 7 = Alerta 5). */
+  /**
+   * Nível ordinal de alerta de branqueamento NOAA CRW por pixel/estação (escala inteira 0 a 7:
+   * 0 = Sem estresse, 1 = Vigilância, 2 = Aviso, 3 = Alerta 1, 4 = Alerta 2, 5 = Alerta 3, 6 = Alerta 4, 7 = Alerta 5).
+   * Nota semântica: no dataset ERDDAP (`dhw_5km` / `NOAA_DHW`), a variável `CRW_BAA` ("Bleaching Alert Area")
+   * codifica exatamente esta categoria ordinal adimensional por pixel — não uma área geográfica em km².
+   */
   bleachingAlertLevel: number | null;
-  /** Campo mantido para retrocompatibilidade semântica. */
-  bleachingAlertArea?: number | null;
+  /** Máximo em janela de 7 dias do nível ordinal de alerta (`CRW_BAA_7D_MAX` ou `baa_7day_max`), quando fornecido pela fonte. */
   bleachingAlertMax7d?: number | null;
-  /** Nível de estresse próprio da estação virtual, quando informado separadamente do BAA 7d. */
+  /** Identifica qual variável bruta da fonte originou `bleachingAlertLevel` para rastreabilidade estrita. */
+  bleachingAlertSourceVariable?: 'CRW_BAA' | 'CRW_BAA_7D_MAX' | 'baa_7day_max' | 'stress_level';
+  /** Nível de estresse próprio da estação virtual (`stress_level`), preservado separadamente de `baa_7day_max`. */
   virtualStationStressLevel?: number | null;
+  /** Climatologia de Temperatura Máxima Mensal (MMM oficial da NOAA, °C) quando reportada pela fonte. */
+  climatologyMmmDegC?: number | null;
   /** SST no percentil 90 de estresse da estação virtual (°C). */
   sst90thPercentileDegC?: number | null;
   /** Faixa de SST observada no cluster da estação (°C). */

@@ -11,11 +11,11 @@ export const CHALLENGES: readonly Challenge[] = [
   {
     id: 'clean-water',
     title: 'Água limpa por 30 dias',
-    brief: 'Mantenha a carga recebida de esgoto até 500 kg DBO e de microplásticos até 100 kg por 30 dias.',
-    hint: 'Reduza as duas cargas e acompanhe a resposta do oxigênio e das algas.',
+    brief: 'Mantenha o aporte de esgoto até 500 kg DBO₅/dia e a concentração de microplásticos até 1.000 part./m³ por 30 dias.',
+    hint: 'Reduza ambos os fatores abaixo dos níveis estuarinos críticos e acompanhe a resposta do oxigênio e das algas.',
     windowDays: 30,
     holds: (point: HistoryPoint) =>
-      point.sewage <= 500 && point.microplastics <= 100,
+      point.sewage <= 500 && point.microplastics <= 1000,
   },
   {
     id: 'living-reef',

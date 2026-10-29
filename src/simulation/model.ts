@@ -60,9 +60,18 @@ export function receivedLoadRange(inputKg: number, sectorId: BtsSectorId = 'frad
   };
 }
 
-/** Normaliza a massa recebida para a escala educativa escolhida. */
+/** Normaliza a massa recebida para a escala educativa escolhida (contaminantes em massa: óleo e esgoto). */
 export function normalizedReceivedLoad(id: MassLoadId, valueKg: number) {
   return clamp(valueKg / PARAMETERS.receivedLoads[id].maximumKg);
+}
+
+/**
+ * Normaliza a concentração superficial de microplásticos (partículas/m³) na escala
+ * ancorada nos levantamentos estuarinos da BTS (0 a 35.000 part./m³; Trindade et al., 2023),
+ * sem converter arbitrariamente massa em contagem de partículas.
+ */
+export function normalizedMicroplasticsConcentration(particlesPerM3: number): number {
+  return clamp(particlesPerM3 / PARAMETERS.microplastics.maximumParticlesPerM3);
 }
 
 /**
@@ -180,7 +189,7 @@ export function calculatePressures(
     thermal: combine([currentHeat, accumulatedHeat]),
     acidification: stressBelow(ph, PARAMETERS.ph.coralStart, PARAMETERS.ph.coralMax),
     oil: oilPressure,
-    microplastics: normalizedReceivedLoad('microplastics', env.microplastics),
+    microplastics: normalizedMicroplasticsConcentration(env.microplastics),
     sewage: normalizedSewagePressure(env.sewage, sewageDischargeMode, bodConcentrationMgL),
     turbidity: clamp(env.turbidity / 100),
     fishing: clamp(env.fishing / 100),
@@ -194,7 +203,7 @@ export function calculatePressures(
  * 2,0–3,0 mg/L: hipóxia (0.35 .. 0.75).
  * < 2,0 mg/L: hipóxia severa (0.75 .. 1.0, risco agudo de asfixia e mortalidade).
  */
-export function hypoxiaStress(dissolvedOxygen = 7.12): number {
+export function hypoxiaStress(dissolvedOxygen: number = PARAMETERS.oxygen.saturationMgL): number {
   if (dissolvedOxygen >= 5.0) return 0;
   if (dissolvedOxygen >= 3.0) {
     return ((5.0 - dissolvedOxygen) / (5.0 - 3.0)) * 0.35;
@@ -209,7 +218,7 @@ export function hypoxiaStress(dissolvedOxygen = 7.12): number {
 export function calculateFishPressures(
   env: Environment,
   dhw = 0,
-  dissolvedOxygen = 7.12,
+  dissolvedOxygen: number = PARAMETERS.oxygen.saturationMgL,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
@@ -260,7 +269,7 @@ export function speciesStress(pressures: Pressures, id: FishSpeciesId) {
 export function calculateStress(
   env: Environment,
   dhw = 0,
-  dissolvedOxygen = 7.12,
+  dissolvedOxygen: number = PARAMETERS.oxygen.saturationMgL,
   bodConcentrationMgL = 0,
   sectorId: BtsSectorId = 'frades',
   respiratoryDicUmolKg?: number,
@@ -443,9 +452,10 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
 }
 
 /**
- * Atualiza a janela móvel de 84 dias usada pelo Degree Heating Week (DHW).
- * Só entram temperaturas pelo menos 1 °C acima da MMM, seguindo o método
- * operacional do NOAA Coral Reef Watch.
+ * Atualiza a janela móvel de 84 dias do estresse térmico acumulado simulado.
+ * Utiliza a referência didática fixa do cenário local (MMM = 28,0 °C; limiar de acúmulo = 29,0 °C),
+ * que não deve ser confundida com o produto satelital oficial DHW da NOAA CRW (calculado sobre a
+ * climatologia específica de cada célula de 5 km).
  */
 function updateThermalDose(state: SimulationState, temperature: number, dtDays: number) {
   const thermalDose = state.thermalDose.map((entry) => ({ ...entry }));

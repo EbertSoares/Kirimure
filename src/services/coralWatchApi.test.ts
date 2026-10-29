@@ -78,6 +78,9 @@ describe('adaptador da Coral Watch Virtual Station API', () => {
     expect(point.virtualStationName).toBe('Todos os Santos, Brazil');
     expect(point.virtualStationStressLevel).toBe(1);
     expect(point.bleachingAlertMax7d).toBe(1);
+    expect(point.bleachingAlertSourceVariable).toBe('baa_7day_max');
+    expect(point.climatologyMmmDegC).toBeCloseTo(27.9214, 4);
+    expect('bleachingAlertArea' in point).toBe(false);
     expect(point.sstAnomalyDegC).toBe(1.6213);
     expect(point.hotSpotDegC).toBe(0.2);
     expect(point.degreeHeatingWeeks).toBe(1.5);

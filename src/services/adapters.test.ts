@@ -55,7 +55,9 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
     expect(BTS_CRW_FALLBACK_SNAPSHOT).toHaveLength(4);
     const maxStress = BTS_CRW_FALLBACK_SNAPSHOT[3];
     expect(maxStress.bleachingAlertLevel).toBe(4); // Alert 2
-    expect(maxStress.bleachingAlertArea).toBe(4);
+    expect(maxStress.bleachingAlertMax7d).toBe(4);
+    expect(maxStress.bleachingAlertSourceVariable).toBe('CRW_BAA');
+    expect('bleachingAlertArea' in maxStress).toBe(false);
     expect(maxStress.degreeHeatingWeeks).toBe(8.2);
     expect(maxStress.requestedCoordinates?.latitude).toBe(-12.85);
     expect(maxStress.spatialResolution).toContain('5 km');

@@ -113,6 +113,9 @@ describe('serviço NOAA Coral Reef Watch (ERDDAP)', () => {
     expect(points[0]!.hotSpotDegC).toBe(1.1);
     expect(points[0]!.degreeHeatingWeeks).toBe(3.4);
     expect(points[0]!.bleachingAlertLevel).toBe(2);
+    expect(points[0]!.bleachingAlertMax7d).toBe(2);
+    expect(points[0]!.bleachingAlertSourceVariable).toBe('CRW_BAA');
+    expect('bleachingAlertArea' in points[0]!).toBe(false);
     expect(points[0]!.gridCell).toEqual({ latitude: -12.875, longitude: -38.525 });
     expect(points[0]!.provenance.fetchStatus).toBe('online_valid');
     expect(points[0]!.provenance.isCachedFallback).toBe(false);

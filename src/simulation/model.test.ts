@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGES, evaluateChallenge } from './challenges';
-import { BASELINE, BTS_SECTORS, ITEM_DEFINITIONS, PARAMETERS } from './config';
+import { BASELINE, BTS_SECTORS, ITEM_DEFINITIONS, MICROPLASTICS_OPTIONS_PARTICLES_M3, PARAMETERS } from './config';
 import {
   buildTargets,
   calculateAlgae,
@@ -13,6 +13,7 @@ import {
   effectivePh,
   estimateCriticalDays,
   getDissolvedOxygenBreakdown,
+  normalizedMicroplasticsConcentration,
   normalizedSewagePressure,
   receivedLoadRange,
   speciesStress,
@@ -34,13 +35,19 @@ function run(state: SimulationState, days: number, stepSeconds = 0.1) {
 }
 
 describe('modelo de simulação', () => {
-  it('oferece cargas pequenas em kg antes das toneladas', () => {
+  it('oferece cargas pequenas em kg antes das toneladas para óleo e esgoto, e concentração em part./m³ para microplásticos', () => {
     const expectedStart = [0, 1, 2, 5, 10, 20, 50];
-    (['microplastics', 'oil', 'sewage'] as const).forEach((id) => {
+    (['oil', 'sewage'] as const).forEach((id) => {
       expect(ITEM_DEFINITIONS[id].massOptionsKg?.slice(0, 7)).toEqual(expectedStart);
       expect(ITEM_DEFINITIONS[id].massOptionsKg).toContain(1000);
       expect(ITEM_DEFINITIONS[id].massOptionsKg).toContain(100000);
     });
+
+    expect(ITEM_DEFINITIONS.microplastics.unit).toBe('part./m³');
+    expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toEqual(MICROPLASTICS_OPTIONS_PARTICLES_M3);
+    expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toContain(5180);
+    expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toContain(32784);
+    expect(normalizedMicroplasticsConcentration(5180)).toBeCloseTo(5180 / 35000, 4);
   });
 
   it('inicia no estado saudável', () => {
@@ -195,7 +202,7 @@ describe('modelo de simulação', () => {
     expect(effectivePh({
       ...BASELINE,
       oil: PARAMETERS.receivedLoads.oil.maximumKg,
-      microplastics: PARAMETERS.receivedLoads.microplastics.maximumKg,
+      microplastics: PARAMETERS.microplastics.maximumParticlesPerM3,
     })).toBe(BASELINE.ph);
   });
 
@@ -259,7 +266,7 @@ describe('modelo de simulação', () => {
       targets: {
         temperature: 34,
         ph: 7.5,
-        microplastics: PARAMETERS.receivedLoads.microplastics.maximumKg,
+        microplastics: PARAMETERS.microplastics.maximumParticlesPerM3,
         oil: PARAMETERS.receivedLoads.oil.maximumKg,
         sewage: PARAMETERS.receivedLoads.sewage.maximumKg,
         turbidity: 100,

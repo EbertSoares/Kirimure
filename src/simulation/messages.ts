@@ -16,12 +16,12 @@ export const INTRO_MESSAGE: EducationalMessage = {
 export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
   {
     id: 'thermal_stress',
-    title: 'Calor acumulado nos corais',
-    badge: 'Padrão Operacional',
-    what: 'O DHW começou a subir: intensidade e duração do calor já estão se acumulando.',
-    cause: 'Com MMM didática de 28,0 °C, HotSpot positivo ocorre quando SST > 28,0 °C; a partir de 29,0 °C (MMM + 1 °C), inicia o acúmulo de DHW.',
-    effect: 'O coral gasta mais energia, cresce menos e fica mais vulnerável a doenças.',
-    ask: 'Observe se o DHW continua subindo quando a água volta para menos de 29 °C.',
+    title: 'Estresse térmico acumulado nos corais',
+    badge: 'Cenário Didático',
+    what: 'O estresse térmico simulado começou a subir: intensidade e duração do calor estão se acumulando.',
+    cause: 'No cenário local (MMM didática = 28,0 °C), temperaturas a partir de 29,0 °C acumulam dose térmica na janela móvel de 84 dias.',
+    effect: 'O coral gasta mais energia metabólica, cresce menos e perde estabilidade na simbiose com zooxantelas.',
+    ask: 'O que acontece com o estresse acumulado logo após a temperatura voltar para menos de 29 °C?',
     tone: 'alert',
     matches: (state) => state.degreeHeatingWeeks >= 1,
   },

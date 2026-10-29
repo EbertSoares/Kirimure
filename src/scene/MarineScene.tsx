@@ -13,7 +13,7 @@ type SceneStatus = 'loading' | 'ready' | 'error';
 
 interface ActiveFactorNotice {
   id: string;
-  tone: 'oil' | 'sewage' | 'microplastics' | 'temperature' | 'ph';
+  tone: 'oil' | 'sewage' | 'microplastics' | 'temperature' | 'ph' | 'turbidity' | 'fishing' | 'recovery';
   label: string;
   text: string;
   leaving?: boolean;
@@ -72,12 +72,39 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
   }
 
   if (Math.abs(next.microplastics - prev.microplastics) > 1e-6 && isFactorActive('microplastics', next.microplastics)) {
-    const launchedKg = controls?.microplastics ?? launchedMassFromTarget('microplastics', next.microplastics);
+    const concentration = Math.round(controls?.microplastics ?? next.microplastics);
     notices.push({
       id: `microplastics-${Date.now()}`,
       tone: 'microplastics',
-      label: 'Plásticos',
-      text: `${formatMass(launchedKg)} de microplásticos lançados na água`,
+      label: 'Microplásticos',
+      text: `Concentração ajustada para ${concentration.toLocaleString('pt-BR')} part./m³`,
+    });
+  }
+
+  if (Math.abs(next.turbidity - prev.turbidity) > 1e-6 && isFactorActive('turbidity', next.turbidity)) {
+    notices.push({
+      id: `turbidity-${Date.now()}`,
+      tone: 'turbidity',
+      label: 'Turbidez',
+      text: `Sedimentos em suspensão: índice em ${Math.round(next.turbidity)}%`,
+    });
+  }
+
+  if (Math.abs(next.fishing - prev.fishing) > 1e-6 && isFactorActive('fishing', next.fishing)) {
+    notices.push({
+      id: `fishing-${Date.now()}`,
+      tone: 'fishing',
+      label: 'Pesca',
+      text: `Pressão pesqueira ajustada para ${Math.round(next.fishing)}%`,
+    });
+  }
+
+  if (Math.abs(next.recovery - prev.recovery) > 1e-6 && isFactorActive('recovery', next.recovery)) {
+    notices.push({
+      id: `recovery-${Date.now()}`,
+      tone: 'recovery',
+      label: 'Recuperação',
+      text: `Proteção e manejo ecológico em ${Math.round(next.recovery)}%`,
     });
   }
 
@@ -132,50 +159,58 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
     }
   }, [resetToken]);
 
-  // Exibe notificação temporária apenas quando o usuário aplica mudanças nos fatores
+  // Exibe notificação discreta e estabilizada (debounce de 380 ms) ao ajustar parâmetros
   useEffect(() => {
-    const prev = prevTargetsRef.current;
     const next = state.targets;
-    prevTargetsRef.current = { ...next };
-
-    // Se reiniciou tudo para o baseline, limpa imediatamente os avisos
     const anyActive = (Object.keys(BASELINE) as Array<keyof Environment>)
       .some((key) => isFactorActive(key, next[key]));
     if (!anyActive) {
+      prevTargetsRef.current = { ...next };
       setNotices([]);
       return undefined;
     }
 
-    const added = buildChangedFactorNotices(prev, next, state.controls);
-    if (added.length === 0) return undefined;
+    let fadeTimer = 0;
+    let removeTimer = 0;
+    const settleTimer = window.setTimeout(() => {
+      const prev = prevTargetsRef.current;
+      prevTargetsRef.current = { ...next };
 
-    setNotices((current) => {
-      const tonesAdded = new Set(added.map((item) => item.tone));
-      const kept = current.filter((item) => !tonesAdded.has(item.tone));
-      return [...kept, ...added];
-    });
+      const added = buildChangedFactorNotices(prev, next, state.controls);
+      if (added.length === 0) return;
 
-    const addedIds = new Set(added.map((item) => item.id));
-    const fadeTimer = window.setTimeout(() => {
-      setNotices((current) => current.map((item) => (
-        addedIds.has(item.id) ? { ...item, leaving: true } : item
-      )));
-    }, 3600);
+      setNotices((current) => {
+        const tonesAdded = new Set(added.map((item) => item.tone));
+        const kept = current.filter((item) => !tonesAdded.has(item.tone));
+        return [...kept, ...added];
+      });
 
-    const removeTimer = window.setTimeout(() => {
-      setNotices((current) => current.filter((item) => !addedIds.has(item.id)));
-    }, 4100);
+      const addedIds = new Set(added.map((item) => item.id));
+      fadeTimer = window.setTimeout(() => {
+        setNotices((current) => current.map((item) => (
+          addedIds.has(item.id) ? { ...item, leaving: true } : item
+        )));
+      }, 3000);
+
+      removeTimer = window.setTimeout(() => {
+        setNotices((current) => current.filter((item) => !addedIds.has(item.id)));
+      }, 3500);
+    }, 380);
 
     return () => {
-      window.clearTimeout(fadeTimer);
-      window.clearTimeout(removeTimer);
+      window.clearTimeout(settleTimer);
+      if (fadeTimer) window.clearTimeout(fadeTimer);
+      if (removeTimer) window.clearTimeout(removeTimer);
     };
   }, [
     state.targets.temperature,
     state.targets.ph,
+    state.targets.turbidity,
     state.targets.microplastics,
     state.targets.oil,
     state.targets.sewage,
+    state.targets.fishing,
+    state.targets.recovery,
   ]);
 
   useEffect(() => {

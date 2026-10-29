@@ -1,289 +1,267 @@
 # Laboratório Digital Marinho Kirimurê
-## Caderno Consolidado de Dados, Fórmulas, Parâmetros e Métricas de Simulação
+## Caderno Consolidado de Dados, Fórmulas, Parâmetros, Proveniência e Nível de Evidência
 
-Este documento reúne a totalidade dos dados científicos, parâmetros matemáticos, constantes cinéticas, formulações ecológicas, referências normativas e coordenadas computacionais utilizados no desenvolvimento do **Laboratório Digital Marinho Kirimurê** (Baía de Todos-os-Santos, Bahia).
+Este documento registra os dados externos, equações matemáticas, constantes cinéticas, formulações ecológicas, ordem operacional de consulta às APIs e a **classificação explícita do nível de evidência** de cada parâmetro do **Laboratório Digital Marinho Kirimurê** (Baía de Todos-os-Santos, Bahia).
 
 ---
 
 ## Sumário
 
-1. [Identificação Geral do Ecossistema](#1-identificação-geral-do-ecossistema)
+1. [Identificação Geral e Distinção Epistemológica](#1-identificação-geral-e-distinção-epistemológica)
 2. [Escala Temporal e Resolução Cinética](#2-escala-temporal-e-resolução-cinética)
 3. [Compartimentação e Hidrodinâmica da Baía de Todos-os-Santos](#3-compartimentação-e-hidrodinâmica-da-baía-de-todos-os-santos)
-4. [Variáveis de Entrada e Condições de Linha de Base](#4-variáveis-de-entrada-e-condições-de-linha-de-base)
-5. [Dinâmica Bioquímica do Oxigênio Dissolvido (OD) e Hipóxia](#5-dinâmica-bioquímica-do-oxigênio-dissolvido-od-e-hipóxia)
-6. [Acúmulo de Estresse Térmico e Degree Heating Weeks (DHW)](#6-acúmulo-de-estresse-térmico-e-degree-heating-weeks-dhw)
-7. [Parâmetros de Acidificação e pH Costeiro](#7-parâmetros-de-acidificação-e-ph-costeiro)
-8. [Matriz de Sensibilidade e Parâmetros das Espécies](#8-matriz-de-sensibilidade-e-parâmetros-das-espécies)
-9. [Equações de Algas, Equilíbrio Trófico e Resiliência](#9-equações-de-algas-equilíbrio-trófico-e-resiliência)
-10. [Geometria, Projeção 3D e Coordenadas Cartográficas](#10-geometria-projeção-3d-e-coordenadas-cartográficas)
-11. [Temporização de Animação e Comportamento dos Predadores](#11-temporização-de-animação-e-comportamento-dos-predadores)
-12. [Referências Bibliográficas e Normativas Oficiais](#12-referências-bibliográficas-e-normativas-oficiais)
+4. [Variáveis de Entrada Agrupadas e Condições de Referência](#4-variáveis-de-entrada-agrupadas-e-condições-de-referência)
+5. [Dinâmica Físico-Química do Oxigênio Dissolvido (Weiss, 1970 e Cinética DBO/OD)](#5-dinâmica-físico-química-do-oxigênio-dissolvido-weiss-1970-e-cinética-dbood)
+6. [Separação entre DHW Satelital (NOAA) e Estresse Térmico Simulado](#6-separação-entre-dhw-satelital-noaa-e-estresse-térmico-simulado)
+7. [Química do Sistema Carbonato Marinho e Acidificação Costeira](#7-química-do-sistema-carbonato-marinho-e-acidificação-costeira)
+8. [Combinação de Estresses, Sensibilidade por Espécie e Limiar Crítico do Modelo](#8-combinação-de-estresses-sensibilidade-por-espécie-e-limiar-crítico-do-modelo)
+9. [Equações de Algas, Equilíbrio Trófico e Resiliência Relativa](#9-equações-de-algas-equilíbrio-trófico-e-resiliência-relativa)
+10. [Fontes Externas, Ordem Operacional de Consulta e Semântica de Dados](#10-fontes-externas-ordem-operacional-de-consulta-e-semântica-de-dados)
+11. [Classificação do Nível de Evidência dos Parâmetros](#11-classificação-do-nível-de-evidência-dos-parâmetros)
+12. [Geometria 3D e Correspondência Visual-Científica](#12-geometria-3d-e-correspondência-visual-científica)
+13. [Referências Bibliográficas e Normativas Oficiais](#13-referências-bibliográficas-e-normativas-oficiais)
 
 ---
 
-## 1. Identificação Geral do Ecossistema
+## 1. Identificação Geral e Distinção Epistemológica
 
 - **Nome Oficial:** Kirimurê — Laboratório Digital Marinho
-- **Ecossistema Modelado:** Recifes de franja, fundos de algas calcárias e comunidades ictiológicas da Baía de Todos-os-Santos (BTS), Bahia, Brasil.
-- **Bioma:** Amazônia Azul / Província Recifal do Atlântico Sudoeste Tropical.
-- **Espécies Formadoras de Recife:** *Siderastrea stellata*, *Mussismilia hispida*, *Mussismilia harttii*, *Montastraea cavernosa*, além de algas coralináceas crostosas (CCA).
-- **Abordagem Pedagógica:** Investigação guiada com ciclo epistemológico tripartido: **Preveja (Hipótese) $\rightarrow$ Teste (Intervenção Experimental) $\rightarrow$ Compare (Evidência)**.
+- **Ecossistema de Referência:** Recifes de franja, fundos carbonáticos e comunidades ictiológicas da Baía de Todos-os-Santos (BTS), Bahia, Brasil.
+- **Espécies Representadas:** Corais construtores (*Siderastrea stellata*, *Mussismilia hispida*, *Mussismilia harttii*, *Montastraea cavernosa*) e três grupos funcionais da ictiofauna recifal (*Acanthurus*, *Abudefduf saxatilis*, *Scarus / Sparisoma*).
+
+O sistema separa rigorosamente **três naturezas distintas de informação**:
+1. **Dados derivados de observações satelitais (NOAA Coral Reef Watch 5 km):** observações indiretas processadas de temperatura superficial (SST), anomalia, HotSpot, DHW oficial e nível ordinal de alerta (`CRW_BAA`).
+2. **Dados produzidos por modelos numéricos externos (Open-Meteo Marine):** estimativas horárias modeladas de ondas, correntes e nível do mar para células oceânicas adjacentes, não equivalentes a boias ou marégrafos locais no interior de canais estuarinos.
+3. **Resultados calculados pela simulação local do Kirimurê:** evolução determinística de oxigênio, carbonato, pressões ambientais e índices relativos de saúde dos organismos sob cenários manipulados em sala de aula.
 
 ---
 
 ## 2. Escala Temporal e Resolução Cinética
 
-A simulação opera desacelerada intencionalmente para permitir observação didática dos fenômenos de bioacumulação e inércia biogeoquímica:
+| Parâmetro | Valor | Unidade | Classificação | Descrição / Função |
+| :--- | :--- | :--- | :--- | :--- |
+| `tickRate` | `10` | Hz | Arquitetura | 10 atualizações por segundo real |
+| `daysPerRealSecond` (1×) | `0.25` | dias / s real | Parâmetro Didático | 1 dia simulado a cada 4 segundos reais |
+| `maxSubStepDays` | `0.05` | dias | Numérico | Passo máximo de Euler (~1,2 h) garantindo invariância entre 1× e 10× |
 
-| Parâmetro | Valor | Unidade | Descrição / Função |
-| :--- | :--- | :--- | :--- |
-| `tickRate` | `10` | Hz | 10 passos de cálculo por segundo de relógio |
-| `daysPerRealSecond` (1×) | `0.25` | dias / s real | 1 dia simulado equivale a 4 segundos de tempo real |
-| Velocidade 1× | `1 dia / 4 s` | dias simulados | Ritmo de investigação padrão |
-| Velocidade 3× | `1 dia / 1.33 s`| dias simulados | Aceleração para verificação de médio prazo |
-| Velocidade 5× | `1 dia / 0.80 s`| dias simulados | Aceleração para desfecho estacional |
-| Velocidade 10× | `1 dia / 0.40 s`| dias simulados | Aceleração anual didática (365 dias em ~146 s) |
+### Constantes de Relaxamento Cinético ($\tau_i$ em dias)
 
-### Constantes de Relaxamento Cinético ($\tau$ em dias)
+As variáveis ambientais aproximam-se gradualmente do valor-alvo ajustado pelo usuário segundo cinética de primeira ordem:
 
-O ambiente não muda instantaneamente. Segue uma equação de transporte de primeira ordem:
+$$X(t + \Delta t) = X(t) + \left( X_{\text{alvo}} - X(t) \right) \cdot \left( 1 - e^{-\Delta t / \tau_i} \right)$$
 
-$$X(t + \Delta t) = X(t) + \left( X_{\text{meta}} - X(t) \right) \cdot \left( 1 - e^{-\Delta t / \tau_i} \right)$$
+| Grupo | Variável ($i$) | $\tau_i$ (dias) | Nível de Evidência | Papel no Modelo |
+| :--- | :--- | :--- | :--- | :--- |
+| **Água** | Temperatura | `7` | Parâmetro Didático | Inércia térmica da camada de mistura costeira |
+| **Água** | pH | `12` | Parâmetro Didático | Inércia do tamponamento químico de carbonatos |
+| **Água** | Turbidez | `4` | Parâmetro Didático | Suspensão e decantação gradual de partículas |
+| **Poluição** | Esgoto ($\text{DBO}_5$) | `4` | Parâmetro Didático | Estabelecimento da pluma orgânica no compartimento |
+| **Poluição** | Óleo / Petróleo | `3` | Parâmetro Didático | Espalhamento superficial e emulsão inicial |
+| **Poluição** | Microplásticos | `5` | Parâmetro Didático | Mistura superficial das partículas na coluna d'água |
+| **Ecossistema** | Pressão Pesqueira | `2` | Parâmetro Didático | Resposta rápida ao esforço de captura |
+| **Ecossistema** | Recuperação Ecológica | `20` | Parâmetro Didático | Maturação lenta de medidas de proteção e manejo |
 
-| Forçante / Variável ($i$) | $\tau_i$ (dias) | Justificativa Físico-Ecológica |
-| :--- | :--- | :--- |
-| **Temperatura** | `7` | Inércia térmica do volume d'água da camada de mistura |
-| **pH** | `12` | Sistema tampão de carbonatos marinho |
-| **Microplásticos** | `5` | Tempo médio de mistura na pluma superficial |
-| **Óleo / Petróleo** | `3` | Espalhamento de filme, evaporação de frações voláteis e emulsão |
-| **Esgoto (DBO)** | `4` | Tempo de hidrólise e decaimento bacteriano primário |
-| **Turbidez** | `4` | Advecção por maré e sedimentação de partículas |
-| **Pressão de Pesca** | `2` | Resposta rápida do esforço pesqueiro |
-| **Recuperação Ambiental** | `20` | Implantação e maturação de medidas de conservação e berçários |
+> **Nota científica:** Os valores de $\tau_i$ ordenam velocidades relativas entre processos físicos e de manejo para investigação didática; não devem ser interpretados como taxas empíricas medidas diretamente em campo.
 
 ---
 
 ## 3. Compartimentação e Hidrodinâmica da Baía de Todos-os-Santos
 
-A BTS possui compartimentos hidrodinâmicos com tempos de renovação e residência de efluentes distintos:
-
-| Compartimento | Sub-região | $\tau_{\text{descarga}}$ (Inverno) | $\tau_{\text{descarga}}$ (Verão) | Salinidade Base | Temp. Base | Retenção aos 30 dias |
+| Compartimento | Sub-região | Faixa $\tau_{\text{descarga}}$ | Salinidade | Temp. Base | Volume de Mistura | Nível de Evidência |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Ilha dos Frades & Itaparica** | Baía Central (Recifes) | `38 dias` | `61 dias` | `35.0 PSU` | `26.8 °C` | **`53.4%` (Moderada)** |
-| **Estuário do Paraguaçu** | Fundo da Baía / Manguezais | `75 dias` | `120 dias` | `22.0 PSU` | `27.2 °C` | **`72.6%` (Alta)** |
-| **Boca da Baía / Barra** | Canal de Salvador (Atlântico) | `9 dias` | `14 dias` | `36.5 PSU` | `26.4 °C` | **`7.4%` (Baixa)** |
+| **Ilha dos Frades & Itaparica** | Baía Central (Recifes) | `38 a 62 dias` | `35,0 PSU` | `26,8 °C` | $3,2 \times 10^7\text{ m}^3$ | **Publicado** ($\tau$: Cirano & Lessa, 2007) / **Hipótese do Modelo** (volume de caixa) |
+| **Estuário do Paraguaçu** | Fundo da Baía / Manguezais | `60 a 90 dias` (ref. `75 d`) | `22,0 PSU` | `27,2 °C` | $1,5 \times 10^7\text{ m}^3$ | **Hipótese do Modelo** (caixa estuarina de alta retenção) |
+| **Boca da Baía / Barra** | Canal de Salvador | `6 a 14 dias` (ref. `9 d`) | `36,5 PSU` | `26,4 °C` | $1,0 \times 10^8\text{ m}^3$ | **Hipótese do Modelo** (caixa oceânica de rápida renovação) |
 
-### Cálculo da Carga Efetiva Recebida ($H = 30$ dias)
+Para contaminantes expressos como **carga lançada em massa** (`óleo` em kg), a fração retida após horizonte de $H = 30$ dias no modelo de caixa é estimada por:
 
-$$\text{Retenção}_{\text{inverno}} = e^{-30 / \tau_{\text{inverno}}}$$
+$$\text{Retenção}_{\text{inverno}} = e^{-30 / \tau_{\text{mín}}}, \qquad \text{Retenção}_{\text{verão}} = e^{-30 / \tau_{\text{máx}}}, \qquad \text{Retenção}_{\text{central}} = \frac{\text{Retenção}_{\text{inverno}} + \text{Retenção}_{\text{verão}}}{2}$$
 
-$$\text{Retenção}_{\text{verão}} = e^{-30 / \tau_{\text{verão}}}$$
-
-$$\text{Retenção Central} = \frac{\text{Retenção}_{\text{inverno}} + \text{Retenção}_{\text{verão}}}{2}$$
-
-Para Ilha dos Frades:
-$$\text{Retenção Central} = \frac{e^{-30/38} + e^{-30/60.8}}{2} = \frac{0.454 + 0.611}{2} = 0.5338 \approx 53.4\%$$
+Na Baía Central (Ilha dos Frades, $\tau \in [38, 62]\text{ d}$), a retenção central em 30 dias resulta em $\approx 53,5\%$ (ou $53,4\%$ para $\tau_{\text{verão}} = 1,6 \times 38 = 60,8\text{ d}$ na constante de normalização `CENTRAL_RETENTION`).
 
 ---
 
-## 4. Variáveis de Entrada e Condições de Linha de Base
+## 4. Variáveis de Entrada Agrupadas e Condições de Referência
 
-| Fator de Estresse | Baseline | Faixa Didática | Passo | Unidade | Referência Regional BTS |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Temperatura da Água** | `26.8` | `24.0 a 31.0` | `0.1` | °C | Águas de verão: branqueamento a 29–30 °C |
-| **pH da Água** | `8.10` | `7.70 a 8.20` | `0.01` | — | Superfície marinha oceânica atual ≈ 8.1 |
-| **Microplásticos** | `0` | `0 a 100.000` | `1` | kg | Estuários BTS: 5.176 a 32.784 part./m³ |
-| **Óleo / Petróleo** | `0` | `0 a 100.000` | `1` | kg | Limiar subletal de tPAH50: 10 a 27 $\mu$g/L |
-| **Esgoto (DBO₅)** | `0` | `0 a 100.000` | `1` | kg DBO₅ | Indicador de matéria orgânica oxidável |
+Os oito controles ambientais dividem-se em três categorias funcionais:
 
-### Opções em Escala Logarítmica Didática para Cargas de Massa (kg)
-`[0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]`
+| Grupo | Variável | Baseline | Faixa | Escala | Unidade | Limiares (Atenção / Crítico) | Base de Referência |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Água** | Temperatura | `26,8` | `24,0 a 31,0` | Linear (`0,1`) | `°C` | `29,0` / `30,0 °C` | Branqueamento regional observado a 29–30 °C (Leão et al., 2008) |
+| **Água** | pH | `8,10` | `7,70 a 8,20` | Logarítmica em $[\text{H}^+]$ | escala total | `8,00` / `7,80` | Superfície marinha tropical $\approx 8,10$ |
+| **Água** | Turbidez | `0` | `0 a 100` | Linear (`1`) | `% índice` | `35%` / `70%` | Índice relativo de atenuação luminosa e sedimentação |
+| **Poluição** | Esgoto ($\text{DBO}_5$) | `0` | `0 a 100.000` | Logarítmica discreta | `kg DBO₅/dia` (contínuo) ou `kg DBO₅` (pulso) | `2.000` / `20.000` | Matéria orgânica biodegradável oxidável |
+| **Poluição** | Óleo / Petróleo | `0` | `0 a 100.000` | Logarítmica discreta | `kg` | `1.000` / `20.000 kg` | Toxicidade subletal de HPAs: $\text{EC}_{50} = 10\text{–}27\ \mu\text{g/L tPAH}_{50}$ (May et al., 2020) |
+| **Poluição** | Microplásticos | `0` | `0 a 35.000` | Não linear discreta | `part./m³` | `5.180` / `24.000 part./m³` | Estuários da BTS: média `5.180` e máx. `32.784 part./m³` (Trindade et al., 2023) |
+| **Ecossistema** | Pressão Pesqueira | `0` | `0 a 100` | Linear (`1`) | `% índice` | `35%` / `70%` | Esforço relativo sobre ictiofauna, com maior peso sobre raspadores |
+| **Ecossistema** | Recuperação Ecológica | `0` | `0 a 100` | Linear (`1`) | `% índice` | — | Proteção costeira, áreas marinhas protegidas e restauração |
+
+### Escalas Discretas Não Lineares
+- **Cargas de Massa (`óleo` e `esgoto`, em kg ou kg/dia):**
+  `[0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]`
+- **Concentração de Microplásticos (`part./m³`):**
+  `[0, 100, 250, 500, 1000, 2500, 5180, 10000, 15000, 24000, 32784, 35000]`
+  *(Preserva estritamente a unidade empírica de concentração superficial em partículas por metro cúbico reportada por Trindade et al., 2023, eliminando conversões arbitrárias entre massa e número de partículas).*
 
 ---
 
-## 5. Dinâmica Bioquímica do Oxigênio Dissolvido (OD) e Hipóxia
+## 5. Dinâmica Físico-Química do Oxigênio Dissolvido (Weiss, 1970 e Cinética DBO/OD)
 
-A modelagem de OD acopla termodinâmica de solubilidade com consumo microbiano aeróbico e demanda biológica por eutrofização:
+O módulo [`src/simulation/oxygen.ts`](src/simulation/oxygen.ts) resolve o balanço acoplado entre solubilidade termodinâmica, reaeração atmosférica, oxidação bacteriana da matéria orgânica, demanda bentônica do sedimento (SOD) e metabolismo líquido.
 
-### 1. Solubilidade de Saturação (Weiss, 1970)
-A $26.8$ °C e $35.0$ PSU, a concentração de saturação do oxigênio na BTS é:
-$$S_0 = 7.12\text{ mg/L}$$
+### 5.1. Solubilidade de Equilíbrio Ar-Mar (Weiss, 1970)
+Para temperatura absoluta $T_K = T + 273,15$ e salinidade $S$ (PSU), o volume dissolvido em $\text{mL O}_2/\text{L}$ é dado por:
 
-Efeito da variação térmica:
-$$S(T) = 7.12 - 0.12 \cdot (T - 26.8)$$
+$$\ln C^* = A_1 + A_2 \left(\frac{100}{T_K}\right) + A_3 \ln\left(\frac{T_K}{100}\right) + A_4 \left(\frac{T_K}{100}\right) + S \left[ B_1 + B_2 \left(\frac{T_K}{100}\right) + B_3 \left(\frac{T_K}{100}\right)^2 \right]$$
 
-### 2. Demanda Bioquímica por Efluente e Floração Algal
-$$\text{Demanda Orgânica (DBO)} = \left(\frac{\text{CargaRecebida}_{\text{esgoto}}}{\text{CargaMáxima}}\right) \cdot 4.40\text{ mg/L}$$
+com $A_1 = -173,4292$, $A_2 = 249,6339$, $A_3 = 143,3483$, $A_4 = -21,8492$, $B_1 = -0,033096$, $B_2 = 0,014259$, $B_3 = -0,0017$ e conversão mássica $C_s = 1,42903 \cdot e^{\ln C^*}\ [\text{mg O}_2/\text{L}]$.
 
-$$\text{Demanda Algal (Respiração)} = \left(\frac{\text{CoberturaAlgas}}{100}\right) \cdot 1.10\text{ mg/L}$$
+Valores de saturação ($C_s$) calculados nas condições de referência de cada setor da BTS:
+- **Ilha dos Frades (`26,8 °C`, `35,0 PSU`):** **`6,55 mg O₂/L`** (`PARAMETERS.oxygen.saturationMgL = 6.55`)
+- **Boca da Barra (`26,4 °C`, `36,5 PSU`):** **`6,54 mg O₂/L`**
+- **Estuário do Paraguaçu (`27,2 °C`, `22,0 PSU`):** **`7,18 mg O₂/L`** *(maior solubilidade devido à menor salinidade estuarina)*
 
-### 3. Concentração Efetiva de Oxigênio Dissolvido
-$$\text{OD} = \text{clamp}\left( S(T) - \text{Demanda Orgânica} - \text{Demanda Algal}, 0.40, 8.50 \right)\text{ mg/L}$$
+### 5.2. Conversão Estequiométrica de $\text{DBO}_5$ e Equações Diferenciais Acopladas
+A demanda laboratorial de 5 dias ($\text{DBO}_5$ a $20\text{ °C}$, com $k_{d,20} = 0,12\text{ d}^{-1}$) é convertida para Demanda Bioquímica Última Carbonácea ($\text{CBOD}_u$):
 
-### 4. Faixas Normativas e Estresse de Hipóxia (CONAMA 357 / US EPA)
+$$\text{CBOD}_u = \frac{\text{DBO}_5}{1 - e^{-5 \cdot k_{d,20}}} \approx 2,216 \cdot \text{DBO}_5$$
 
-| Concentração de OD | Regime Respiratório | Estresse Biológico | Efeito Ecológico na Fauna |
+As taxas cinéticas ajustadas por temperatura (Arrhenius) e vento/profundidade ($w$ em m/s, $H$ em m) são:
+
+$$k_d(T) = 0,12 \cdot (1,047)^{(T - 20)}, \qquad k_a(w, H, T) = \max\left(0,05,\ \frac{0,728\sqrt{w} - 0,317w + 0,0372w^2}{H} \cdot (1,024)^{(T - 20)}\right)$$
+
+O sistema diferencial integrado a cada sub-passo $\Delta t$ para $[\text{B}] = [\text{CBOD}_u]$ e $[\text{OD}]$ é:
+
+$$\frac{d[\text{B}]}{dt} = L_{\text{entrada}} - \left(k_d + \frac{1}{\tau_{\text{descarga}}}\right)[\text{B}]$$
+
+$$\frac{d[\text{OD}]}{dt} = k_a \left(C_s - [\text{OD}]\right) - k_d [\text{B}] - \frac{\text{SOD}}{H} + (P - R)$$
+
+com $\text{SOD} = 0,5\text{ g O}_2\cdot\text{m}^{-2}\cdot\text{d}^{-1}$, fotossíntese $P = 0,5(1 - \text{bloqueio óptico por turbidez e óleo})$, respiração $R = 0,35 + 0,40 \cdot (\text{Algas}/100)$ e piso numérico termodinâmico de `0,05 mg/L`.
+
+### 5.3. Faixas Normativas e Estresse de Hipóxia (CONAMA 357 / US EPA)
+- **$\ge 5,0\text{ mg/L}$:** Normóxia / Condição adequada para águas salinas Classe 1 (`estresse = 0,00`)
+- **$3,0\text{ a }5,0\text{ mg/L}$:** Estresse respiratório potencial (`0,00 a 0,35`)
+- **$2,0\text{ a }3,0\text{ mg/L}$:** Hipóxia (`0,35 a 0,75`)
+- **$< 2,0\text{ mg/L}$:** Hipóxia severa / risco agudo de asfixia (`0,75 a 1,00`)
+
+---
+
+## 6. Separação entre DHW Satelital (NOAA) e Estresse Térmico Simulado
+
+O Kirimurê mantém **dois indicadores térmicos conceitualmente distintos**, que nunca devem ser apresentados como equivalentes:
+
+1. **DHW Satelital da NOAA (`ThermalForcingPoint.degreeHeatingWeeks`):**
+   - Produto observacional externo importado do **NOAA Coral Reef Watch (grade 5 km)**.
+   - Calculado pela NOAA comparando a SST de satélite com a **climatologia oficial de Temperatura Máxima Mensal (MMM) específica de cada célula** (por exemplo, $\text{MMM} = 27,92\text{ °C}$ e limiar $28,92\text{ °C}$ na estação virtual regional `todos_os_santos`).
+2. **Estresse Térmico Acumulado Simulado (`SimulationState.degreeHeatingWeeks`):**
+   - Resultado interno do modelo local quando o estudante manipula a temperatura no experimento.
+   - Utiliza uma **referência didática fixa** ($\text{MMM}_{\text{didática}} = 28,0\text{ °C}$ e limiar de acúmulo em $29,0\text{ °C}$), integrando anomalias $\ge 1,0\text{ °C}$ acima da $\text{MMM}_{\text{didática}}$ em janela móvel de 84 dias:
+     $$\text{Graus-Dia}_i = \begin{cases} (T_i - 28,0) \cdot \Delta t_i, & \text{se } T_i \ge 29,0\text{ °C} \\ 0, & \text{se } T_i < 29,0\text{ °C} \end{cases}, \qquad \text{Estresse Acumulado} = \frac{1}{7}\sum_{84\text{ d}} \text{Graus-Dia}_i\ [\text{°C-sem.}]$$
+
+---
+
+## 7. Química do Sistema Carbonato Marinho e Acidificação Costeira
+
+O módulo [`src/simulation/carbonate.ts`](src/simulation/carbonate.ts) resolve o equilíbrio termodinâmico do carbono inorgânico dissolvido ($\text{DIC}$) a partir do pH (escala total), alcalinidade total escalada pela salinidade ($\text{TA} = 2350 \cdot S / 35\ \mu\text{mol/kg}$), constantes de dissociação $K_1, K_2$ de **Lueker et al. (2000)**, constante de Henry $K_0$ de **Weiss (1974)** e produtos de solubilidade $K'_{sp}$ de aragonita e calcita de **Mucci (1983)**:
+
+$$\Omega_{\text{arag}} = \frac{[\text{Ca}^{2+}][\text{CO}_3^{2-}]}{K'_{sp,\text{arag}}}$$
+
+Quando há oxidação bacteriana de esgoto ($\text{DBO}$), o fluxo respiratório microbiano integrado adiciona carbono inorgânico dissolvido ($\Delta\text{DIC}$, assumindo quociente respiratório $RQ = 1,0\text{ mol CO}_2/\text{mol O}_2$), e o método de bisseção determina o **pH efetivo** resultante na água costeira. Óleo e microplásticos não alteram diretamente o pH neste modelo.
+
+---
+
+## 8. Combinação de Estresses, Sensibilidade por Espécie e Limiar Crítico do Modelo
+
+### 8.1. Combinação Multiplicativa Independente
+Para evitar somas lineares que ultrapassem o domínio $[0, 1]$, o modelo combina pressões normalizadas $S_i \in [0, 1]$ por ação independente:
+
+$$S_{\text{combinado}} = 1 - \prod_i (1 - S_i)$$
+
+Nos corais, aplica-se ainda um termo de sinergia térmico-poluente ($S_{\text{sinergia}} = 0,50$):
+
+$$S_{\text{coral}} = \text{clamp}\left( S_{\text{base}} \cdot \left[ 1 + 0,50 \cdot \min\left(P_{\text{térmico}}, \max_{j \in \text{poluentes}} W_j P_j\right) \right],\ 0,\ 1 \right)$$
+
+### 8.2. Pesos e Sensibilidades (Parâmetros Didáticos / Hipóteses do Modelo)
+- **Pesos nos corais ($W_{\text{coral}}$):** óleo `0,75`, turbidez `0,60`, esgoto `0,55`, pesca `0,30`, microplásticos `0,14`.
+- **Pesos de base na ictiofauna ($W_{\text{peixe}}$):** pesca `0,85`, óleo `0,55`, esgoto `0,40` (acoplado à hipóxia), microplásticos `0,35`, turbidez `0,35`.
+- **Multiplicadores por grupo funcional de peixes:**
+  - *Peixe-cirurgião (`Acanthurus`, `collapseDays = 62 d`):* calor `1,20`, turbidez `1,30`, acidez `1,10`, pesca `0,70`.
+  - *Sargentinho (`Abudefduf saxatilis`, `collapseDays = 78 d`):* microplásticos `1,25`, esgoto/hipóxia `1,25`, óleo `1,10`, calor `0,85`.
+  - *Peixe-papagaio (`Scarus / Sparisoma`, `collapseDays = 48 d`):* pesca `1,60`, acidez `1,20`, calor `1,05`, esgoto `1,05`.
+
+### 8.3. Tempo Estimado até o Limiar Crítico do Modelo (`estimateCriticalDays`)
+A função `estimateCriticalDays()` projeta em quantos dias simulados o índice agregado cruzaria o patamar interno $\le 33/100$, mantidas constantes as condições atuais.
+> **Rótulo obrigatório na interface e relatórios:** *"Tempo estimado até o limiar crítico do modelo ($\le 33/100$)"*. Trata-se de uma convenção didática interna de bancada, **não** de uma previsão demográfica de colapso ou extinção biológica na Baía de Todos-os-Santos.
+
+---
+
+## 9. Equações de Algas, Equilíbrio Trófico e Resiliência Relativa
+
+- **Pressão / Cobertura de Algas ($0\text{ a }100$):**
+  $$A = \text{clamp}\Big(0,15 + 0,75 \cdot P_{\text{nutrientes/DBO}} + 0,55 \cdot \left(1 - \frac{\text{Fauna}}{100}\right) + 0,20 \cdot \frac{\text{Turbidez}}{100} + 0,50 \cdot \left(1 - \frac{\text{Corais}}{100}\right),\ 0,\ 1\Big) \cdot 100$$
+- **Equilíbrio Trófico ($0\text{ a }100$):**
+  $$\text{Herbívoros} = \frac{\text{Cirurgião} + \text{Papagaio}}{2}, \qquad \text{Equilíbrio Trófico} = 0,65 \cdot \text{Herbívoros} + 0,35 \cdot (100 - A)$$
+- **Índice Agregado do Modelo ($0\text{ a }100$):** média aritmética entre o índice dos corais e o índice da ictiofauna.
+
+---
+
+## 10. Fontes Externas, Ordem Operacional de Consulta e Semântica de Dados
+
+### 10.1. Ordem Real de Consulta (Failover) para Dados Térmicos (NOAA CRW 5 km)
+Implementada em [`src/services/noaaCrw.ts`](src/services/noaaCrw.ts) com orçamento total de `16 s` e timeout individual de `6 s`:
+1. **Fonte Primária — PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu/erddap`, dataset `dhw_5km`):** redistribuição oficial da grade de 5 km do NOAA Coral Reef Watch com suporte CORS direto no navegador, consultando o pixel oceânico exato de Frades (`-12.875°, -38.525°`) ou Barra (`-13.025°, -38.525°`).
+2. **Fonte Secundária — NOAA CoastWatch ERDDAP / PFEG (`coastwatch.pfeg.noaa.gov/erddap`, dataset `NOAA_DHW`):** servidor ERDDAP oficial de contingência para os mesmos pixels de 5 km.
+3. **Fonte Terciária (Contingência Regional Recente) — Coral Watch Virtual Station API (`api.coral.tsr.lol`):** serviço externo de terceiros que espelha a estação virtual regional `todos_os_santos` (`-13.375°, -38.375°`, plataforma externa adjacente à entrada da BTS). Utilizado apenas caso os dois servidores ERDDAP falhem na consulta recente, com aviso explícito de que representa referência regional offshore.
+4. **Contingência Offline Sob Demanda — Snapshots Históricos de 2024 (`noaaCrwSnapshots.ts`):** séries calibradas do evento de aquecimento marinho de mar/abr de 2024. **Nunca** substituem silenciosamente uma consulta com erro; só são carregadas por ação explícita do usuário e exibem o estado `Histórico / Contingência (2024)`.
+
+> **Setor Estuarino do Paraguaçu:** por ser um canal estuarino estreito mascarado como continente na grade satelital de 5 km da NOAA, o adaptador retorna imediatamente o estado `Sem cobertura (no_coverage)` sem emitir requisições espúrias nem atribuir dados de mar aberto ao manguezal interno.
+
+### 10.2. Semântica Estrita de `CRW_BAA` (Nível de Alerta de Branqueamento)
+No esquema ERDDAP do NOAA CRW (`dhw_5km` / `NOAA_DHW`), a variável `CRW_BAA` (*Bleaching Alert Area*, unidade adimensional `1`, `_FillValue = 251`) representa a **categoria ordinal diária de alerta do pixel (0 a 7)** — e **não** uma área espacial em $\text{km}^2$.
+- No Kirimurê, `CRW_BAA` é mapeada exclusivamente para `bleachingAlertLevel` (`0..7`), `CRW_BAA_7D_MAX` para `bleachingAlertMax7d`, e `bleachingAlertSourceVariable` registra a variável bruta de origem (`'CRW_BAA'`, `'baa_7day_max'` ou `'stress_level'`).
+
+### 10.3. Modelo Hidrodinâmico Externo (Open-Meteo Marine)
+Consultado em [`src/services/openMeteo.ts`](src/services/openMeteo.ts) (`marine-api.open-meteo.com/v1/marine`, `cell_selection=sea`) para previsão horária modelada de altura significativa de onda, velocidade/direção de corrente, temperatura superficial e nível do mar. Todos os valores são identificados na interface como **Modelo Externo**, com ressalva explícita sobre limitações de resolução costeira.
+
+---
+
+## 11. Classificação do Nível de Evidência dos Parâmetros
+
+| Parâmetro / Conjunto | Valor no Sistema | Nível de Evidência | Fonte / Justificativa e Limites |
 | :--- | :--- | :--- | :--- |
-| **$\ge 5.0\text{ mg/L}$** | **Normóxia Plena** (CONAMA Classe 1) | `0.00` | Respiração desobstruída, cardumes ativos |
-| **$3.0\text{ a }5.0\text{ mg/L}$** | **Estresse Respiratório** | `0.00 a 0.35` | Aumento da frequência opercular, nado letárgico |
-| **$2.0\text{ a }3.0\text{ mg/L}$** | **Hipóxia Crítica** | `0.35 a 0.75` | Fuga para superfície, paralisação de desova |
-| **$< 2.0\text{ mg/L}$** | **Hipóxia Severa / Anóxia** | `0.75 a 1.00` | Asfixia aguda e mortandade em massa da fauna |
-
-Formulação contínua do índice de estresse por hipóxia:
-$$E_{\text{hipóxia}} = \begin{cases} 0, & \text{se } \text{OD} \ge 5.0 \\ \frac{5.0 - \text{OD}}{5.0 - 3.0} \cdot 0.35, & \text{se } 3.0 \le \text{OD} < 5.0 \\ 0.35 + \frac{3.0 - \text{OD}}{3.0 - 2.0} \cdot 0.40, & \text{se } 2.0 \le \text{OD} < 3.0 \\ 0.75 + \frac{2.0 - \text{OD}}{2.0} \cdot 0.25, & \text{se } \text{OD} < 2.0 \end{cases}$$
-
----
-
-## 6. Acúmulo de Estresse Térmico e Degree Heating Weeks (DHW)
-
-Implementação estrita da metodologia operacional do **NOAA Coral Reef Watch (CRW)**:
-
-- **MMM didática (Maximum Monthly Mean):** $28.0\text{ °C}$
-- **Limiar de Branqueamento (*Bleaching Threshold*):** $\text{MMM} + 1.0\text{ °C} = 29.0\text{ °C}$
-- **HotSpot:** $\text{SST} - 28.0\text{ °C}$
-- **Janela de Integração:** 84 dias móveis (12 semanas consecutivas)
-
-$$\text{Graus-Dia}_i = \begin{cases} (T_i - \text{MMM}) \cdot \Delta t_i, & \text{se } (T_i - \text{MMM}) \ge 1.0\text{ °C} \\ 0, & \text{se } (T_i - \text{MMM}) < 1.0\text{ °C} \end{cases}$$
-
-$$\text{DHW} = \frac{1}{7} \sum_{i \in 84\text{ dias}} \text{Graus-Dia}_i \quad [ \text{°C-semanas} ]$$
-
-### Escala de Severidade do DHW
-
-| DHW (°C-semanas) | Categoria NOAA | Resposta dos Corais da BTS |
-| :--- | :--- | :--- |
-| **$0.0$** | Sem Estresse | Tecidos íntegros e simbiose ativa |
-| **$> 0.0\text{ e }< 4.0$** | Atenção Térmica | Palidez sutil nas pontas (*pale tips*) |
-| **$4.0\text{ a }8.0$** | **Alerta 1** | Branqueamento significativo evidente |
-| **$8.0\text{ a }20.0$** | **Alerta 2** | Branqueamento severo generalizado e mortalidade |
-| **$\ge 20.0$** | **Alerta Extremo** | Mortalidade catastrófica da colônia recifal |
+| Faixa de microplásticos estuarinos na BTS | `5.180` (média) a `32.784 part./m³` (máx.) | **Medido** | Amostragem superficial em 10 estuários da BTS (Trindade et al., 2023). |
+| Solubilidade de saturação de $\text{O}_2$ | `6,55 mg/L` (`26,8 °C`, `35 PSU`) | **Publicado** | Equação termodinâmica de Weiss (1970). |
+| Tempo de descarga da Baía Central (Frades) | `38 a 62 dias` | **Publicado** | Hidrodinâmica sazonal da BTS (Cirano & Lessa, 2007). |
+| Constantes do sistema carbonato ($K_1, K_2, K'_{sp}$) | $\Omega_{\text{arag}} \approx 3,66$ na base | **Publicado** | Lueker et al. (2000), Dickson (1990) e Mucci (1983). |
+| Toxicidade subletal de HPAs em corais ($\text{tPAH}_{50}$) | $\text{EC}_{50} = 10$ e $27\ \mu\text{g/L}$ | **Publicado** | Bioensaio controlado de 96 h (May et al., 2020). |
+| Taxas cinéticas $k_{d,20}$, $\text{SOD}$ e $\theta$ | `0,12 d⁻¹`, `0,5 g/m²/d` | **Publicado** | Literatura de qualidade de água costeira (Bowie et al., 1985); faixas CONAMA 357. |
+| Volumes de mistura e caixas Paraguaçu / Barra | $1,5\times 10^7$ a $1,0\times 10^8\text{ m}^3$ | **Hipótese do Modelo** | Parametrização comparativa entre estuário interno, baía central e canal oceânico. |
+| Partição do óleo em 4 reservatórios internos | Filme, disperso, HPA, sedimento | **Hipótese do Modelo** | Formulação mecanística simplificada tipo caixa (inspirada em ADIOS), sem calibração local. |
+| $\text{MMM}_{\text{didática}}$ do modelo térmico local | `28,0 °C` (limiar `29,0 °C`) | **Parâmetro Didático** | Convenção fixa inspirada em Leão et al. (2008); separada do DHW satelital oficial da NOAA. |
+| Constantes de relaxamento $\tau_i$ | `2 a 20 dias` | **Parâmetro Didático** | Ordenação relativa de velocidades de resposta para exploração em sala. |
+| Pesos `pollutantWeights`, `collapseDays` e limiar $\le 33$ | `48 a 78 dias` | **Parâmetro Didático** | Escala interna para comparação causal entre cenários; não prevê extinção real em campo. |
 
 ---
 
-## 7. Parâmetros de Acidificação e pH Costeiro
+## 12. Geometria 3D e Correspondência Visual-Científica
 
-- pH Oceânico Limpo: $8.10$
-- Limiar de estresse inicial em corais: $\text{pH} \le 8.00$
-- Limiar crítico (dissolução / inibição de aragonita): $\text{pH} \le 7.70$
-- Acoplamento com matéria orgânica (acidificação por decomposição de esgoto):
-  $$\Delta \text{pH}_{\text{org}} = \left(\frac{\text{Esgoto Recebido}}{\text{Esgoto Máximo}}\right) \cdot 0.08$$
-  $$\text{pH}_{\text{efetivo}} = \text{pH}_{\text{físico}} - \Delta \text{pH}_{\text{org}}$$
+A cena 3D em Babylon.js (`src/scene/babylon/runtime.ts`) obedece ao princípio de **correspondência estrita com as variáveis calculadas**:
+- **Coluna d'água física:** plumas orgânicas/sedimentos respondem à pressão normalizada de esgoto (contínuo ou pulso de DBO) somada ao índice de **turbidez**; película superficial responde à massa retida de **óleo**; partículas em suspensão respondem à concentração de **microplásticos** (`part./m³`); cáusticas solares no fundo arenoso atenuam-se conforme a perda de transparência óptica.
+- **Branqueamento dos corais:** vinculado exclusivamente às variáveis biológicas e químicas integradas no tempo (`health.coral`, `degreeHeatingWeeks` simulado e `effectivePh` real). Alterar o controle de temperatura em $t = 0$ **não** produz branqueamento instantâneo artificial antes que a dose térmica e a perda de saúde sejam efetivamente acumuladas.
+- **Ictiofauna:** atividade, coloração e presença dos cardumes respondem à saúde calculada das três espécies (`health.fish` e `species`).
 
 ---
 
-## 8. Matriz de Sensibilidade e Parâmetros das Espécies
+## 13. Referências Bibliográficas e Normativas Oficiais
 
-### 1. Pesos de Pressão em Corais e Peixes
-$$E_{\text{poluentes}} = \sum_j W_j \cdot P_j$$
-
-| Pressão ($j$) | Peso em Corais ($W_{\text{coral}}$) | Peso em Peixes ($W_{\text{peixe}}$) |
-| :--- | :--- | :--- |
-| **Óleo** | `0.75` | `0.55` |
-| **Esgoto / DBO** | `0.55` | `0.40` |
-| **Sedimentos / Turbidez** | `0.60` | `0.35` |
-| **Microplásticos** | `0.14` | `0.35` |
-| **Pesca** | `0.30` | `0.85` |
-
-**Fator de Sinergia Térmico-Poluente nos Corais:** $S_{\text{sinergia}} = 0.50$
-$$E_{\text{coral}} = E_{\text{base}} \cdot \left( 1 + 0.50 \cdot \min(P_{\text{térmico}}, P_{\text{pior\_poluição}}) \right)$$
-
-### 2. Espécies Representativas do Recife da BTS
-
-| Parâmetro | Peixe-cirurgião (*Acanthurus*) | Sargentinho (*Abudefduf*) | Peixe-papagaio (*Scarus*) |
-| :--- | :--- | :--- | :--- |
-| **Nicho Trófico** | Herbívoro raspador | Onívoro generalista | Herbívoro bioerosor |
-| **Dias p/ Colapso** | `62 dias` | `78 dias` | `48 dias` |
-| **Sensib. Térmica** | `1.20` (Muito Alta) | `0.85` (Moderada) | `1.05` (Alta) |
-| **Sensib. Acidificação** | `1.10` | `1.00` | `1.20` (Muito Alta) |
-| **Sensib. Óleo** | `1.00` | `1.10` | `0.95` |
-| **Sensib. Microplásticos**| `1.00` | `1.25` (Confunde c/ plâncton) | `0.90` |
-| **Sensib. Esgoto / Hipóxia**| `0.85` | `1.25` | `1.05` |
-| **Sensib. Turbidez** | `1.30` | `0.80` | `1.00` |
-| **Sensib. Sobrepesca** | `0.70` | `0.90` | `1.60` (Extremamente Alta) |
-
----
-
-## 9. Equações de Algas, Equilíbrio Trófico e Resiliência
-
-### Cobertura de Algas Competidoras ($0\text{ a }100\%$)
-$$A = \text{clamp}\Big( 0.15 + 0.75 \cdot \text{Nutrientes} + 0.55 \cdot (1 - \text{Fauna}) + 0.20 \cdot \text{Turbidez} + 0.50 \cdot (1 - \text{Corais}) \Big) \cdot 100$$
-
-### Equilíbrio Trófico
-Baseia-se na densidade de herbívoros responsáveis por conter o avanço das macroalgas:
-$$\text{Herbívoros} = \frac{\text{Pop}_{\text{cirurgião}} + \text{Pop}_{\text{papagaio}}}{2}$$
-
-$$\text{Equilíbrio Trófico} = 0.65 \cdot \text{Herbívoros} + 0.35 \cdot (100 - A)$$
-
-### Índice Integrado de Resiliência
-$$\text{Resiliência Geral} = \frac{\text{Saúde Corais} + \text{Saúde Fauna}}{2}$$
-
----
-
-## 10. Geometria, Projeção 3D e Coordenadas Cartográficas
-
-### 1. Mapa do Brasil e Localização da Bahia (SVG)
-- **ViewBox:** `1100 x 1000`
-- **Polígono da Bahia:**
-  - $X_{\text{mín}} = 682.0$, $X_{\text{máx}} = 901.3$ (Largura = $219.3$ px)
-  - $Y_{\text{mín}} = 369.0$, $Y_{\text{máx}} = 612.0$ (Altura = $243.0$ px)
-  - **Centro Geométrico Exato:** $X = 794.2$ px ($72.2\%$), $Y = 480.0$ px ($48.0\%$)
-- **Parâmetros da Transição Cinematográfica:**
-  - `transform-origin`: `72.2% 48.0%`
-  - Escala de Aproximação: `scale(6.5)`
-  - Duração do Zoom: `1600ms` com `cubic-bezier(0.2, 0, 0.25, 1)`
-  - Duração do Escurecimento: `1100ms` com `cubic-bezier(0.4, 0, 0.2, 1)`
-  - Sincronização: Troca de tela aos `1250ms`, dissipação suave do véu aos `1450ms` (fade-out de `550ms`).
-
-### 2. Câmera e Projeção Subaquática (Babylon.js)
-- **Câmera:** `FreeCamera`, posição `(0, 0, 0)`, apontando para $+Z$.
-- **Field of View (FOV):** $45^\circ$ ($0.785398$ radianos).
-- **Aspect Ratio Nominal:** $16:9 \approx 1.77778$.
-- **Constante Focal:** $\tan(\text{FOV} / 2) = \tan(22.5^\circ) \approx 0.41421356$.
-- **Conversão de Coordenadas de Tela ($u, v \in [0, 1]$) para o Espaço de Mundo 3D ($X, Y, Z$):**
-  $$\text{halfH} = Z \cdot \tan\left(\frac{\text{FOV}}{2}\right) = Z \cdot 0.41421356$$
-  $$\text{halfW} = \text{halfH} \cdot \text{aspect}$$
-  $$X_{\text{mundo}} = (2u - 1) \cdot \text{halfW}$$
-  $$Y_{\text{mundo}} = (1 - 2v) \cdot \text{halfH}$$
-
-### 3. Profundidades de Renderização dos Planos 3D ($Z$)
-- Fundo Fotográfico / Backdrop: $Z = 60.0$
-- Véu de Sedimentos / Esgoto: $Z = 58.8$
-- Camada de Corais / Branqueamento: $Z = 58.3$
-- Sombras Volumétricas de Óleo: $Z = 58.2$
-- Plano de Nado Médio dos Cardumes (`PLANE_Z`): $Z = 30.0$ (variação dinâmica $Z \in [28.2, 31.8]$)
-- Bolhas de Aeração e Partículas de Plástico: $Z \in [28.0, 31.0]$
-
----
-
-## 11. Temporização de Animação e Comportamento dos Predadores
-
-### Cardumes 2.5D (*FishSwimmer*)
-- Orientação do Sprite: Inversão horizontal (`scaling.x = -worldScale * currentDir`) para manter o focinho sempre apontado no sentido do avanço.
-- Frequência de Nado: $5.4\text{ a }5.7\text{ Hz} + \text{estresse} \cdot 0.8\text{ Hz}$.
-- Propagação de Onda Caudal:
-  $$\text{fase} = \phi_{\text{cauda}} - \left(\frac{x}{L} + 0.5\right) \cdot 4.2$$
-
-### Cardume 3D Riggado (*Pale Bleak* / 43 Ossos)
-- Animação Esquelética: Loop contínuo a $1.18\text{ a }1.60\text{ Hz}$.
-- Rotação 3D em 360° com guinada (*Yaw*), arfagem (*Pitch*) e rolamento de curva (*Bank*).
-
-### Tubarão-Recifal 3D (*Carcharhinus perezi*)
-- **Tempo para Primeira Aparição:** `3 a 5 segundos` de relógio real após o início/reset.
-- **Intervalo Recorrente de Cooldown:** `14 a 22 segundos` de relógio real.
-- **Padrões de Patrulha Alternados:**
-  1. *Approaching:* Surge do fundo central ($Z_{\text{relativo}} = 0.02$) em direção à câmera ($Z_{\text{relativo}} = 0.88$), causando dispersão nos cardumes próximos, e realiza curva em C saindo pela lateral.
-  2. *Camera Flyby:* Cruza rente à câmera em velocidade constante de ponta a ponta da tela.
-- **Deformação Axial Carangiforme:** Focinho estabilizado em $x = -0.5$ e amplitude lateral crescente na nadadeira caudal ($x = +0.5$).
-
----
-
-## 12. Referências Bibliográficas e Normativas Oficiais
-
-1. **BRASIL. Conselho Nacional do Meio Ambiente (CONAMA).** Resolução nº 357, de 17 de março de 2005. Dispõe sobre a classificação dos corpos de água e diretrizes ambientais para o seu enquadramento. *Diário Oficial da União*, Brasília, DF, 2005. (Padrão de OD $\ge 5.0\text{ mg/L}$ para águas marinhas Classe 1).
-2. **LEÃO, Z. M. A. N.; KIKUCHI, R. K. P.; OLIVEIRA, M. D. M.** Branqueamento de corais nos recifes da Bahia e sua relação com anomalias térmicas. *Revista Brasileira de Geofísica*, v. 26, n. 4, p. 507-516, 2008.
-3. **NOAA Coral Reef Watch.** Operational 5-km Satellite Coral Bleaching Heat Stress Monitoring Products (DHW, Bleaching Alert Levels). National Oceanic and Atmospheric Administration, 2024.
-4. **CIRANO, M.; LESSA, G. C.** Oceanographic characteristics of Baía de Todos os Santos, Brazil. *Continental Shelf Research*, v. 27, p. 1420-1437, 2007.
-5. **TRINDADE, B. S. et al.** Abundância e distribuição de microplásticos em estuários da Baía de Todos-os-Santos. *Marine Pollution Bulletin*, 2023.
-6. **MAY, L. et al.** Sublethal cellular and physiological stress responses in tropical corals exposed to water-accommodated fractions of petroleum hydrocarbons. *Aquatic Toxicology*, 2020.
-7. **WEISS, R. F.** The solubility of nitrogen, oxygen and argon in water and seawater. *Deep Sea Research and Oceanographic Abstracts*, v. 17, n. 4, p. 721-735, 1970.
-8. **IBGE.** Malha Municipal e Divisão Político-Administrativa do Brasil. Instituto Brasileiro de Geografia e Estatística, Diretoria de Geociências, 2025.
+1. **BRASIL. Conselho Nacional do Meio Ambiente (CONAMA).** Resolução nº 357, de 17 de março de 2005. Padrões de qualidade de águas salinas Classe 1 ($\text{OD} \ge 5,0\text{ mg/L}$).
+2. **BOWIE, G. L. et al.** *Rates, Constants, and Kinetics Formulations in Surface Water Quality Modeling* (2nd ed.). US EPA, EPA/600/3-85/040, 1985.
+3. **CIRANO, M.; LESSA, G. C.** Oceanographic characteristics of Baía de Todos os Santos, Brazil. *Revista Brasileira de Geofísica*, v. 25, n. 4, p. 363–387, 2007.
+4. **DICKSON, A. G.; SABINE, C. L.; CHRISTIAN, J. R.** *Guide to Best Practices for Ocean CO₂ Measurements*. PICES Special Publication 3, 2007.
+5. **LEÃO, Z. M. A. N.; KIKUCHI, R. K. P.; OLIVEIRA, M. D. M.** Branqueamento de corais nos recifes da Bahia e sua relação com anomalias térmicas. *Revista Brasileira de Geofísica*, v. 26, n. 4, p. 507–516, 2008.
+6. **LUEKER, T. J.; DICKSON, A. G.; KEELING, C. D.** Ocean $p\text{CO}_2$ calculated from dissolved inorganic carbon, alkalinity, and equations for $K_1$ and $K_2$. *Marine Chemistry*, v. 70, p. 105–119, 2000.
+7. **MAY, L. A. et al.** Sublethal cellular and physiological effects of petroleum hydrocarbons on tropical reef-building corals. *Aquatic Toxicology*, v. 226, 105454, 2020.
+8. **MUCCI, A.** The solubility of calcite and aragonite in seawater at various salinities, temperatures, and one atmosphere total pressure. *American Journal of Science*, v. 283, n. 7, p. 780–799, 1983.
+9. **NOAA Coral Reef Watch.** *Version 3.1 Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring Products*. National Oceanic and Atmospheric Administration.
+10. **TRINDADE, R. F. et al.** Microplastics in estuaries of Todos os Santos Bay, Bahia, Brazil. *Environmental Pollution*, v. 323, 121224, 2023.
+11. **WEISS, R. F.** The solubility of nitrogen, oxygen and argon in water and seawater. *Deep Sea Research*, v. 17, n. 4, p. 721–735, 1970.

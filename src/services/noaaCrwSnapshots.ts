@@ -27,8 +27,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 0.4,
     degreeHeatingWeeks: 1.2,
     bleachingAlertLevel: 1, // Watch
-    bleachingAlertArea: 1,
     bleachingAlertMax7d: 1,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.85, longitude: -38.55 },
     requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
     spatialResolution: '5 km (0.05° pixel)',
@@ -51,8 +51,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 1.2,
     degreeHeatingWeeks: 3.8,
     bleachingAlertLevel: 2, // Warning
-    bleachingAlertArea: 2,
     bleachingAlertMax7d: 2,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.85, longitude: -38.55 },
     requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
     spatialResolution: '5 km (0.05° pixel)',
@@ -75,8 +75,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 1.8,
     degreeHeatingWeeks: 6.4,
     bleachingAlertLevel: 3, // Alert 1
-    bleachingAlertArea: 3,
     bleachingAlertMax7d: 3,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.85, longitude: -38.55 },
     requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
     spatialResolution: '5 km (0.05° pixel)',
@@ -99,8 +99,8 @@ export const BTS_CRW_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 1.5,
     degreeHeatingWeeks: 8.2,
     bleachingAlertLevel: 4, // Alert 2
-    bleachingAlertArea: 4,
     bleachingAlertMax7d: 4,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.85, longitude: -38.55 },
     requestedCoordinates: { latitude: -12.85, longitude: -38.55 },
     spatialResolution: '5 km (0.05° pixel)',
@@ -126,8 +126,8 @@ export const BTS_CRW_BARRA_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 0.3,
     degreeHeatingWeeks: 1.0,
     bleachingAlertLevel: 1, // Watch
-    bleachingAlertArea: 1,
     bleachingAlertMax7d: 1,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.95, longitude: -38.50 },
     requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
     spatialResolution: '5 km (0.05° pixel)',
@@ -150,8 +150,8 @@ export const BTS_CRW_BARRA_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 1.0,
     degreeHeatingWeeks: 3.2,
     bleachingAlertLevel: 2, // Warning
-    bleachingAlertArea: 2,
     bleachingAlertMax7d: 2,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.95, longitude: -38.50 },
     requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
     spatialResolution: '5 km (0.05° pixel)',
@@ -174,8 +174,8 @@ export const BTS_CRW_BARRA_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 1.5,
     degreeHeatingWeeks: 5.8,
     bleachingAlertLevel: 3, // Alert 1
-    bleachingAlertArea: 3,
     bleachingAlertMax7d: 3,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.95, longitude: -38.50 },
     requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
     spatialResolution: '5 km (0.05° pixel)',
@@ -198,8 +198,8 @@ export const BTS_CRW_BARRA_FALLBACK_SNAPSHOT: ThermalForcingPoint[] = [
     hotSpotDegC: 1.3,
     degreeHeatingWeeks: 7.5,
     bleachingAlertLevel: 3, // Alert 1
-    bleachingAlertArea: 3,
     bleachingAlertMax7d: 3,
+    bleachingAlertSourceVariable: 'CRW_BAA',
     gridCell: { latitude: -12.95, longitude: -38.50 },
     requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
     spatialResolution: '5 km (0.05° pixel)',

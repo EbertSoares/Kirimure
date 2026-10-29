@@ -14,18 +14,18 @@ A aplicação permite modificar temperatura da água, pH, cargas de matéria org
 
 O Kirimurê distingue explicitamente quatro categorias de informação ambiental para manter total transparência epistemológica:
 
-1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico e Degree Heating Weeks (DHW) obtidos na grade operacional de 5 km, com arquitetura multi-fonte com failover ordenado e orçamento global de tempo (16s):
-   - **Fonte 1 (REST/JSON):** Coral Watch Virtual Station API (`api.coral.tsr.lol`, estação virtual `todos_os_santos` na plataforma externa da BTS);
-   - **Fonte 2 (ERDDAP CORS):** Espelho oficial PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu`, dataset `dhw_5km`);
-   - **Fonte 3 (Failover Secundário):** NOAA CoastWatch ERDDAP PFEG (`coastwatch.pfeg.noaa.gov`, dataset `NOAA_DHW`).
-   Pixels oceânicos calibrados para Frades e Barra; canais estuarinos interiores estreitos (Paraguaçu) são identificados explicitamente com estado de sem cobertura (`no_coverage`), sem emissão de requisições espúrias. Em contingência, erros reais de protocolo são apresentados sem mascaramento, com acesso a snapshots históricos calibrados (El Niño mar/abr 2024).
+1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico, Degree Heating Weeks (DHW) oficial e nível ordinal de alerta (`CRW_BAA`, escala 0 a 7 por pixel) obtidos na grade operacional de 5 km, com arquitetura multi-fonte com failover ordenado e orçamento global de tempo (16s):
+   - **Fonte 1 (Primária — ERDDAP CORS):** Espelho oficial PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu`, dataset `dhw_5km`, pixel costeiro local de 5 km);
+   - **Fonte 2 (Secundária — ERDDAP NOAA):** NOAA CoastWatch ERDDAP PFEG (`coastwatch.pfeg.noaa.gov`, dataset `NOAA_DHW`);
+   - **Fonte 3 (Contingência Regional Externa):** Coral Watch Virtual Station API (`api.coral.tsr.lol`, serviço externo com estação virtual `todos_os_santos` na plataforma adjacente à entrada da BTS).
+   Pixels oceânicos calibrados para Frades e Barra; canais estuarinos interiores estreitos (Paraguaçu) são identificados explicitamente com estado de sem cobertura (`no_coverage`), sem emissão de requisições espúrias. Em contingência, erros reais de protocolo são apresentados sem mascaramento, com acesso manual explícito a snapshots históricos identificados (El Niño mar/abr 2024).
 2. **Produtos de Modelo Numérico Global (Open-Meteo Marine):** Séries horárias de altura de onda ($H_s$), correntes e nível do mar baseadas em modelos Copernicus/ECMWF para o canal da BTS, com normalização estrita de carimbos de data/hora em UTC.
 3. **Modelos Físico-Químicos Acoplados da Simulação:**
    - **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Cinética acoplada ar-mar baseada em Weiss (1970) para saturação termodinâmica, Streeter-Phelps para reaeração atmosférica e desoxigenação por DBO, demanda de oxigênio bentônica (SOD; Bowie et al., 1985) e fotossíntese/respiração líquida de algas e corais. Piso numérico de proteção termodinâmica a 0,05 mg/L.
    - **Sistema Carbonato Marinho (`carbonate.ts`):** Equilíbrio termodinâmico do $\text{CO}_2$ marinho ($K_1, K_2, K_w, K_B$ de Lueker et al., 2000 e Dickson, 1990; $K'_{sp}$ de Mucci, 1983) calculando pH efetivo, $p\text{CO}_2$, saturação de aragonita ($\Omega_{\text{arag}}$) e calcita ($\Omega_{\text{calc}}$), acoplado à produção respiratória de $\text{CO}_2$.
    - **Destino e Balanço de Óleo (`contaminants.ts`):** Balanço de massa em 4 compartimentos (filme superficial, dispersão em gotículas, dissolução de HPAs biodisponíveis e deposição em sedimento) com atenuação luminosa, perdas atmosféricas e exportação oceânica hidrodinâmica.
    - **Ecotoxicologia Subletal de HPAs:** Curvas de inibição de regeneração tecidual em corais recifais baseadas em May et al. (2020) com EC50 de 10 µg/L tPAH50.
-   - **Microplásticos nos Estuários:** Levantamento amostral regional representativo dos estuários da BTS baseado em Trindade et al. (2023, v. 323).
+   - **Microplásticos nos Estuários (`part./m³`):** Controle e resposta modelados diretamente em concentração superficial (`0 a 35.000 part./m³`), ancorados nas faixas medidas nos estuários da BTS por Trindade et al. (2023, v. 323) sem conversão arbitrária para massa.
 4. **Cenário Experimental Interativo:** Bancada didática em que o usuário manipula forçantes e observa a resposta ecossistêmica sem sobrescrever os registros observacionais externos.
 
 ## Funcionalidades
@@ -35,8 +35,9 @@ O Kirimurê distingue explicitamente quatro categorias de informação ambiental
 - **Regimes de Esgoto Selecionáveis:** Aporte contínuo diário ($\text{kg DBO}_5/\text{dia}$) ou pulso pontual instantâneo ($\Delta\text{DBO}$).
 - **Monitor de Sistema Carbonato:** Graus de saturação mineral ($\Omega_{\text{arag}}$, $\Omega_{\text{calc}}$) e $p\text{CO}_2$ com alertas de risco de corrosão do esqueleto coralino.
 - **Cinética de Desoxigenação:** Efeitos subletais e hipóxia severa influenciando a sobrevivência de peixes e corais.
-- **DHW em janela móvel de 12 semanas:** Cumprimento estrito da metodologia Coral Reef Watch para quantificação do estresse térmico acumulado.
-- **Painel de Ciência e Proveniência:** Inspeção de fórmulas, constantes, URLs de consulta externa e hashes de integridade.
+- **Estresse Térmico Simulado vs. DHW Satelital NOAA:** Separação explícita entre o DHW observacional externo da NOAA (baseado na climatologia MMM de cada pixel) e o estresse térmico acumulado do cenário local (`MMM didática = 28,0 °C`, janela móvel de 84 dias).
+- **Comparação Antes/Depois e Guardar Cenário:** Retorno ao estado inicial em um clique, desfazer alterações, salvamento de cenários para comparar dois experimentos (ex.: descarga contínua vs. pulso único) e alternância no mesmo enquadramento 3D.
+- **Painel de Evidências, Fontes e Método:** Gráficos temporais, cadeia causal do modelo, classificação do nível de evidência dos parâmetros (`Medido`, `Publicado`, `Hipótese do Modelo`, `Parâmetro Didático`) e rastreabilidade completa das consultas externas.
 - **Controles de Tempo:** Velocidades 1×, 3×, 5× e 10× com integração física invariante por sub-stepping numérico independente da velocidade.
 - **Desafios e Marcos Pedagógicos:** Diagnóstico e recuperação de recifes degradados.
 

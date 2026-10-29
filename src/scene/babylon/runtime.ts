@@ -21,7 +21,12 @@ import {
   VertexData,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { normalizedReceivedLoad } from '../../simulation/model';
+import {
+  effectivePh,
+  normalizedMicroplasticsConcentration,
+  normalizedReceivedLoad,
+  normalizedSewagePressure,
+} from '../../simulation/model';
 import type { FishSpeciesId, SimulationState } from '../../simulation/types';
 import { MARINE_ASSET_URLS } from '../assets';
 import { updateFishState } from '../fishAppearance';
@@ -77,13 +82,14 @@ export function computeBackdropFitting(aspect: number): BackdropFitting {
   const meshScaleY = 1.0;
 
   if (aspect >= REFERENCE_ASPECT) {
-    // Telas largas (desktop / widescreen / ultrawide):
-    // Preserva 100% da altura da arte sem corte vertical no topo (barco, céu) ou base (areia, corais).
-    // O artwork 16:9 fica perfeitamente enquadrado e centralizado, estendendo suavemente o mar/céu nas bordas laterais.
-    const uScale = aspect / REFERENCE_ASPECT;
-    const uOffset = (1 - uScale) * 0.5;
-    const vScale = 1.0;
-    const vOffset = 0.0;
+    // Telas mais largas que a arte 1672x941 (ex.: monitor 16:9 com barra superior ou ultrawide):
+    // Enquadramento "cover" horizontal 1:1 (u em [0, 1], zero bordas laterais esticadas)
+    // preservando o saveiro no topo e os corais de primeiro plano na base (v estritamente em [0, 1]).
+    const uScale = 1.0;
+    const uOffset = 0.0;
+    const vScale = REFERENCE_ASPECT / aspect;
+    const topArtCrop = (1 - vScale) * 0.36;
+    const vOffset = 1 - vScale - topArtCrop;
     return {
       uScale,
       uOffset,
@@ -92,19 +98,19 @@ export function computeBackdropFitting(aspect: number): BackdropFitting {
       meshScaleX,
       meshScaleY,
       artToScreen: (artU: number, artV: number) => ({
-        screenX: (artU - uOffset) / uScale,
-        screenY: artV,
+        screenX: artU,
+        screenY: (artV - topArtCrop) / vScale,
       }),
     };
   }
 
-  // Telas estreitas (celulares / tablets portrait):
-  // Preserva 100% da largura da arte sem nenhum corte horizontal nas colônias de corais das extremidades.
-  // Os recifes da esquerda e direita e o saveiro ficam 100% no campo de visão do usuário no celular.
-  const uScale = 1.0;
-  const uOffset = 0.0;
-  const vScale = REFERENCE_ASPECT / aspect;
-  const vOffset = (1 - vScale) * 0.5;
+  // Telas mais estreitas ou altas que 1672x941 (notebooks 16:10, projetores 4:3, tablets e celulares):
+  // Enquadramento "cover" vertical 1:1 (v em [0, 1], zero bordas superiores/inferiores esticadas)
+  // com janela horizontal centralizada (u estritamente dentro de [0, 1]).
+  const uScale = aspect / REFERENCE_ASPECT;
+  const uOffset = (1 - uScale) * 0.5;
+  const vScale = 1.0;
+  const vOffset = 0.0;
   return {
     uScale,
     uOffset,
@@ -113,8 +119,8 @@ export function computeBackdropFitting(aspect: number): BackdropFitting {
     meshScaleX,
     meshScaleY,
     artToScreen: (artU: number, artV: number) => ({
-      screenX: artU,
-      screenY: (artV - vOffset) / vScale,
+      screenX: (artU - uOffset) / uScale,
+      screenY: artV,
     }),
   };
 }
@@ -4506,22 +4512,38 @@ export class BabylonOceanRuntime {
 
   private updateScientificEffects(dt: number) {
     const envOil = normalizedReceivedLoad('oil', this.state.env.oil);
-    const targetOil = normalizedReceivedLoad('oil', this.state.targets.oil);
-    const desiredOil = Math.max(envOil, targetOil);
+    const previewOil = normalizedReceivedLoad('oil', this.state.targets.oil) * 0.35;
+    const desiredOil = Math.max(envOil, previewOil);
 
-    const envSewage = normalizedReceivedLoad('sewage', this.state.env.sewage);
-    const targetSewage = normalizedReceivedLoad('sewage', this.state.targets.sewage);
-    const desiredSewage = Math.max(envSewage, targetSewage);
+    const envSewage = normalizedSewagePressure(
+      this.state.env.sewage,
+      this.state.sewageDischargeMode,
+      this.state.biochemicalOxygenDemand,
+    );
+    const previewSewage = normalizedSewagePressure(
+      this.state.targets.sewage,
+      this.state.sewageDischargeMode,
+      this.state.biochemicalOxygenDemand,
+    ) * 0.35;
+    const envTurbidity = clamp(Math.max(this.state.env.turbidity, this.state.targets.turbidity * 0.4) / 100);
+    const desiredSewage = clamp(Math.max(envSewage, previewSewage) + envTurbidity * 0.72);
 
-    const envPlastics = normalizedReceivedLoad('microplastics', this.state.env.microplastics);
-    const targetPlastics = normalizedReceivedLoad('microplastics', this.state.targets.microplastics);
-    const desiredPlastics = Math.max(envPlastics, targetPlastics);
+    const envPlastics = normalizedMicroplasticsConcentration(this.state.env.microplastics);
+    const previewPlastics = normalizedMicroplasticsConcentration(this.state.targets.microplastics) * 0.35;
+    const desiredPlastics = Math.max(envPlastics, previewPlastics);
 
-    const coralHealthLoss = clamp((92 - this.state.health.coral) / 46);
-    const dhwBleach = clamp(this.state.degreeHeatingWeeks / 3.8);
-    const acidStress = clamp((8.02 - Math.min(this.state.env.ph, this.state.targets.ph)) / 0.25) * 0.75;
-    const thermalPreview = clamp((Math.max(this.state.env.temperature, this.state.targets.temperature) - 28.8) / 1.8) * 0.82;
-    const desiredBleach = clamp(Math.max(coralHealthLoss, dhwBleach, acidStress, thermalPreview));
+    // Resposta biológica dos corais vinculada estritamente às variáveis calculadas pelo modelo
+    // (saúde coralina, estresse térmico acumulado em 84 dias e pH efetivo real, sem fingir colapso instantâneo em t=0).
+    const coralHealthLoss = clamp((94 - this.state.health.coral) / 48);
+    const dhwBleach = clamp(this.state.degreeHeatingWeeks / 4.2);
+    const currentPh = effectivePh(
+      this.state.env,
+      this.state.biochemicalOxygenDemand,
+      this.state.sector,
+      this.state.respiratoryDicUmolKg,
+    );
+    const acidStress = clamp((8.0 - currentPh) / 0.30) * 0.65;
+    const desiredBleach = clamp(Math.max(coralHealthLoss, dhwBleach, acidStress));
 
     const smoothRate = Math.min(1, dt * 2.4);
     this.visualOil += (desiredOil - this.visualOil) * smoothRate;

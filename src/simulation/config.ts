@@ -1,10 +1,14 @@
 import type {
   BtsSectorDefinition,
   BtsSectorId,
+  ControlCategoryId,
   Environment,
+  EvidenceLevel,
   FishSpeciesDefinition,
   ItemId,
+  ParameterEvidenceRecord,
   PressureId,
+  ScaleType,
 } from './types';
 
 export const BASELINE: Environment = {
@@ -18,8 +22,32 @@ export const BASELINE: Environment = {
   recovery: 0,
 };
 
-export const MASS_LOAD_IDS = ['microplastics', 'oil', 'sewage'] as const;
+export const MASS_LOAD_IDS = ['oil', 'sewage'] as const;
 export type MassLoadId = (typeof MASS_LOAD_IDS)[number];
+
+/**
+ * Escala não linear de concentração de microplásticos em partículas/m³,
+ * ancorada nos levantamentos estuarinos da Baía de Todos-os-Santos (Trindade et al., 2023):
+ * - 0: condição de referência sem contaminação no cenário;
+ * - 5.180 part./m³: média estuarina global reportada em 10 ambientes da BTS;
+ * - 24.000 part./m³: patamar elevado observado em estuários urbanos (ex.: Subaé ~24.110 part./m³);
+ * - 32.784 part./m³: concentração máxima observada no Estuário do Paraguaçu;
+ * - 35.000 part./m³: teto experimental do cenário didático.
+ */
+export const MICROPLASTICS_OPTIONS_PARTICLES_M3 = [
+  0,
+  100,
+  250,
+  500,
+  1000,
+  2500,
+  5180,
+  10000,
+  15000,
+  24000,
+  32784,
+  35000,
+] as const;
 
 export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
   {
@@ -167,12 +195,16 @@ export const PARAMETERS = {
     centralRetention: CENTRAL_RETENTION,
   },
   receivedLoads: {
-    // Escalas didáticas da massa retida na baía após 30 dias para contaminantes cumulativos em massa (óleo e microplásticos).
-    // A capacidade de referência (100.000 kg × retenção central da baía) é mantida fixa para permitir a comparação
-    // intersetorial do efeito de retenção hidrodinâmica dos diferentes compartimentos da BTS.
-    microplastics: { maximumKg: 100000 * CENTRAL_RETENTION },
+    // Escalas didáticas da massa retida na baía após 30 dias para contaminantes expressos em massa (óleo e esgoto).
+    // Microplásticos utilizam concentração em partículas/m³ (PARAMETERS.microplastics), sem conversão arbitrária de massa.
     oil: { maximumKg: 100000 * CENTRAL_RETENTION },
     sewage: { maximumKg: 100000 * CENTRAL_RETENTION },
+  },
+  microplastics: {
+    // Escala em concentração (partículas/m³) respaldada por Trindade et al. (2023) nos estuários da BTS
+    maximumParticlesPerM3: 35000,
+    studyMeanParticlesPerM3: 5180,
+    studyMaxParticlesPerM3: 32784,
   },
   sewageLoads: {
     // Escala máxima de taxa contínua de lançamento (kg DBO₅/dia)
@@ -256,22 +288,52 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
 ];
 
 /**
- * Ordem dos controles na bancada.
- *
- * Só entram os fatores que o aluno ajusta na mão: temperatura, pH e os três
- * poluentes. Pesca, turbidez e recuperação saíram da bancada.
+ * Ordem completa dos oito controles ambientais agrupados nas três categorias da bancada:
+ * Água (temperatura, pH, turbidez), Poluição (esgoto, óleo, microplásticos) e Ecossistema (pesca, recuperação).
  */
 export const FACTOR_ORDER: readonly ItemId[] = [
   'temperature',
   'ph',
-  'microplastics',
-  'oil',
+  'turbidity',
   'sewage',
+  'oil',
+  'microplastics',
+  'fishing',
+  'recovery',
 ];
 
-interface ItemDefinition {
+export interface ControlGroupDefinition {
+  id: ControlCategoryId;
+  label: string;
+  subtitle: string;
+  items: readonly ItemId[];
+}
+
+export const CONTROL_GROUPS: readonly ControlGroupDefinition[] = [
+  {
+    id: 'water',
+    label: 'Água',
+    subtitle: 'Temperatura, pH e turbidez',
+    items: ['temperature', 'ph', 'turbidity'],
+  },
+  {
+    id: 'pollution',
+    label: 'Poluição',
+    subtitle: 'Carga orgânica, óleo e microplásticos',
+    items: ['sewage', 'oil', 'microplastics'],
+  },
+  {
+    id: 'ecosystem',
+    label: 'Ecossistema',
+    subtitle: 'Pressão pesqueira e recuperação ecológica',
+    items: ['fishing', 'recovery'],
+  },
+] as const;
+
+export interface ItemDefinition {
   label: string;
   shortLabel: string;
+  category: ControlCategoryId;
   min: number;
   max: number;
   step: number;
@@ -282,109 +344,180 @@ interface ItemDefinition {
   riskDirection?: 'above' | 'below';
   help: string;
   icon: string;
+  scaleType: ScaleType;
+  scaleBadge?: string;
+  scaleOptions?: readonly number[];
   massLoad?: boolean;
   massQualifier?: string;
   massOptionsKg?: readonly number[];
+  evidenceLevel: EvidenceLevel;
+  /** Cadeia causal concisa fiel aos mecanismos efetivamente calculados pelo modelo. */
+  causalChain: string;
+  /** Indicadores prioritários (2–3) exibidos em destaque ao manipular esta variável. */
+  primaryIndicators: readonly ('oxygen' | 'temperature' | 'thermalStress' | 'ph' | 'aragonite' | 'coral' | 'fish' | 'algae' | 'trophic')[];
 }
 
 export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
   temperature: {
     label: 'Temperatura da água',
     shortLabel: 'Temperatura',
+    category: 'water',
     min: 24,
     max: 31,
     step: 0.1,
     unit: '°C',
-    reference: 'BTS: branq. em 29–30 °C',
+    reference: 'BTS: limiar didático 29,0 °C',
     warning: 29,
     critical: 30,
     riskDirection: 'above',
-    help: 'Dado Local BTS / Padrão Operacional: Estudos regionais (Leão et al., 2008) registraram branqueamento a 29–30 °C. O HotSpot positivo ocorre quando SST > 28,0 °C (MMM didática); a partir de 29,0 °C (MMM + 1 °C), o DHW acumula estresse térmico em °C-semana.',
+    help: 'Publicado / Parâmetro Didático: Estudos na Bahia (Leão et al., 2008) observaram branqueamento a 29–30 °C. No modelo local, usa-se MMM didática fixa de 28,0 °C e limiar de acúmulo térmico em 29,0 °C (distinto do DHW satelital oficial da NOAA, que usa a climatologia MMM de cada pixel).',
     icon: 'temperature',
+    scaleType: 'linear',
+    evidenceLevel: 'Publicado',
+    causalChain: 'Temperatura ≥ 29 °C → acúmulo térmico (janela 84 d) + solubilidade de O₂ menor → perda de simbiose e estresse nos corais.',
+    primaryIndicators: ['temperature', 'thermalStress', 'coral'],
   },
   ph: {
     label: 'pH da água',
     shortLabel: 'pH',
+    category: 'water',
     min: 7.7,
     max: 8.2,
     step: 0.01,
-    unit: '',
-    reference: 'Oceano atual ≈ 8,1',
+    unit: 'escala total',
+    reference: 'Referência oceânica ≈ 8,10',
     warning: 8,
     critical: 7.8,
     riskDirection: 'below',
-    help: 'Cenário Didático: O pH oceânico médio de superfície é cerca de 8,1. A escala é logarítmica: pequenas quedas representam aumentos relevantes de H⁺, reduzindo o estado de saturação de aragonita para o esqueleto dos corais.',
+    help: 'Publicado / Cenário Didático: Escala logarítmica de atividade de H⁺ (uma queda de 0,1 unidade representa ~26% mais acidez). Reduz a disponibilidade de CO₃²⁻ e o estado de saturação da aragonita (Ωarag) calculado via Lueker et al. (2000) e Mucci (1983).',
     icon: 'flask',
-  },
-  microplastics: {
-    label: 'Microplásticos',
-    shortLabel: 'Microplásticos',
-    min: 0,
-    max: 100000,
-    step: 1,
-    unit: 'kg',
-    reference: 'Carga lançada (kg/t)',
-    help: 'Cenário Didático: carga simulada de polímeros. Contexto de campo (Dado Local BTS): estuários da BTS registram média de 5.176 a 32.784 partículas/m³ (Trindade et al., 2023), métrica que não equivale a massa sem granulometria e densidade.',
-    icon: 'bottle',
-    massLoad: true,
-    massOptionsKg: MASS_LOAD_OPTIONS_KG,
-  },
-  oil: {
-    label: 'Óleo',
-    shortLabel: 'Óleo',
-    min: 0,
-    max: 100000,
-    step: 1,
-    unit: 'kg',
-    reference: 'Carga lançada (kg/t)',
-    help: 'Cenário Didático / Dado de Laboratório: Carga simulada de petróleo. A película atenua a luz PAR na superfície; hidrocarbonetos induzem inibição celular subletal em pólipos em concentrações de 10 a 27 µg/L tPAH50 (May et al., 2020), não morte imediata.',
-    icon: 'drop',
-    massLoad: true,
-    massOptionsKg: MASS_LOAD_OPTIONS_KG,
-  },
-  sewage: {
-    label: 'Aporte Contínuo de DBO₅ (Esgoto)',
-    shortLabel: 'Aporte DBO₅/dia',
-    min: 0,
-    max: 100000,
-    step: 1,
-    unit: 'kg DBO₅/dia',
-    reference: 'Taxa diária de DBO₅ lançada (kg/dia ou t/dia)',
-    help: 'Cenário Didático: Taxa diária contínua de matéria orgânica biodegradável (DBO₅ a 20 °C) diluída no volume de mistura. O modelo converte estequiometricamente para Demanda Última (CBODu) e integra o consumo bacteriano no tempo.',
-    icon: 'sewage',
-    massLoad: true,
-    massQualifier: 'DBO₅/d',
-    massOptionsKg: MASS_LOAD_OPTIONS_KG,
+    scaleType: 'logarithmic',
+    scaleBadge: 'Escala log ([H⁺])',
+    evidenceLevel: 'Publicado',
+    causalChain: 'pH menor (escala log de H⁺) → menor íon carbonato (CO₃²⁻) → saturação de aragonita (Ωarag) menor → estresse de calcificação nos corais.',
+    primaryIndicators: ['ph', 'aragonite', 'coral'],
   },
   turbidity: {
     label: 'Turbidez e sedimentos',
     shortLabel: 'Turbidez',
+    category: 'water',
     min: 0,
     max: 100,
     step: 1,
-    unit: '',
-    help: 'Sedimento em suspensão bloqueia a luz que alimenta as algas simbiontes do coral e pode sufocar os pólipos ao assentar.',
+    unit: '% índice',
+    reference: 'Índice relativo do modelo (0–100%)',
+    warning: 35,
+    critical: 70,
+    riskDirection: 'above',
+    help: 'Parâmetro Didático: Índice relativo de atenuação luminosa e sedimentos em suspensão (0–100%). No modelo, reduz a fotossíntese líquida no balanço de oxigênio, favorece macroalgas tolerantes e pressiona corais e herbívoros visuais.',
     icon: 'sediment',
+    scaleType: 'linear',
+    evidenceLevel: 'Parâmetro Didático',
+    causalChain: 'Turbidez maior → atenuação de luz → fotossíntese líquida menor no balanço de O₂ + estresse de soterramento nos corais.',
+    primaryIndicators: ['coral', 'oxygen', 'algae'],
+  },
+  sewage: {
+    label: 'Carga orgânica / Esgoto (DBO₅)',
+    shortLabel: 'Esgoto (DBO₅)',
+    category: 'pollution',
+    min: 0,
+    max: 100000,
+    step: 1,
+    unit: 'kg DBO₅/dia',
+    reference: 'Escala logarítmica (kg a 100 t)',
+    warning: 2000,
+    critical: 20000,
+    riskDirection: 'above',
+    help: 'Cenário Didático / Modelo de Caixa: Carga de matéria orgânica biodegradável (DBO₅ a 20 °C) em aporte diário contínuo ou pulso pontual. Convertida para CBODu, consome oxigênio dissolvido via oxidação bacteriana, libera CO₂ respiratório (reduzindo o pH efetivo) e estimula algas.',
+    icon: 'sewage',
+    scaleType: 'logarithmic',
+    scaleBadge: 'Escala log (kg → t)',
+    scaleOptions: MASS_LOAD_OPTIONS_KG,
+    massLoad: true,
+    massQualifier: 'DBO₅/d',
+    massOptionsKg: MASS_LOAD_OPTIONS_KG,
+    evidenceLevel: 'Hipótese do Modelo',
+    causalChain: 'Carga orgânica (DBO₅) maior → oxidação bacteriana consome O₂ e libera CO₂ → oxigênio dissolvido menor + algas maiores → hipóxia na fauna e pressão nos corais.',
+    primaryIndicators: ['oxygen', 'fish', 'algae'],
+  },
+  oil: {
+    label: 'Óleo / Petróleo',
+    shortLabel: 'Óleo',
+    category: 'pollution',
+    min: 0,
+    max: 100000,
+    step: 1,
+    unit: 'kg',
+    reference: 'Limiar subletal: 10–27 µg/L tPAH50',
+    warning: 1000,
+    critical: 20000,
+    riskDirection: 'above',
+    help: 'Publicado / Modelo de Caixa: Massa derramada particionada entre filme superficial, coluna d’água, sedimento e fração dissolvida tPAH50. A película reduz a luz e a fotossíntese; HPAs dissolvidos induzem toxicidade subletal em corais (EC50 = 10 µg/L tPAH50; May et al., 2020).',
+    icon: 'drop',
+    scaleType: 'logarithmic',
+    scaleBadge: 'Escala log (kg → t)',
+    scaleOptions: MASS_LOAD_OPTIONS_KG,
+    massLoad: true,
+    massOptionsKg: MASS_LOAD_OPTIONS_KG,
+    evidenceLevel: 'Publicado',
+    causalChain: 'Massa de óleo → filme superficial bloqueia luz + fração dissolvida (tPAH50) sobe → inibição subletal de tecidos coralinos e estresse na fauna.',
+    primaryIndicators: ['coral', 'fish', 'oxygen'],
+  },
+  microplastics: {
+    label: 'Microplásticos',
+    shortLabel: 'Microplásticos',
+    category: 'pollution',
+    min: 0,
+    max: 35000,
+    step: 1,
+    unit: 'part./m³',
+    reference: 'BTS: média 5.180 · máx. 32.784 part./m³',
+    warning: 5180,
+    critical: 24000,
+    riskDirection: 'above',
+    help: 'Medido na BTS (faixa) / Hipótese do Modelo (efeito): Concentração superficial em partículas/m³, alinhada aos levantamentos de Trindade et al. (2023) em estuários da BTS (média ~5.180 part./m³; máximo 32.784 part./m³ no Paraguaçu). Sem conversão artificial para massa em kg.',
+    icon: 'bottle',
+    scaleType: 'nonlinear',
+    scaleBadge: 'Escala não linear',
+    scaleOptions: MICROPLASTICS_OPTIONS_PARTICLES_M3,
+    evidenceLevel: 'Medido',
+    causalChain: 'Concentração de microplásticos (part./m³) maior → ingestão acidental por planctívoros/onívoros e contato com pólipos → estresse crônico maior na fauna e corais.',
+    primaryIndicators: ['fish', 'coral', 'trophic'],
   },
   fishing: {
-    label: 'Pressão de pesca',
+    label: 'Pressão pesqueira',
     shortLabel: 'Pesca',
+    category: 'ecosystem',
     min: 0,
     max: 100,
     step: 1,
-    unit: '',
-    help: 'Herbívoros como o peixe-papagaio são os primeiros a desaparecer. Sem eles, as algas competem com o coral por espaço.',
+    unit: '% índice',
+    reference: 'Índice de esforço relativo (0–100%)',
+    warning: 35,
+    critical: 70,
+    riskDirection: 'above',
+    help: 'Parâmetro Didático / Hipótese do Modelo: Índice relativo de esforço pesqueiro (0–100%). Afeta desproporcionalmente herbívoros raspadores como o peixe-papagaio (sensibilidade 1,6×), reduzindo o controle de macroalgas e o equilíbrio trófico.',
     icon: 'hook',
+    scaleType: 'linear',
+    evidenceLevel: 'Parâmetro Didático',
+    causalChain: 'Pressão pesqueira maior → declínio mais rápido de herbívoros (peixe-papagaio) → menor raspagem → expansão de algas sobre o recife.',
+    primaryIndicators: ['fish', 'trophic', 'algae'],
   },
   recovery: {
-    label: 'Recuperação ambiental',
+    label: 'Recuperação ecológica',
     shortLabel: 'Recuperação',
+    category: 'ecosystem',
     min: 0,
     max: 100,
     step: 1,
-    unit: '',
-    help: 'Unidade de conservação, berçários e restauração de corais reduzem o dano e aceleram a recuperação do recife.',
+    unit: '% índice',
+    reference: 'Proteção e manejo (0–100%)',
+    help: 'Parâmetro Didático: Representa áreas marinhas protegidas, zonas de exclusão de pesca e manejo costeiro. No modelo, atenua a taxa diária de dano (até 60%) e acelera a regeneração quando as pressões caem abaixo do limiar de recuperação.',
     icon: 'shield',
+    scaleType: 'linear',
+    evidenceLevel: 'Parâmetro Didático',
+    causalChain: 'Manejo e proteção maiores → amortecimento da taxa diária de dano + regeneração acelerada quando os estressores recuam.',
+    primaryIndicators: ['coral', 'fish', 'trophic'],
   },
 };
 
@@ -399,3 +532,101 @@ export const PRESSURE_LABELS: Record<PressureId, string> = {
   turbidity: 'turbidez',
   fishing: 'pesca',
 };
+
+/**
+ * Registro explícito do nível de evidência científica dos parâmetros centrais do modelo.
+ * Permite que professores, estudantes e avaliadores distingam o que é medido/publicado
+ * do que constitui hipótese de modelagem ou convenção didática.
+ */
+export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
+  {
+    id: 'weiss-o2-saturation',
+    parameter: 'Saturação de O₂ na referência (26,8 °C; 35,0 PSU)',
+    valueDisplay: '6,55',
+    unit: 'mg O₂/L',
+    evidenceLevel: 'Publicado',
+    sourceOrBasis: 'Equação termodinâmica de Weiss (1970)',
+    scopeNote: 'Solubilidade físico-química exata ao nível do mar; varia por setor conforme temperatura e salinidade (7,18 mg/L a 22 PSU no Paraguaçu).',
+  },
+  {
+    id: 'frades-residence-time',
+    parameter: 'Tempo de descarga da Baía Central (Ilha dos Frades)',
+    valueDisplay: '38–62',
+    unit: 'dias',
+    evidenceLevel: 'Publicado',
+    sourceOrBasis: 'Cirano & Lessa (2007)',
+    scopeNote: 'Estimativa hidrodinâmica publicada para renovação sazonal da BTS; aplicada aqui a um modelo de caixa homogêneo.',
+  },
+  {
+    id: 'paraguacu-barra-boxes',
+    parameter: 'Tempos de residência e volumes de mistura (Paraguaçu e Barra)',
+    valueDisplay: '75 d / 9 d',
+    unit: 'dias',
+    evidenceLevel: 'Hipótese do Modelo',
+    sourceOrBasis: 'Parametrização comparativa de modelo de caixas',
+    scopeNote: 'Contraste hidrodinâmico coerente entre fundo estuarino e canal oceânico, ainda sem calibração local por traçadores in situ.',
+  },
+  {
+    id: 'bts-microplastics-range',
+    parameter: 'Faixa de microplásticos em estuários da BTS',
+    valueDisplay: '5.180 (média) · 32.784 (máx.)',
+    unit: 'part./m³',
+    evidenceLevel: 'Medido',
+    sourceOrBasis: 'Trindade et al. (2023) — 10 estuários da BTS',
+    scopeNote: 'Amostragem empírica superficial com redes de 64 e 300 µm. O peso de estresse biológico associado no simulador é Hipótese do Modelo.',
+  },
+  {
+    id: 'pah-sublethal-ecotox',
+    parameter: 'Limiar subletal de hidrocarbonetos dissolvidos (tPAH50)',
+    valueDisplay: 'EC50 = 10 e 27',
+    unit: 'µg/L',
+    evidenceLevel: 'Publicado',
+    sourceOrBasis: 'May et al. (2020) — bioensaio controlado (96 h)',
+    scopeNote: 'Referência laboratorial para inibição de regeneração tecidual e retração de pólipos; a partição em 4 reservatórios na BTS é Hipótese do Modelo.',
+  },
+  {
+    id: 'carbonate-constants',
+    parameter: 'Constantes do sistema carbonato (K₁, K₂, K′sp)',
+    valueDisplay: 'Ωarag base ≈ 3,66',
+    unit: 'adimensional',
+    evidenceLevel: 'Publicado',
+    sourceOrBasis: 'Lueker et al. (2000), Dickson (1990) e Mucci (1983)',
+    scopeNote: 'Equações termodinâmicas padrão; alcalinidade total escalada pela salinidade (2350 µmol/kg a 35 PSU) é Hipótese do Modelo.',
+  },
+  {
+    id: 'oxygen-kinetics-rates',
+    parameter: 'Taxas cinéticas de DBO e sedimento (kd₂₀, SOD, θ)',
+    valueDisplay: 'kd = 0,12 d⁻¹ · SOD = 0,5 g/m²/d',
+    unit: 'dia⁻¹ / g O₂·m⁻²·d⁻¹',
+    evidenceLevel: 'Publicado',
+    sourceOrBasis: 'Literatura clássica de qualidade da água (Bowie et al., 1985); limites CONAMA 357',
+    scopeNote: 'Coeficientes típicos de águas costeiras/estuarinas; não calibrados contra séries contínuas de sondas em cada recife da BTS.',
+  },
+  {
+    id: 'didactic-mmm-thermal',
+    parameter: 'Referência térmica do modelo local (MMM didática)',
+    valueDisplay: '28,0 (limiar 29,0)',
+    unit: '°C',
+    evidenceLevel: 'Parâmetro Didático',
+    sourceOrBasis: 'Ancorado qualitativamente em Leão et al. (2008) (branqueamento a 29–30 °C na Bahia)',
+    scopeNote: 'Convenção fixa do cenário local para acumular estresse em 84 dias; distinta do DHW satelital oficial da NOAA CRW (que usa MMM específica por pixel, ~27,92 °C na estação externa).',
+  },
+  {
+    id: 'kinetic-relaxation-tau',
+    parameter: 'Tempos característicos de resposta ambiental (τ)',
+    valueDisplay: '2 a 20',
+    unit: 'dias',
+    evidenceLevel: 'Parâmetro Didático',
+    sourceOrBasis: 'Ordenação relativa da inércia física/ecológica',
+    scopeNote: 'Representa diferenças de velocidade entre variáveis (ex.: pesca rápida vs. tamponamento de pH e recuperação lentos), não taxas medidas em campo.',
+  },
+  {
+    id: 'ecological-weights-and-collapse',
+    parameter: 'Pesos de pressão, sensibilidades por espécie e limiar crítico (≤ 33/100)',
+    valueDisplay: 'collapseDays: 48–78 d',
+    unit: 'índice 0–100',
+    evidenceLevel: 'Parâmetro Didático',
+    sourceOrBasis: 'Síntese qualitativa de vulnerabilidade trófica recifal',
+    scopeNote: 'Convenção interna para investigação comparativa de cenários; não constitui previsão quantitativa de mortalidade ou extinção populacional na BTS.',
+  },
+] as const;

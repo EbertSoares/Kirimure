@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-type IconName =
+export type IconName =
   | 'waves'
   | 'leaf'
   | 'bottle'
@@ -23,7 +23,13 @@ type IconName =
   | 'chart'
   | 'target'
   | 'web'
-  | 'sliders';
+  | 'sliders'
+  | 'undo'
+  | 'bookmark'
+  | 'compare'
+  | 'chevronDown'
+  | 'close'
+  | 'alert';
 
 export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconName }) {
   const common = {
@@ -73,6 +79,12 @@ export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconN
         <line x1="17" y1="16" x2="23" y2="16" />
       </>
     ),
+    undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></>,
+    bookmark: <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />,
+    compare: <><path d="M16 3h5v5" /><path d="M21 3 9 15" /><path d="M8 21H3v-5" /><path d="M3 21 15 9" /></>,
+    chevronDown: <path d="m6 9 6 6 6-6" />,
+    close: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
+    alert: <><path d="m10.3 3.9-8.5 14.2A2 2 0 0 0 3.5 21h17a2 2 0 0 0 1.7-2.9L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></>,
   };
 
   return <svg {...common}>{paths[name]}</svg>;

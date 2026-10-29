@@ -152,10 +152,13 @@ export function mapCoralWatchRecordToThermalPoint(
     sstAnomalyDegC: finiteOrNull(record.ssta_90th_hs),
     hotSpotDegC: finiteOrNull(record.hs_90th),
     degreeHeatingWeeks: finiteOrNull(record.dhw),
-    bleachingAlertLevel: stationStress ?? baa7d,
-    bleachingAlertArea: baa7d ?? stationStress,
+    bleachingAlertLevel: baa7d ?? stationStress,
     bleachingAlertMax7d: baa7d,
+    bleachingAlertSourceVariable: baa7d !== null
+      ? 'baa_7day_max'
+      : (stationStress !== null ? 'stress_level' : undefined),
     virtualStationStressLevel: stationStress,
+    climatologyMmmDegC: finiteOrNull(station.avg_max_monthly_mean),
     isVirtualStation: true,
     virtualStationName: station.name,
     gridCell: {

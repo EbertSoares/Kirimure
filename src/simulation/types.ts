@@ -8,6 +8,31 @@ export type ItemId =
   | 'fishing'
   | 'recovery';
 
+export type ControlCategoryId = 'water' | 'pollution' | 'ecosystem';
+
+export type ScaleType = 'linear' | 'logarithmic' | 'nonlinear';
+
+/**
+ * Classificação explícita do nível de evidência científica de cada parâmetro do modelo.
+ * Distingue observações/publicações de hipóteses e convenções didáticas.
+ */
+export type EvidenceLevel =
+  | 'Medido'
+  | 'Publicado'
+  | 'Calibrado'
+  | 'Hipótese do Modelo'
+  | 'Parâmetro Didático';
+
+export interface ParameterEvidenceRecord {
+  id: string;
+  parameter: string;
+  valueDisplay: string;
+  unit: string;
+  evidenceLevel: EvidenceLevel;
+  sourceOrBasis: string;
+  scopeNote: string;
+}
+
 export type SimulationSpeed = 1 | 3 | 5 | 10;
 
 export type EpistemologicalBadge =
@@ -242,6 +267,27 @@ export interface MissionDefinition {
   targetLoad: number;
   solutionControls: Partial<Environment>;
   transferQuestion: string;
+}
+
+export interface SavedScenario {
+  id: string;
+  label: string;
+  savedAtDay: number;
+  sector: BtsSectorId;
+  sewageDischargeMode: 'continuous' | 'pulse';
+  controls: Environment;
+  env: Environment;
+  dissolvedOxygen: number;
+  biochemicalOxygenDemand: number;
+  effectivePh: number;
+  degreeHeatingWeeks: number;
+  algae: number;
+  trophicBalance: number;
+  health: Health;
+  overall: number;
+  species: Record<FishSpeciesId, number>;
+  /** Cópia congelada do estado completo para alternância visual Antes/Depois no mesmo enquadramento 3D. */
+  snapshotState: SimulationState;
 }
 
 export interface MissionState {

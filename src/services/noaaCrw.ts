@@ -248,7 +248,7 @@ export function parseErddapCrwCsv(csvText: string): ParsedCrwRow[] {
       hotSpot: get(idx.hotSpot),
       dhw: get(idx.dhw),
       baa,
-      baa7d: idx.baa7d >= 0 ? parseAlertLevel(parts[idx.baa7d]) : baa,
+      baa7d: idx.baa7d >= 0 ? parseAlertLevel(parts[idx.baa7d]) : null,
     });
   }
   return rows;
@@ -310,8 +310,8 @@ async function querySingleDistributor(
     hotSpotDegC: row.hotSpot,
     degreeHeatingWeeks: row.dhw,
     bleachingAlertLevel: row.baa,
-    bleachingAlertArea: row.baa,
     bleachingAlertMax7d: row.baa7d,
+    bleachingAlertSourceVariable: row.baa !== null ? 'CRW_BAA' : undefined,
     gridCell: row.latitude !== null && row.longitude !== null
       ? { latitude: row.latitude, longitude: row.longitude }
       : { latitude: pixel.latitude, longitude: pixel.longitude },
