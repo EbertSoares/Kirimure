@@ -25,7 +25,7 @@ export function FpsCounter() {
         const engineFps = runtime?.getFps ? runtime.getFps() : 0;
 
         const effectiveFps = engineFps > 0 ? engineFps : calculatedFps;
-        setFps(Math.min(120, Math.max(1, effectiveFps)));
+        setFps(Math.max(1, effectiveFps));
 
         frames = 0;
         lastTime = now;
