@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon } from './Icons';
 import { OxygenTrendChart } from './OxygenTrendChart';
 import { Sparkline } from './Sparkline';
@@ -12,13 +12,18 @@ import {
 import { calculateRespirationPhImpact } from '../simulation/carbonate';
 import { BTS_MICROPLASTICS_SURVEY, calculateOilFateBudget, evaluateOilEcotoxicity } from '../simulation/contaminants';
 import {
+  INTERVENTIONS,
+  type InterventionId,
+} from '../simulation/interventions';
+import {
   calculateAlgae,
   calculateFishPressures,
   calculateTrophicBalance,
   effectivePh,
   getDissolvedOxygenBreakdown,
+  type ImpactMilestone,
 } from '../simulation/model';
-import { formatSimulatedTime } from '../simulation/time';
+import { formatSimulatedDuration, formatSimulatedTime } from '../simulation/time';
 import type {
   EvidenceLevel,
   FishSpeciesId,
@@ -190,6 +195,8 @@ interface EvidenceDrawerProps {
   oceanData: OceanDataState;
   criticalDays?: number | null;
   onApplySatelliteTemperature: (sst: number) => void;
+  focusedInterventionId?: InterventionId | null;
+  timelineMilestones?: ImpactMilestone[];
 }
 
 export function EvidenceDrawer({
@@ -201,9 +208,23 @@ export function EvidenceDrawer({
   oceanData,
   criticalDays = null,
   onApplySatelliteTemperature,
+  focusedInterventionId = null,
+  timelineMilestones = [],
 }: EvidenceDrawerProps) {
   const [chartMode, setChartMode] = useState<ChartSeriesMode>('oxygen');
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceLevel | 'all'>('all');
+
+  useEffect(() => {
+    if (tab === 'sources' && focusedInterventionId) {
+      const timer = window.setTimeout(() => {
+        const el = document.getElementById(`evidence-intervention-${focusedInterventionId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      return () => window.clearTimeout(timer);
+    }
+  }, [tab, focusedInterventionId]);
 
   if (!open) return null;
 
@@ -440,9 +461,73 @@ export function EvidenceDrawer({
                     <strong>{oilEcotox ? `${oilEcotox.tissueRegenerationInhibitionPercent}%` : '—'}</strong>
                   </div>
                 </div>
+                {simulation.recoveredOilKg !== undefined && simulation.recoveredOilKg > 0 && (
+                  <div className="oil-skimming-status-pill">
+                    <Icon name="check" className="skimming-icon" />
+                    <span>Óleo superficial recolhido (skimming ativo): <strong>{simulation.recoveredOilKg.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg</strong></span>
+                  </div>
+                )}
                 <p className="method-caveat">
                   Curva subletal baseada em bioensaio controlado de May et al. (2020; EC50 = 10 µg/L tPAH50). A partição física da massa na baía é uma hipótese de modelo de caixa.
                 </p>
+              </article>
+            )}
+
+            {timelineMilestones.length > 0 && (
+              <article className="evidence-card">
+                <div className="evidence-card-head">
+                  <div>
+                    <span className="origin-tag local">Projeção do modelo (1× física real)</span>
+                    <h3>Marcos de resposta e tempo ecológico</h3>
+                  </div>
+                </div>
+                <p className="method-caveat">
+                  Estimativa determinística calculada pelo modelo para identificar o tempo até o primeiro efeito e cruzamento de limiares conhecidos, independente da taxa de aceleração gráfica da interface.
+                </p>
+                <div className="milestone-table-wrapper">
+                  <table className="milestone-table">
+                    <thead>
+                      <tr>
+                        <th>Marco / Indicador</th>
+                        <th>Limiar</th>
+                        <th>Tempo projetado</th>
+                        <th>Evidência</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {timelineMilestones.map((ms) => {
+                        const timeLabel = ms.firstCrossingDay === null
+                          ? 'Não atinge em 1 ano'
+                          : ms.firstCrossingDay === 0
+                            ? 'Já ativo na condição inicial'
+                            : `~${formatSimulatedDuration(ms.firstCrossingDay)}`;
+                        return (
+                          <tr key={ms.id}>
+                            <td>
+                              <strong>{ms.label}</strong>
+                              <small>{ms.assumptions}</small>
+                            </td>
+                            <td>{ms.threshold} {ms.unit}</td>
+                            <td>
+                              <span className={ms.firstCrossingDay !== null ? 'milestone-time active' : 'milestone-time'}>
+                                {timeLabel}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`evidence-lvl-badge lvl-${ms.evidenceLevel}`}>
+                                {ms.evidenceLevel === 'published'
+                                  ? 'Publicado'
+                                  : ms.evidenceLevel === 'local-calibrated'
+                                    ? 'Calibrado local'
+                                    : 'Hipótese didática'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </article>
             )}
 
@@ -753,6 +838,55 @@ export function EvidenceDrawer({
                   </ul>
                 </div>
               </details>
+            </article>
+
+            <article className="evidence-card" id="interventions-evidence-card">
+              <div className="evidence-card-head">
+                <div>
+                  <span className="origin-tag local">Catálogo científico</span>
+                  <h3>Ações de recuperação: mecanismos, limites e evidências</h3>
+                </div>
+              </div>
+              <p className="method-caveat">
+                Ações de mitigação com limites biofísicos explícitos: intervenções reduzem taxas de aporte e recolhem frações acessíveis, mas a depuração biológica e hidrodinâmica segue sua escala temporal real.
+              </p>
+              <div className="parameter-evidence-list">
+                {INTERVENTIONS.map((item) => {
+                  const isFocused = focusedInterventionId === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      id={`evidence-intervention-${item.id}`}
+                      className={`param-evidence-item ${isFocused ? 'is-focused-target' : ''}`}
+                    >
+                      <div className="param-evidence-top">
+                        <div className="evidence-title-with-icon">
+                          <Icon name={item.icon as any} className="param-icon-svg" />
+                          <strong>{item.title}</strong>
+                        </div>
+                        <div className="evidence-badges-row">
+                          <span className={`evidence-lvl-badge ${item.modeled ? 'lvl-publicado' : 'lvl-hipotese-do-modelo'}`}>
+                            {item.modeled ? 'Modelado numericamente' : 'Exploração conceitual'}
+                          </span>
+                          <span className="evidence-lvl-badge lvl-medido">
+                            {item.evidenceLabel}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="intervention-evidence-desc">{item.description}</p>
+                      <div className="param-evidence-meta">
+                        <span><strong>Mecanismo:</strong> {item.effectLabel}</span>
+                        <span><strong>Início do efeito:</strong> {item.onsetLabel}</span>
+                      </div>
+                      <div className="intervention-evidence-limits">
+                        <p><strong>Limites e ressalvas:</strong> {item.limitation}</p>
+                        <p><strong>Escala temporal:</strong> {item.timeframeNote}</p>
+                        <p className="method-caveat"><strong>Base científica:</strong> {item.scientificBasis}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </article>
           </div>
         )}

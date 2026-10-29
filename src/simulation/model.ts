@@ -10,6 +10,14 @@ import {
 } from './config';
 import { calculateCarbonateSystem, calculateRespirationPhImpact } from './carbonate';
 import { calculateOilFateBudget, evaluateOilEcotoxicity } from './contaminants';
+import {
+  computeEffectiveFishingPressure,
+  computeEffectiveTargets,
+  isInterventionActive,
+  stepEnvironmentalStocks,
+  stepOilContainmentSkimming,
+} from './interventionModel';
+import type { ActiveIntervention } from './interventions';
 import { calculateDeoxygenationRate, calculateEquilibriumOxygen, calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL, convertBOD5ToUltimateBOD, integrateOxygenKinetics } from './oxygen';
 import type {
   BtsSectorId,
@@ -168,6 +176,8 @@ export function calculatePressures(
   respiratoryDicUmolKg?: number,
   sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
   elapsedDays = 1,
+  recoveredOilKg = 0,
+  activeInterventions?: readonly ActiveIntervention[],
 ): Pressures {
   const ph = effectivePh(env, bodConcentrationMgL, sectorId, respiratoryDicUmolKg);
   const currentHeat = stressAbove(
@@ -177,13 +187,24 @@ export function calculatePressures(
   ) * 0.25;
   const accumulatedHeat = clamp(dhw / PARAMETERS.temperature.severeDhw);
 
-  let oilPressure = normalizedReceivedLoad('oil', env.oil);
+  const remainingOilKg = Math.max(0, env.oil - recoveredOilKg);
+  let oilPressure = normalizedReceivedLoad('oil', remainingOilKg);
   if (env.oil > 0) {
-    const budget = calculateOilFateBudget(env.oil, sectorId, Math.max(0.1, elapsedDays), true);
+    const isContainment = isInterventionActive(activeInterventions, 'oilContainmentSkimming');
+    const budget = calculateOilFateBudget(
+      env.oil,
+      sectorId,
+      Math.max(0.1, elapsedDays),
+      true,
+      recoveredOilKg,
+      isContainment,
+    );
     const ecotox = evaluateOilEcotoxicity(budget.dissolvedPahConcentrationUgL);
     const toxicResponse = clamp(ecotox.tissueRegenerationInhibitionPercent / 100);
     oilPressure = Math.max(oilPressure, toxicResponse);
   }
+
+  const effectiveFishing = computeEffectiveFishingPressure(env.fishing, activeInterventions);
 
   return {
     thermal: combine([currentHeat, accumulatedHeat]),
@@ -192,7 +213,7 @@ export function calculatePressures(
     microplastics: normalizedMicroplasticsConcentration(env.microplastics),
     sewage: normalizedSewagePressure(env.sewage, sewageDischargeMode, bodConcentrationMgL),
     turbidity: clamp(env.turbidity / 100),
-    fishing: clamp(env.fishing / 100),
+    fishing: clamp(effectiveFishing / 100),
   };
 }
 
@@ -224,6 +245,8 @@ export function calculateFishPressures(
   respiratoryDicUmolKg?: number,
   sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
   elapsedDays = 1,
+  recoveredOilKg = 0,
+  activeInterventions?: readonly ActiveIntervention[],
 ): Pressures {
   const base = calculatePressures(
     env,
@@ -233,6 +256,8 @@ export function calculateFishPressures(
     respiratoryDicUmolKg,
     sewageDischargeMode,
     elapsedDays,
+    recoveredOilKg,
+    activeInterventions,
   );
   const hypoxia = hypoxiaStress(dissolvedOxygen);
   return {
@@ -275,6 +300,8 @@ export function calculateStress(
   respiratoryDicUmolKg?: number,
   sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
   elapsedDays = 1,
+  recoveredOilKg = 0,
+  activeInterventions?: readonly ActiveIntervention[],
 ) {
   const pressures = calculatePressures(
     env,
@@ -284,6 +311,8 @@ export function calculateStress(
     respiratoryDicUmolKg,
     sewageDischargeMode,
     elapsedDays,
+    recoveredOilKg,
+    activeInterventions,
   );
   const fishPressures = calculateFishPressures(
     env,
@@ -294,6 +323,8 @@ export function calculateStress(
     respiratoryDicUmolKg,
     sewageDischargeMode,
     elapsedDays,
+    recoveredOilKg,
+    activeInterventions,
   );
   const species = Object.fromEntries(
     FISH_SPECIES.map((item) => [item.id, speciesStress(fishPressures, item.id)]),
@@ -366,6 +397,9 @@ export function createInitialState(sectorId: BtsSectorId = 'frades'): Simulation
     speed: 1,
     paused: false,
     everDegraded: false,
+    activeInterventions: [],
+    recoveredOilKg: 0,
+    oilSpillAgeDays: 0,
     history: [
       {
         day: 0,
@@ -484,12 +518,27 @@ function updateThermalDose(state: SimulationState, temperature: number, dtDays: 
 }
 
 function singleTickStep(state: SimulationState, dtDays: number): SimulationState {
-  const env = { ...state.env };
+  const sector = BTS_SECTORS.find((s) => s.id === state.sector) ?? BTS_SECTORS[0];
+  const effectiveTargets = computeEffectiveTargets(state.targets, state.activeInterventions);
 
-  (Object.keys(env) as ItemId[]).forEach((id) => {
-    const factor = 1 - Math.exp(-dtDays / PARAMETERS.tauDays[id]);
-    env[id] += (state.targets[id] - env[id]) * factor;
-  });
+  // Depuração de estoques ambientais respeitando tempos de descarga e sedimentação
+  const env = stepEnvironmentalStocks(state.env, effectiveTargets, state.activeInterventions, sector, dtDays);
+
+  // Idade de intemperismo do derramamento de óleo
+  const currentSpillAge = (env.oil > 0 || state.targets.oil > 0)
+    ? (state.oilSpillAgeDays ?? 0) + dtDays
+    : 0;
+
+  // Skimming de óleo superficial
+  const skimming = stepOilContainmentSkimming(
+    env.oil,
+    state.recoveredOilKg ?? 0,
+    currentSpillAge,
+    state.sector,
+    state.activeInterventions,
+    dtDays,
+  );
+  const nextRecoveredOilKg = skimming.nextRecoveredKg;
 
   const currentBod = state.biochemicalOxygenDemand ?? 0;
   const currentDo = state.dissolvedOxygen ?? calculateWeissOxygenSaturation(env.temperature);
@@ -508,7 +557,6 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
   const bod = oxygenKinetics.nextBod;
 
   // Integração do fluxo de respiração microbiana para acréscimo de DIC (estequiometria RQ = 1,0)
-  const sector = BTS_SECTORS.find((s) => s.id === state.sector) ?? BTS_SECTORS[0];
   const kFlush = 1 / Math.max(1, sector.dischargeDays);
   const respiratoryDicFluxUmolKg = (oxygenKinetics.bodDeoxFlux / 32) * 1000 * 0.98;
   const nextRespiratoryDic = Math.max(
@@ -526,8 +574,12 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
     nextRespiratoryDic,
     state.sewageDischargeMode,
     state.elapsedDays + dtDays,
+    nextRecoveredOilKg,
+    state.activeInterventions,
   );
-  const protection = clamp(env.recovery / 100);
+
+  // Proteção do ecossistema: responde a alívio real e suporta compatibilidade legada caso recovery > 0
+  const protection = Math.max(0, Math.min(1, (state.env.recovery ?? 0) / 100));
   const exposure = PRESSURE_IDS.reduce(
     (result, id) => {
       result[id] += stress.pressures[id] * dtDays;
@@ -573,6 +625,8 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
     dissolvedOxygen: oxygen,
     biochemicalOxygenDemand: bod,
     respiratoryDicUmolKg: nextRespiratoryDic,
+    recoveredOilKg: nextRecoveredOilKg,
+    oilSpillAgeDays: currentSpillAge,
     elapsedDays: state.elapsedDays + dtDays,
   };
 }
@@ -582,9 +636,10 @@ export function tickSimulation(state: SimulationState, realDtSeconds: number): S
 
   const totalDtDays = realDtSeconds * PARAMETERS.daysPerRealSecond * state.speed;
   // Sub-stepping numérico: passos de no máximo 0.05 dias (~1.2 horas simuladas)
-  // para garantir invariância numérica e estabilidade da integração de Euler independentemente da velocidade (1x a 10x).
+  // com proteção contra erros de arredondamento em ponto flutuante para garantir
+  // equivalência exata entre velocidades (1×, 3×, 5× e 10×).
   const maxSubStepDays = 0.05;
-  const numSteps = Math.max(1, Math.ceil(totalDtDays / maxSubStepDays));
+  const numSteps = Math.max(1, Math.ceil((totalDtDays - 1e-9) / maxSubStepDays));
   const subDtDays = totalDtDays / numSteps;
 
   let current = state;
@@ -800,4 +855,195 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
       equation: 'd[OD]/dt = ka·(Cs - [OD]) - kd·[DBO] - SOD/H + (P - R)',
     },
   ];
+}
+
+export type ImpactMetricId =
+  | 'dissolvedOxygen'
+  | 'coralHealth'
+  | 'fishHealth'
+  | 'turbidity'
+  | 'ph';
+
+export interface ImpactMilestone {
+  id: string;
+  label: string;
+  metric: ImpactMetricId;
+  direction: 'below' | 'above' | 'decreaseFromBaseline';
+  threshold: number;
+  firstCrossingDay: number | null;
+  crossingSimDay?: number | null;
+  baseline?: number;
+  unit?: string;
+  assumptions?: string;
+  evidenceLevel: 'published' | 'local-calibrated' | 'educational-hypothesis';
+}
+
+/**
+ * Cria a lista de marcos padrão para estimativa de linha do tempo de impacto.
+ * Distingue explicitamente limiares oceanográficos publicados (CONAMA/EPA, Lueker)
+ * de convenções didáticas de sensibilidade do modelo.
+ */
+export function buildDefaultImpactMilestones(state: SimulationState): ImpactMilestone[] {
+  const currentPh = effectivePh(state.env, state.biochemicalOxygenDemand, state.sector, state.respiratoryDicUmolKg);
+  return [
+    {
+      id: 'do-stress-5mgL',
+      label: 'Oxigênio < 5,0 mg/L (estresse respiratório inicial)',
+      metric: 'dissolvedOxygen',
+      direction: 'below',
+      threshold: 5.0,
+      baseline: Number(state.dissolvedOxygen.toFixed(2)),
+      unit: 'mg/L',
+      assumptions: 'Critério CONAMA 357 / US EPA para vida aquática marinha',
+      evidenceLevel: 'published',
+      firstCrossingDay: null,
+    },
+    {
+      id: 'do-hypoxia-3mgL',
+      label: 'Oxigênio < 3,0 mg/L (alerta de hipóxia estuarina)',
+      metric: 'dissolvedOxygen',
+      direction: 'below',
+      threshold: 3.0,
+      baseline: Number(state.dissolvedOxygen.toFixed(2)),
+      unit: 'mg/L',
+      assumptions: 'Limiar de fuga e letargia da fauna recifal',
+      evidenceLevel: 'published',
+      firstCrossingDay: null,
+    },
+    {
+      id: 'ph-stress-790',
+      label: 'pH efetivo ≤ 7,90 (redução de saturação de aragonita)',
+      metric: 'ph',
+      direction: 'below',
+      threshold: 7.90,
+      baseline: Number(currentPh.toFixed(2)),
+      unit: 'escala total',
+      assumptions: 'Equilíbrio carbonático acoplado a Lueker et al. (2000)',
+      evidenceLevel: 'published',
+      firstCrossingDay: null,
+    },
+    {
+      id: 'coral-drop-10',
+      label: 'Saúde dos corais cai 10% no modelo',
+      metric: 'coralHealth',
+      direction: 'decreaseFromBaseline',
+      threshold: 10,
+      baseline: Number(state.health.coral.toFixed(1)),
+      unit: '% índice',
+      assumptions: 'Dinâmica didática de sensibilidade ponderada do recife',
+      evidenceLevel: 'educational-hypothesis',
+      firstCrossingDay: null,
+    },
+    {
+      id: 'fish-drop-10',
+      label: 'Saúde dos peixes cai 10% no modelo',
+      metric: 'fishHealth',
+      direction: 'decreaseFromBaseline',
+      threshold: 10,
+      baseline: Number(state.health.fish.toFixed(1)),
+      unit: '% índice',
+      assumptions: 'Média ponderada das 3 espécies recifais simuladas',
+      evidenceLevel: 'educational-hypothesis',
+      firstCrossingDay: null,
+    },
+    {
+      id: 'turbidity-attenuation-35',
+      label: 'Turbidez ≥ 35% (limiar de atenuação de luz)',
+      metric: 'turbidity',
+      direction: 'above',
+      threshold: 35,
+      baseline: Number(state.env.turbidity.toFixed(1)),
+      unit: '% índice',
+      assumptions: 'Índice de perda de transparência no cenário',
+      evidenceLevel: 'educational-hypothesis',
+      firstCrossingDay: null,
+    },
+  ];
+}
+
+/**
+ * Percorre o modelo em passos simulados fixos projetando quando os indicadores ambientais
+ * e ecológicos cruzam marcos predefinidos.
+ *
+ * Força velocidade speed = 1 para que o resultado dependa exclusivamente do estado e da física,
+ * nunca da taxa de reprodução gráfica escolhida na interface.
+ */
+export function estimateImpactTimeline(
+  initialState: SimulationState,
+  milestones: readonly ImpactMilestone[],
+  horizonDays = 365,
+): ImpactMilestone[] {
+  let sim: SimulationState = {
+    ...initialState,
+    paused: false,
+    speed: 1,
+    history: [],
+    firedMessages: new Set<string>(),
+    events: [],
+  };
+
+  const results: ImpactMilestone[] = milestones.map((m) => ({ ...m, firstCrossingDay: null }));
+  const startDay = sim.elapsedDays;
+
+  const readMetric = (st: SimulationState, metric: ImpactMetricId): number => {
+    switch (metric) {
+      case 'dissolvedOxygen':
+        return st.dissolvedOxygen;
+      case 'coralHealth':
+        return st.health.coral;
+      case 'fishHealth':
+        return st.health.fish;
+      case 'turbidity':
+        return st.env.turbidity;
+      case 'ph':
+        return effectivePh(st.env, st.biochemicalOxygenDemand, st.sector, st.respiratoryDicUmolKg);
+    }
+  };
+
+  const checkCrossing = (m: ImpactMilestone, currentVal: number): boolean => {
+    const base = m.baseline ?? (m.direction === 'decreaseFromBaseline' ? 100 : currentVal);
+    if (m.direction === 'below') {
+      return currentVal <= m.threshold;
+    }
+    if (m.direction === 'above') {
+      return currentVal >= m.threshold;
+    }
+    if (m.direction === 'decreaseFromBaseline') {
+      return (base - currentVal) >= m.threshold;
+    }
+    return false;
+  };
+
+  // Avaliação no instante t = 0 (marco já atingido na condição inicial)
+  for (let i = 0; i < results.length; i += 1) {
+    const val = readMetric(sim, results[i].metric);
+    if (checkCrossing(results[i], val)) {
+      results[i].firstCrossingDay = 0;
+      results[i].crossingSimDay = Number(sim.elapsedDays.toFixed(1));
+    }
+  }
+
+  const stepDays = 0.25;
+  const realSecondsPerStep = stepDays / PARAMETERS.daysPerRealSecond; // a speed=1: 0.5 s real
+  let projectedDays = 0;
+
+  while (projectedDays < horizonDays) {
+    const allCrossed = results.every((m) => m.firstCrossingDay !== null);
+    if (allCrossed) break;
+
+    sim = tickSimulation(sim, realSecondsPerStep);
+    projectedDays += stepDays;
+
+    for (let i = 0; i < results.length; i += 1) {
+      if (results[i].firstCrossingDay === null) {
+        const val = readMetric(sim, results[i].metric);
+        if (checkCrossing(results[i], val)) {
+          results[i].firstCrossingDay = Number((sim.elapsedDays - startDay).toFixed(1));
+          results[i].crossingSimDay = Number(sim.elapsedDays.toFixed(1));
+        }
+      }
+    }
+  }
+
+  return results;
 }

@@ -68,9 +68,9 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await expect(telemetry).toContainText('°C');
     await expect(telemetry).toContainText('Estresse térmico');
 
-    // Expande Poluição e Ecossistema para testar a rolagem real com roda do mouse
+    // Expande Poluição e verifica a seção de Recuperação para testar a rolagem real com roda do mouse
     await envDrawer.getByRole('button', { name: /Poluição/i }).click();
-    await envDrawer.getByRole('button', { name: /Ecossistema/i }).click();
+    await expect(envDrawer.locator('.recovery-section')).toBeVisible();
     const envBody = envDrawer.locator('.env-drawer-body');
     const envBodyBox = await envBody.boundingBox();
     expect(envBodyBox).not.toBeNull();
@@ -111,17 +111,22 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     const daysMatch = clockText.match(/(\d+)/);
     expect(Number(daysMatch?.[1] ?? '0')).toBeGreaterThanOrEqual(4);
 
-    // 8. Voltar ao mapa do Brasil e retornar selecionando a Bahia
+    // 8. Voltar ao mapa do Brasil e retornar selecionando a Bahia com zoom cinematográfico e escurecimento
     const mapReturnBtn = topbar.locator('.map-return-btn');
     await expect(mapReturnBtn).toBeVisible();
     await mapReturnBtn.click();
     const mapScreen = page.locator('.map-screen');
     await expect(mapScreen).toBeVisible();
 
+    await expect(mapScreen.locator('.map-legend')).toContainText('Amazônia Azul');
     const bahiaState = mapScreen.locator('.state.available').first();
     await expect(bahiaState).toBeVisible();
     await bahiaState.click();
-    await expect(topbar).toBeVisible();
+
+    // Zoom e véu de transição ativados juntos
+    await expect(mapScreen).toHaveClass(/is-zooming/);
+    await expect(page.locator('.screen-transition-veil')).toHaveClass(/cinematic-dive/);
+    await expect(topbar).toBeVisible({ timeout: 6000 });
   });
 
   test('mobile (390×844): logo centralizada, controles sem cortes, rolagem em bottom sheet e scrim', async ({ page }) => {

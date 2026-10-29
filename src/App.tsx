@@ -14,16 +14,20 @@ import {
   FACTOR_ORDER,
   ITEM_DEFINITIONS,
 } from './simulation/config';
+import { type ActiveIntervention, type InterventionId } from './simulation/interventions';
 import { calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL } from './simulation/oxygen';
 import {
+  buildDefaultImpactMilestones,
   buildTargets,
   calculateAlgae,
   calculateTrophicBalance,
   createInitialState,
   effectivePh,
   estimateCriticalDays,
+  estimateImpactTimeline,
   isFactorActive,
   tickSimulation,
+  type ImpactMilestone,
 } from './simulation/model';
 import { evaluateMessages } from './simulation/messages';
 import { formatSimulatedTime, SIMULATION_SPEEDS } from './simulation/time';
@@ -46,7 +50,10 @@ export type ContextualIndicatorId =
   | 'coral'
   | 'fish'
   | 'algae'
-  | 'trophic';
+  | 'trophic'
+  | 'turbidity';
+
+const MAIN_PROGRESS_INDICATORS = ['coral', 'fish'] as const;
 
 interface ContextualIndicatorView {
   id: ContextualIndicatorId;
@@ -118,6 +125,9 @@ export function App() {
 
   const [criticalDays, setCriticalDays] = useState<number | null>(null);
 
+  const [timelineMilestones, setTimelineMilestones] = useState<ImpactMilestone[]>([]);
+  const [focusedInterventionId, setFocusedInterventionId] = useState<InterventionId | null>(null);
+
   const oceanData = useOceanData(simulation.sector, screen === 'simulation');
 
   const sectorDef = useMemo(
@@ -141,11 +151,11 @@ export function App() {
     const fixedStep = 1 / 10;
 
     const animate = (now: number) => {
-      const elapsed = Math.min((now - previous) / 1000, 0.5);
+      const elapsed = Math.min((now - previous) / 1000, 1.5);
       previous = now;
       accumulator += elapsed;
       if (accumulator >= fixedStep) {
-        const steps = Math.min(Math.floor(accumulator / fixedStep), 5);
+        const steps = Math.min(Math.floor(accumulator / fixedStep), 15);
         accumulator -= steps * fixedStep;
         setSimulation((current) => {
           if (current.paused) return current;
@@ -171,6 +181,23 @@ export function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
+
+  // Recálculo assíncrono (debounce 300 ms) da linha do tempo ecológica independente da velocidade da UI
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const defaultMilestones = buildDefaultImpactMilestones(simulation);
+      const calculated = estimateImpactTimeline(simulation, defaultMilestones, 365);
+      setTimelineMilestones(calculated);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    simulation.controls,
+    simulation.activeInterventions,
+    simulation.sewageDischargeMode,
+    simulation.sector,
+    simulation.biochemicalOxygenDemand > 0.05,
+  ]);
 
   // Recálculo assíncrono (debounce 260 ms) do tempo até o limiar crítico do modelo
   useEffect(() => {
@@ -342,6 +369,27 @@ export function App() {
     }));
   }, [handleAdjustFactor, oceanData.noaaStatus.state]);
 
+  const handleToggleIntervention = useCallback((id: InterventionId) => {
+    setSimulation((current) => {
+      const activeList = current.activeInterventions ?? [];
+      const exists = activeList.some((act) => act.id === id);
+      const nextList: ActiveIntervention[] = exists
+        ? activeList.filter((act) => act.id !== id)
+        : [...activeList, { id, startedAtDay: current.elapsedDays, intensity: 1, status: 'active' }];
+      return {
+        ...current,
+        activeInterventions: nextList,
+      };
+    });
+  }, []);
+
+  const handleOpenInterventionLimits = useCallback((id: InterventionId) => {
+    setFocusedInterventionId(id);
+    setEnvDrawerOpen(false);
+    setEvidenceTab('sources');
+    setEvidenceOpen(true);
+  }, []);
+
   const indicatorViews = useMemo<Record<ContextualIndicatorId, ContextualIndicatorView>>(() => {
     const algae = calculateAlgae(
       simulation.env,
@@ -390,6 +438,9 @@ export function App() {
 
     const trophicVal = Math.max(0, Math.min(100, Math.round(trophic)));
     const trophicTone = trophicVal >= 67 ? 'good' : trophicVal >= 45 ? 'watch' : 'critical';
+
+    const turbVal = Math.max(0, Math.min(100, Math.round(simulation.env.turbidity)));
+    const turbTone = turbVal >= 60 ? 'critical' : turbVal >= 30 ? 'watch' : 'good';
 
     return {
       oxygen: {
@@ -451,7 +502,6 @@ export function App() {
         id: 'algae',
         label: 'Algas',
         valueText: `${algaeVal}%`,
-        progressPercent: algaeVal,
         tone: algaeTone,
         tooltip: 'Cobertura de algas no modelo.',
       },
@@ -459,9 +509,16 @@ export function App() {
         id: 'trophic',
         label: 'Equilíbrio trófico',
         valueText: `${trophicVal}%`,
-        progressPercent: trophicVal,
         tone: trophicTone,
         tooltip: 'Equilíbrio alimentar no modelo.',
+      },
+      turbidity: {
+        id: 'turbidity',
+        label: 'Turbidez',
+        valueText: `${turbVal}`,
+        unitText: '% índice',
+        tone: turbTone,
+        tooltip: 'Partículas em suspensão e transparência da água.',
       },
     };
   }, [simulation]);
@@ -471,7 +528,9 @@ export function App() {
       ? focusedFactor
       : (activeFactorIds[activeFactorIds.length - 1] ?? focusedFactor);
     if (driverFactor) {
-      return ITEM_DEFINITIONS[driverFactor].primaryIndicators.slice(0, 3);
+      const primary = (ITEM_DEFINITIONS[driverFactor].primaryIndicators as readonly ContextualIndicatorId[])
+        .filter((id) => id !== 'coral' && id !== 'fish');
+      return ['coral', 'fish', ...(primary.slice(0, 2) as ContextualIndicatorId[])];
     }
     return ['coral', 'fish', 'oxygen'];
   }, [focusedFactor, simulation.controls, activeFactorIds]);
@@ -514,12 +573,22 @@ export function App() {
   const handleSelectBahiaFromMap = () => {
     if (mapZooming) return;
     setMapZooming(true);
-    setTransitionDark(true);
+
+    // O zoom calmo e suave no centro da Bahia e o escurecimento iniciam-se juntos:
+    window.setTimeout(() => {
+      setTransitionDark(true);
+    }, 40);
+
+    // Aos 1200ms, a tela já está escura: troca imperceptivelmente para a simulação 3D
     window.setTimeout(() => {
       setScreen('simulation');
       setMapZooming(false);
-      window.setTimeout(() => setTransitionDark(false), 160);
-    }, 220);
+
+      // Com a cena 3D pronta: dissipa o véu suavemente em fade-out
+      window.setTimeout(() => {
+        setTransitionDark(false);
+      }, 240);
+    }, 1200);
   };
 
   const handleOpenMap = () => {
@@ -530,9 +599,9 @@ export function App() {
       setMapReturning(true);
       window.setTimeout(() => {
         setTransitionDark(false);
-        window.setTimeout(() => setMapReturning(false), 240);
-      }, 60);
-    }, 180);
+        window.setTimeout(() => setMapReturning(false), 800);
+      }, 100);
+    }, 350);
   };
 
   if (screen === 'map') {
@@ -544,7 +613,7 @@ export function App() {
           isReturning={mapReturning}
         />
         <div
-          className={`screen-transition-veil ${transitionDark ? 'active' : ''}`}
+          className={`screen-transition-veil ${transitionDark ? 'active' : ''} ${mapZooming ? 'cinematic-dive' : ''}`}
           aria-hidden="true"
         />
       </>
@@ -669,12 +738,14 @@ export function App() {
               <div className="telemetry-pills">
                 {visibleIndicatorIds.map((indId) => {
                   const view = indicatorViews[indId];
-                  if (view.progressPercent !== undefined) {
+                  if (!view) return null;
+                  const isMainProgress = (MAIN_PROGRESS_INDICATORS as readonly string[]).includes(view.id) && view.progressPercent !== undefined;
+                  if (isMainProgress) {
                     return (
                       <IndicatorProgress
                         key={view.id}
                         label={view.label}
-                        value={view.progressPercent}
+                        value={view.progressPercent!}
                         tone={view.tone}
                         tooltip={view.tooltip}
                         onClick={openIndicatorDetails}
@@ -796,17 +867,25 @@ export function App() {
           onResetSingleFactor={handleResetSingleFactor}
           onSewageModeChange={handleSewageModeChange}
           onTriggerSewagePulse={handleTriggerSewagePulse}
+          onToggleIntervention={handleToggleIntervention}
+          onOpenInterventionLimits={handleOpenInterventionLimits}
+          timelineMilestones={timelineMilestones}
         />
 
         <EvidenceDrawer
           open={evidenceOpen}
           tab={evidenceTab}
           onTabChange={setEvidenceTab}
-          onClose={() => setEvidenceOpen(false)}
+          onClose={() => {
+            setEvidenceOpen(false);
+            setFocusedInterventionId(null);
+          }}
           simulation={simulation}
           oceanData={oceanData}
           criticalDays={criticalDays}
           onApplySatelliteTemperature={handleApplySatelliteTemperature}
+          focusedInterventionId={focusedInterventionId}
+          timelineMilestones={timelineMilestones}
         />
       </main>
 

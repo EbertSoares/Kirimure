@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Icon, type IconName } from './Icons';
 import {
   BTS_SECTORS,
@@ -6,7 +6,16 @@ import {
   isMassLoadId,
   ITEM_DEFINITIONS,
 } from '../simulation/config';
-import { isFactorActive } from '../simulation/model';
+import {
+  INTERVENTIONS,
+  type InterventionId,
+} from '../simulation/interventions';
+import {
+  getRecommendedInterventions,
+  isInterventionActive,
+} from '../simulation/interventionModel';
+import { isFactorActive, type ImpactMilestone } from '../simulation/model';
+import { formatSimulatedDuration } from '../simulation/time';
 import type {
   ControlCategoryId,
   ItemId,
@@ -17,6 +26,13 @@ export function formatParameterValue(id: ItemId, value: number, sewageMode: 'con
   value: string;
   unit: string;
 } {
+  if (id === 'turbidity') {
+    return {
+      value: `${Math.round(value)}`,
+      unit: '% índice',
+    };
+  }
+
   if (isMassLoadId(id)) {
     const qualifier = id === 'sewage'
       ? (sewageMode === 'pulse' ? 'DBO₅' : 'DBO₅/dia')
@@ -116,6 +132,9 @@ interface EnvironmentDrawerProps {
   onResetSingleFactor: (id: ItemId) => void;
   onSewageModeChange: (mode: 'continuous' | 'pulse') => void;
   onTriggerSewagePulse: (massKg: number) => void;
+  onToggleIntervention: (id: InterventionId) => void;
+  onOpenInterventionLimits: (id: InterventionId) => void;
+  timelineMilestones?: ImpactMilestone[];
 }
 
 export function EnvironmentDrawer({
@@ -131,6 +150,9 @@ export function EnvironmentDrawer({
   onResetSingleFactor,
   onSewageModeChange,
   onTriggerSewagePulse,
+  onToggleIntervention,
+  onOpenInterventionLimits,
+  timelineMilestones,
 }: EnvironmentDrawerProps) {
   const initialCategory: ControlCategoryId = focusedFactor
     ? ITEM_DEFINITIONS[focusedFactor].category
@@ -139,8 +161,10 @@ export function EnvironmentDrawer({
   const [expandedGroups, setExpandedGroups] = useState<Record<ControlCategoryId, boolean>>(() => ({
     water: initialCategory === 'water',
     pollution: initialCategory === 'pollution',
-    ecosystem: initialCategory === 'ecosystem',
+    ecosystem: false,
   }));
+
+  const [showAllInterventions, setShowAllInterventions] = useState(false);
 
   const toggleGroup = (groupId: ControlCategoryId) => {
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -149,6 +173,18 @@ export function EnvironmentDrawer({
   const sectorDef = BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0];
   const controls = simulation.controls;
   const sewageMode = simulation.sewageDischargeMode;
+
+  const { recommended } = useMemo(
+    () => getRecommendedInterventions(simulation),
+    [simulation]
+  );
+
+  const displayedInterventions = showAllInterventions
+    ? INTERVENTIONS
+    : (recommended.length > 0 ? recommended : INTERVENTIONS.slice(0, 3));
+
+  const hasActiveInterventions = (simulation.activeInterventions?.length ?? 0) > 0;
+  const firstMilestoneCrossing = timelineMilestones?.find((m) => m.firstCrossingDay !== null && m.firstCrossingDay > 0);
 
   if (!open) return null;
 
@@ -379,6 +415,95 @@ export function EnvironmentDrawer({
             </section>
           );
         })}
+
+        <section className="recovery-section" aria-label="Ações de recuperação ambiental">
+          <div className="recovery-section-header">
+            <div className="recovery-title-group">
+              <h3 className="recovery-section-title">Recuperação</h3>
+              <p className="recovery-section-desc">Ações de mitigação para conter e reduzir impactos</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn--quiet btn--compact see-all-toggle-btn"
+              onClick={() => setShowAllInterventions((prev) => !prev)}
+            >
+              {showAllInterventions ? 'Ver recomendadas' : `Ver todas (${INTERVENTIONS.length})`}
+            </button>
+          </div>
+
+          <div className="interventions-grid">
+            {displayedInterventions.map((item) => {
+              const active = isInterventionActive(simulation.activeInterventions, item.id);
+              return (
+                <article
+                  key={item.id}
+                  className={`intervention-card ${active ? 'is-active' : ''} ${!item.modeled ? 'is-conceptual' : ''}`}
+                >
+                  <div className="intervention-card-top">
+                    <div className="intervention-title-row">
+                      <Icon name={item.icon as any} className="intervention-icon" />
+                      <h4 className="intervention-title">{item.title}</h4>
+                    </div>
+                    <div className="intervention-badges">
+                      {active && <span className="intervention-badge is-active">Ativa</span>}
+                      {!item.modeled && (
+                        <span
+                          className="intervention-badge is-conceptual"
+                          title="Ação para reflexão pedagógica; não altera numericamente o modelo no momento"
+                        >
+                          Exploração conceitual
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="intervention-desc">{item.description}</p>
+                  <p className="intervention-effect-line">
+                    <strong>Efeito:</strong> {item.effectLabel}
+                  </p>
+
+                  <div className="intervention-actions">
+                    <button
+                      type="button"
+                      className={`btn btn--compact ${active ? 'btn--primary' : 'btn--quiet'}`}
+                      onClick={() => onToggleIntervention(item.id)}
+                      aria-pressed={active}
+                    >
+                      {active ? 'Desativar' : 'Ativar'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--quiet btn--compact"
+                      onClick={() => onOpenInterventionLimits(item.id)}
+                      title="Ver limites científicos e evidências no painel de Dados"
+                    >
+                      Ver limites
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="timeline-preview-strip">
+            <div className="timeline-preview-row">
+              <span className="timeline-preview-label">Primeiro efeito no modelo:</span>
+              <span className="timeline-preview-val">
+                {hasActiveInterventions
+                  ? 'Imediato sobre o fluxo de novas entradas (~0–3 dias)'
+                  : 'Sem intervenção ativa'}
+              </span>
+            </div>
+            <div className="timeline-preview-row">
+              <span className="timeline-preview-label">Recuperação do indicador:</span>
+              <span className="timeline-preview-val">
+                {firstMilestoneCrossing
+                  ? `~${formatSimulatedDuration(firstMilestoneCrossing.firstCrossingDay!)} (${firstMilestoneCrossing.label})`
+                  : 'Depuração gradual conforme hidrodinâmica'}
+              </span>
+            </div>
+          </div>
+        </section>
       </div>
     </aside>
   );

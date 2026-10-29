@@ -42,6 +42,26 @@
   --status-warning: #D7BD80;
   --status-critical: #D7867D;
 
+  /* Azul: uso pontual na UI principal */
+  --accent-blue: #2A39F9;
+  --accent-blue-hover: #4654FF;
+  --accent-blue-soft: rgba(42, 57, 249, 0.14);
+  --focus-blue: #8D96FF;
+
+  /* Paleta exclusiva da tela de mapa */
+  --map-ocean-deep: #051424;
+  --map-ocean-mid: #082238;
+  --map-ocean-light: #1678C2;
+  --map-land: #12212B;
+  --map-land-coastal: #1678C2; /* Amazônia Azul: azul vibrante e forte */
+  --map-land-coastal-hover: #268EDC;
+  --map-state-stroke: rgba(180, 215, 240, 0.20);
+  --map-label: #E1EFF8;
+  --map-label-muted: #7E97A8;
+  --brand-yellow: #F8B020; /* Amarelo da logo Kirimurê */
+  --brand-yellow-hover: #FFD052;
+  --brand-yellow-stroke: #FFF0B5;
+
   /* Painéis sobre a cena 3D */
   --overlay: rgba(20, 23, 21, 0.88);
   --overlay-strong: rgba(17, 19, 17, 0.95);
@@ -220,7 +240,9 @@ summary:focus-visible {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  background: var(--app-bg);
+  background:
+    radial-gradient(ellipse at 60% 48%, rgba(18, 51, 75, 0.72), transparent 67%),
+    linear-gradient(135deg, var(--map-ocean-deep), var(--map-ocean-mid));
 }
 
 .map-screen::before {
@@ -229,8 +251,8 @@ summary:focus-visible {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(242, 244, 238, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(242, 244, 238, 0.018) 1px, transparent 1px);
+    linear-gradient(rgba(160, 190, 215, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(160, 190, 215, 0.045) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(circle at 50% 48%, black, transparent 74%);
 }
@@ -261,7 +283,7 @@ summary:focus-visible {
 
 .map-selection h1 {
   margin: 4px 0 0;
-  color: var(--text-secondary);
+  color: var(--map-label);
   font-size: clamp(17px, 1.8vw, 23px);
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -303,23 +325,23 @@ summary:focus-visible {
 }
 
 .state.locked .state-shape {
-  fill: var(--surface-1);
-  stroke: rgba(242, 244, 238, 0.14);
+  fill: var(--map-land);
+  stroke: var(--map-state-stroke);
   stroke-width: 1.1;
 }
 
 .state.locked:hover .state-shape {
-  fill: var(--surface-2);
+  fill: #192E3B;
 }
 
 .state.coastal .state-shape {
-  fill: var(--surface-3);
-  stroke: rgba(242, 244, 238, 0.24);
-  stroke-width: 1.25;
+  fill: var(--map-land-coastal);
+  stroke: rgba(180, 230, 255, 0.75);
+  stroke-width: 1.4;
 }
 
 .state.coastal:hover .state-shape {
-  fill: #343C35;
+  fill: var(--map-land-coastal-hover);
 }
 
 .state.available {
@@ -327,18 +349,20 @@ summary:focus-visible {
 }
 
 .state.available .state-shape {
-  fill: var(--accent-strong);
-  stroke: var(--accent);
-  stroke-width: 1.8;
+  fill: var(--brand-yellow);
+  stroke: var(--brand-yellow-stroke);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 12px rgba(248, 176, 32, 0.55));
 }
 
 .state.available:hover .state-shape {
-  fill: #98CFAA;
-  stroke: var(--text-primary);
+  fill: var(--brand-yellow-hover);
+  stroke: #FFFFFF;
 }
 
+.state.available:focus-visible .state-shape,
 .state:focus-visible .state-shape {
-  stroke: var(--focus-ring);
+  stroke: #FFFFFF;
   stroke-width: 2.8;
 }
 
@@ -349,16 +373,17 @@ summary:focus-visible {
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
-  fill: var(--text-tertiary);
+  fill: var(--map-label-muted);
 }
 
 .state-label.coastal {
-  fill: var(--text-secondary);
+  fill: #E5F4FF;
+  font-weight: 700;
 }
 
 .state-label.available {
-  fill: var(--accent-ink);
-  font-weight: 800;
+  fill: #2B1D00;
+  font-weight: 900;
 }
 
 .map-legend {
@@ -368,10 +393,12 @@ summary:focus-visible {
   justify-content: center;
   gap: 10px 20px;
   margin: 0;
-  padding: 8px 16px;
-  border: 1px solid var(--border-subtle);
+  padding: 8px 18px;
+  border: 1px solid rgba(206, 224, 239, 0.16);
   border-radius: 999px;
-  background: var(--surface-0);
+  background: rgba(5, 20, 36, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   list-style: none;
 }
 
@@ -379,7 +406,7 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-secondary);
+  color: var(--map-label);
   font-size: 12.5px;
   font-weight: 500;
 }
@@ -392,18 +419,18 @@ summary:focus-visible {
 }
 
 .legend-swatch.available {
-  background: var(--accent-strong);
-  border: 1px solid var(--accent);
+  background: var(--brand-yellow);
+  border: 1px solid var(--brand-yellow-stroke);
 }
 
 .legend-swatch.coastal {
-  background: var(--surface-3);
-  border: 1px solid rgba(242, 244, 238, 0.28);
+  background: var(--map-land-coastal);
+  border: 1px solid rgba(180, 230, 255, 0.75);
 }
 
 .legend-swatch.other {
-  background: var(--surface-1);
-  border: 1px solid rgba(242, 244, 238, 0.16);
+  background: var(--map-land);
+  border: 1px solid var(--map-state-stroke);
 }
 
 .map-discreet-toast {
@@ -434,7 +461,8 @@ summary:focus-visible {
 .map-screen.is-zooming .map-selection h1,
 .map-screen.is-zooming .map-legend {
   opacity: 0;
-  transition: opacity 180ms ease;
+  transform: translateY(-16px);
+  transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1), transform 500ms cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
 
@@ -444,28 +472,71 @@ summary:focus-visible {
 
 .brazil-map.zooming-to-bahia .brazil-map-svg {
   transform-origin: 77.4% 45.7%;
-  transform: scale(1.12);
-  opacity: 0.4;
-  transition: transform 220ms ease, opacity 220ms ease;
+  transform: translate(-27.4%, 4.3%) scale(6.5);
+  transition: transform 1500ms cubic-bezier(0.2, 0, 0.25, 1);
+  will-change: transform;
+}
+
+.brazil-map.zooming-to-bahia .state:not(.available),
+.brazil-map.zooming-to-bahia .label-layer text:not(.available) {
+  opacity: 0.04;
+  transition: opacity 700ms ease;
+}
+
+.brazil-map.zooming-to-bahia .state.available .state-shape {
+  fill: var(--brand-yellow) !important;
+  stroke: #FFFFFF !important;
+  stroke-width: 2.2 !important;
+  filter: drop-shadow(0 0 35px rgba(248, 176, 32, 1)) drop-shadow(0 0 75px rgba(255, 208, 82, 0.85)) !important;
+  transition: fill 500ms ease, stroke 500ms ease, filter 500ms ease;
+}
+
+.brazil-map.zooming-to-bahia .state-label.available {
+  opacity: 0;
+  transition: opacity 400ms ease;
 }
 
 .brazil-map.returning-from-bahia .brazil-map-svg {
-  animation: mapFadeReturn 220ms ease-out both;
+  animation: zoomOutFromBahia 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes zoomOutFromBahia {
+  from {
+    transform-origin: 77.4% 45.7%;
+    transform: translate(-27.4%, 4.3%) scale(2.8);
+    opacity: 0.55;
+  }
+  to {
+    transform-origin: center center;
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Véu de transição global com gradiente oceânico abissal */
 .screen-transition-veil {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: var(--app-bg);
+  background: radial-gradient(circle at 72.2% 48.0%, #032840 0%, #011422 45%, #00070c 100%);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 200ms ease;
+  transition: opacity 550ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .screen-transition-veil.active {
   opacity: 1;
   pointer-events: all;
+  transition: opacity 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.screen-transition-veil.active.cinematic-dive {
+  opacity: 1;
+  pointer-events: all;
+  transition: opacity 1100ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ── Estrutura Principal do Laboratório ────────────────────────────────── */
@@ -2196,6 +2267,341 @@ summary:focus-visible {
   margin: 0;
   font-size: 12px;
   line-height: 1.42;
+  color: var(--text-secondary);
+}
+
+.param-evidence-item.is-focused-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  animation: pulseTarget 1.2s ease-in-out 2;
+}
+
+@keyframes pulseTarget {
+  0%, 100% { border-color: var(--accent); }
+  50% { border-color: rgba(190, 219, 199, 0.4); }
+}
+
+.evidence-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.intervention-evidence-desc {
+  color: var(--text-primary) !important;
+  font-size: 12.5px !important;
+  font-weight: 500;
+}
+
+.intervention-evidence-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.intervention-evidence-limits p {
+  font-size: 11.5px !important;
+  color: var(--text-secondary);
+}
+
+/* ── Seção de Recuperação (EnvironmentDrawer) ────────────────────────── */
+
+.recovery-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 10px 14px;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+}
+
+.recovery-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recovery-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recovery-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.recovery-section-desc {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.see-all-toggle-btn {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+}
+
+.interventions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.intervention-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-0);
+  transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease;
+}
+
+.intervention-card.is-active {
+  border-color: rgba(134, 196, 154, 0.45);
+  background: rgba(134, 196, 154, 0.05);
+}
+
+.intervention-card.is-conceptual {
+  border-style: dashed;
+}
+
+.intervention-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.intervention-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.intervention-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.intervention-card.is-active .intervention-icon {
+  color: var(--accent);
+}
+
+.intervention-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.intervention-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.intervention-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 580;
+  white-space: nowrap;
+}
+
+.intervention-badge.is-active {
+  background: var(--status-good);
+  color: #0A1E11;
+}
+
+.intervention-badge.is-conceptual {
+  background: rgba(215, 189, 128, 0.14);
+  color: var(--status-warning);
+  border: 1px solid rgba(215, 189, 128, 0.3);
+}
+
+.intervention-desc {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+.intervention-effect-line {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+.intervention-effect-line strong {
+  color: var(--text-primary);
+}
+
+.intervention-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.timeline-preview-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--surface-0);
+  border: 1px solid var(--border-subtle);
+}
+
+.timeline-preview-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.timeline-preview-label {
+  color: var(--text-secondary);
+  font-weight: 520;
+}
+
+.timeline-preview-val {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Óleo recolhido (skimming) e Tabela de Marcos (EvidenceDrawer) ──────── */
+
+.oil-skimming-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  border: 1px solid rgba(134, 196, 154, 0.28);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.skimming-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.milestone-table-wrapper {
+  overflow-x: auto;
+  margin-top: 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-0);
+}
+
+.milestone-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.milestone-table th {
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+}
+
+.milestone-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.milestone-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.milestone-table td strong {
+  display: block;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.milestone-table td small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.milestone-time {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.milestone-time.active {
+  color: var(--status-warning);
+  font-weight: 600;
+}
+
+.evidence-lvl-badge.lvl-published {
+  background: var(--accent-soft);
+  border-color: rgba(134, 196, 154, 0.28);
+  color: var(--accent);
+}
+
+.evidence-lvl-badge.lvl-local-calibrated {
+  background: rgba(88, 192, 232, 0.12);
+  border-color: rgba(88, 192, 232, 0.3);
+  color: #78D4FA;
+}
+
+.evidence-lvl-badge.lvl-educational-hypothesis {
+  background: rgba(215, 189, 128, 0.12);
+  border-color: rgba(215, 189, 128, 0.28);
+  color: var(--status-warning);
+}
+
+.evidence-lvl-badge.lvl-context {
+  background: var(--surface-2);
+  border-color: var(--border-default);
   color: var(--text-secondary);
 }
 

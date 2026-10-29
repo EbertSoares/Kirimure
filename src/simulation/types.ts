@@ -1,3 +1,5 @@
+import type { ActiveIntervention } from './interventions';
+
 export type ItemId =
   | 'temperature'
   | 'ph'
@@ -197,6 +199,12 @@ export interface SimulationState {
   latestMessageId: string | null;
   /** Segundos reais restantes até o painel poder trocar de marco. */
   messageCooldown: number;
+  /** Intervenções concretas de mitigação/recuperação ativas no cenário. */
+  activeInterventions?: ActiveIntervention[];
+  /** Massa acumulada de óleo superficial efetivamente recolhida por contenção e skimming (kg). */
+  recoveredOilKg?: number;
+  /** Idade acumulada da mancha de óleo atual em dias simulados para intemperismo físico. */
+  oilSpillAgeDays?: number;
 }
 
 export interface EducationalMessage {

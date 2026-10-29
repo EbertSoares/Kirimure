@@ -321,12 +321,6 @@ export const CONTROL_GROUPS: readonly ControlGroupDefinition[] = [
     subtitle: 'Carga orgânica, óleo e microplásticos',
     items: ['sewage', 'oil', 'microplastics'],
   },
-  {
-    id: 'ecosystem',
-    label: 'Ecossistema',
-    subtitle: 'Pressão pesqueira e recuperação ecológica',
-    items: ['fishing', 'recovery'],
-  },
 ] as const;
 
 export interface ItemDefinition {
@@ -341,6 +335,7 @@ export interface ItemDefinition {
   warning?: number;
   critical?: number;
   riskDirection?: 'above' | 'below';
+  tooltip: string;
   help: string;
   icon: string;
   scaleType: ScaleType;
@@ -369,6 +364,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     warning: 29,
     critical: 30,
     riskDirection: 'above',
+    tooltip: 'Temperatura superficial da água.',
     help: 'Publicado / Parâmetro Didático: Estudos na Bahia (Leão et al., 2008) observaram branqueamento a 29–30 °C. No modelo local, usa-se MMM didática fixa de 28,0 °C e limiar de acúmulo térmico em 29,0 °C (distinto do DHW satelital oficial da NOAA, que usa a climatologia MMM de cada pixel).',
     icon: 'temperature',
     scaleType: 'linear',
@@ -388,6 +384,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     warning: 8,
     critical: 7.8,
     riskDirection: 'below',
+    tooltip: 'Acidez da água.',
     help: 'Publicado / Cenário Didático: Escala logarítmica de atividade de H⁺ (uma queda de 0,1 unidade representa ~26% mais acidez). Reduz a disponibilidade de CO₃²⁻ e o estado de saturação da aragonita (Ωarag) calculado via Lueker et al. (2000) e Mucci (1983).',
     icon: 'flask',
     scaleType: 'logarithmic',
@@ -397,8 +394,8 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     primaryIndicators: ['ph', 'aragonite', 'coral'],
   },
   turbidity: {
-    label: 'Turbidez e sedimentos',
-    shortLabel: 'Turbidez',
+    label: 'Turbidez (índice do cenário)',
+    shortLabel: 'Turbidez (índice do cenário)',
     category: 'water',
     min: 0,
     max: 100,
@@ -408,6 +405,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     warning: 35,
     critical: 70,
     riskDirection: 'above',
+    tooltip: 'Partículas em suspensão e transparência da água.',
     help: 'Parâmetro Didático: Índice relativo de atenuação luminosa e sedimentos em suspensão (0–100%). No modelo, reduz a fotossíntese líquida no balanço de oxigênio, favorece macroalgas tolerantes e pressiona corais e herbívoros visuais.',
     icon: 'sediment',
     scaleType: 'linear',
@@ -427,6 +425,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     warning: 2000,
     critical: 20000,
     riskDirection: 'above',
+    tooltip: 'Matéria orgânica que consome oxigênio.',
     help: 'Cenário Didático / Modelo de Caixa: Carga de matéria orgânica biodegradável (DBO₅ a 20 °C) em aporte diário contínuo ou pulso pontual. Convertida para CBODu, consome oxigênio dissolvido via oxidação bacteriana, libera CO₂ respiratório (reduzindo o pH efetivo) e estimula algas.',
     icon: 'sewage',
     scaleType: 'logarithmic',
@@ -451,6 +450,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     warning: 1000,
     critical: 20000,
     riskDirection: 'above',
+    tooltip: 'Contaminação por petróleo e derivados.',
     help: 'Publicado / Modelo de Caixa: Massa derramada particionada entre filme superficial, coluna d’água, sedimento e fração dissolvida tPAH50. A película reduz a luz e a fotossíntese; HPAs dissolvidos induzem toxicidade subletal em corais (EC50 = 10 µg/L tPAH50; May et al., 2020).',
     icon: 'drop',
     scaleType: 'logarithmic',
@@ -474,6 +474,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     warning: 5180,
     critical: 24000,
     riskDirection: 'above',
+    tooltip: 'Partículas plásticas menores que 5 mm.',
     help: 'Medido na BTS (faixa) / Hipótese do Modelo (efeito): Concentração superficial em partículas/m³, alinhada aos levantamentos de Trindade et al. (2023) em estuários da BTS (média ~5.180 part./m³; máximo 32.784 part./m³ no Paraguaçu). Sem conversão artificial para massa em kg.',
     icon: 'bottle',
     scaleType: 'nonlinear',
@@ -495,6 +496,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     warning: 35,
     critical: 70,
     riskDirection: 'above',
+    tooltip: 'Pressão pesqueira no modelo.',
     help: 'Parâmetro Didático / Hipótese do Modelo: Índice relativo de esforço pesqueiro (0–100%). Afeta desproporcionalmente herbívoros raspadores como o peixe-papagaio (sensibilidade 1,6×), reduzindo o controle de macroalgas e o equilíbrio trófico.',
     icon: 'hook',
     scaleType: 'linear',
@@ -511,6 +513,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     step: 1,
     unit: '% índice',
     reference: 'Proteção e manejo (0–100%)',
+    tooltip: 'Ações de mitigação e recuperação ecológica.',
     help: 'Parâmetro Didático: Representa áreas marinhas protegidas, zonas de exclusão de pesca e manejo costeiro. No modelo, atenua a taxa diária de dano (até 60%) e acelera a regeneração quando as pressões caem abaixo do limiar de recuperação.',
     icon: 'shield',
     scaleType: 'linear',
@@ -627,5 +630,14 @@ export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
     evidenceLevel: 'Parâmetro Didático',
     sourceOrBasis: 'Síntese qualitativa de vulnerabilidade trófica recifal',
     scopeNote: 'Convenção interna para investigação comparativa de cenários; não constitui previsão quantitativa de mortalidade ou extinção populacional na Baía de Todos-os-Santos.',
+  },
+  {
+    id: 'interventions-mitigation-rates',
+    parameter: 'Eficiências nominais de mitigação (tratamento, retenção na fonte, contenção)',
+    valueDisplay: '60% a 75%',
+    unit: 'fração de aporte / recolhimento',
+    evidenceLevel: 'Hipótese do Modelo',
+    sourceOrBasis: 'Modelos de engenharia sanitária e resposta costeira (Bowie et al., 1985; NOAA WebGNOME; UNEP/IWMI)',
+    scopeNote: 'Representam reduções de fluxo de entrada no cenário didático; não constituem constantes universais de limpeza da água na Baía de Todos-os-Santos.',
   },
 ] as const;

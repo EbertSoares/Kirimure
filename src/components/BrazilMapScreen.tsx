@@ -126,7 +126,7 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
         <ul className="map-legend" aria-label="Legenda do mapa">
           <li>
             <span className="legend-swatch available" aria-hidden="true" />
-            Bahia
+            Bahia (disponível)
           </li>
           <li>
             <span className="legend-swatch coastal" aria-hidden="true" />

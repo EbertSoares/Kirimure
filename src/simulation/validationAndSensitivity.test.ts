@@ -158,11 +158,11 @@ describe('Validação Científica, Casos de Referência da BTS e Sensibilidade (
       }
     });
 
-    it('classifica parâmetros por nível de evidência e organiza os 8 controles em 3 grupos com indicadores', () => {
+    it('classifica parâmetros por nível de evidência e organiza os controles em grupos com indicadores', () => {
       expect(FACTOR_ORDER).toHaveLength(8);
       const groupedItems = CONTROL_GROUPS.flatMap((g) => g.items);
-      expect(groupedItems).toHaveLength(8);
-      expect(new Set(groupedItems).size).toBe(8);
+      expect(groupedItems).toHaveLength(6);
+      expect(new Set(groupedItems).size).toBe(6);
 
       for (const id of FACTOR_ORDER) {
         const def = ITEM_DEFINITIONS[id];

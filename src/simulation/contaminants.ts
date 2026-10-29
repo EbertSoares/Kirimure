@@ -18,6 +18,8 @@ export interface OilFateBudget {
   evaporatedKg: number;
   exportedKg: number;
   evaporatedExportedKg: number;
+  /** Massa de óleo superficial transferida para armazenamento/destinação por contenção e skimming (kg). */
+  recoveredKg: number;
   /** Concentração da fração dissolvida biodisponível (tPAH50) em µg/L. */
   dissolvedPahConcentrationUgL: number;
   /** Espessura nominal média do filme superficial em micrômetros (µm). */
@@ -105,6 +107,8 @@ export function calculateOilFateBudget(
   sectorId: BtsSectorId = 'frades',
   elapsedDays = 1,
   isAlreadyRetained = false,
+  skimmedSurfaceKg = 0,
+  containmentActive = false,
 ): OilFateBudget {
   if (totalInputKg <= 0) {
     return {
@@ -115,6 +119,7 @@ export function calculateOilFateBudget(
       evaporatedKg: 0,
       exportedKg: 0,
       evaporatedExportedKg: 0,
+      recoveredKg: 0,
       dissolvedPahConcentrationUgL: 0,
       surfaceFilmThicknessUm: 0,
       lightAttenuation: 0,
@@ -152,10 +157,15 @@ export function calculateOilFateBudget(
   const totalCoeff = surfCoeff + dispCoeff + sedCoeff + pahCoeff;
   const normFactor = totalCoeff > 0 ? 1 / totalCoeff : 1;
 
-  const surfaceFilmKg = internalAvailableKg * (surfCoeff * normFactor);
+  const rawSurfaceFilmKg = internalAvailableKg * (surfCoeff * normFactor);
   const waterColumnDispersedKg = internalAvailableKg * (dispCoeff * normFactor);
   const dissolvedPahKg = internalAvailableKg * (pahCoeff * normFactor);
   const sedimentedKg = internalAvailableKg * (sedCoeff * normFactor);
+
+  // Skimming mecânico atua exclusivamente sobre o filme superficial acessível,
+  // preservando intactas as frações já evaporadas, dispersas, dissolvidas (tPAH50) e sedimentadas.
+  const recoveredKg = Math.max(0, Math.min(skimmedSurfaceKg, rawSurfaceFilmKg));
+  const surfaceFilmKg = Math.max(0, rawSurfaceFilmKg - recoveredKg);
 
   const totalLostKg = evaporatedKg + exportedKg;
 
@@ -163,16 +173,27 @@ export function calculateOilFateBudget(
   // kg * 1e9 ug / (volumeM3 * 1000 L) = ug/L
   const dissolvedPahConcentrationUgL = (dissolvedPahKg * 1e9) / (sector.mixingVolumeM3 * 1000);
 
-  // Espessura estimada do filme superficial (área de mancha estimada entre 10.000 e 2.000.000 m²)
-  const slickAreaM2 = Math.max(1e4, Math.min(2e6, surfaceFilmKg * 150));
-  const surfaceFilmThicknessUm = (surfaceFilmKg / 880 / slickAreaM2) * 1e6;
+  // Espessura estimada do filme superficial; barreiras de contenção limitam a área de espalhamento
+  const spreadingFactor = containmentActive ? 85 : 150;
+  const slickAreaM2 = surfaceFilmKg > 0
+    ? Math.max(5e3, Math.min(containmentActive ? 1.1e6 : 2e6, surfaceFilmKg * spreadingFactor))
+    : 1e4;
+  const surfaceFilmThicknessUm = surfaceFilmKg > 0 ? (surfaceFilmKg / 880 / slickAreaM2) * 1e6 : 0;
+  const areaExposureFactor = containmentActive ? 0.65 : 1.0;
   const lightAttenuation = Math.min(
     0.95,
-    surfaceFilmThicknessUm > 0.1 ? 0.3 + Math.log10(1 + surfaceFilmThicknessUm) * 0.25 : 0,
+    (surfaceFilmThicknessUm > 0.1 ? 0.3 + Math.log10(1 + surfaceFilmThicknessUm) * 0.25 : 0) * areaExposureFactor,
   );
 
-  // Resíduo numérico de conservação de massa independente
-  const sumReservoirs = surfaceFilmKg + waterColumnDispersedKg + dissolvedPahKg + sedimentedKg + evaporatedKg + exportedKg;
+  // Resíduo numérico de conservação de massa independente (inclui óleo superficial recolhido)
+  const sumReservoirs =
+    surfaceFilmKg
+    + waterColumnDispersedKg
+    + dissolvedPahKg
+    + sedimentedKg
+    + evaporatedKg
+    + exportedKg
+    + recoveredKg;
   const massBalanceResidualKg = Math.abs(totalInputKg - sumReservoirs);
 
   return {
@@ -183,6 +204,7 @@ export function calculateOilFateBudget(
     evaporatedKg: parseFloat(evaporatedKg.toFixed(1)),
     exportedKg: parseFloat(exportedKg.toFixed(1)),
     evaporatedExportedKg: parseFloat(totalLostKg.toFixed(1)),
+    recoveredKg: parseFloat(recoveredKg.toFixed(1)),
     dissolvedPahConcentrationUgL: parseFloat(dissolvedPahConcentrationUgL.toFixed(3)),
     surfaceFilmThicknessUm: parseFloat(surfaceFilmThicknessUm.toFixed(2)),
     lightAttenuation: parseFloat(lightAttenuation.toFixed(2)),
