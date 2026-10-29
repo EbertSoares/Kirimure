@@ -52,7 +52,7 @@ export const MICROPLASTICS_OPTIONS_PARTICLES_M3 = [
 export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
   {
     id: 'frades',
-    label: 'Ilha dos Frades & Itaparica',
+    label: 'Ilha dos Frades e Itaparica',
     sublabel: 'Baía Central · Recifes de Franja',
     description: 'Águas claras e circulação moderada com recifes de Siderastrea e Mussismilia. Tempo de descarga medido entre 38 e 62 dias (Cirano & Lessa, 2007); salinidade de 35,0 PSU e profundidade média recifal de 8 m.',
     badge: 'Modelo de Caixa (Ref. BTS)',
@@ -69,7 +69,7 @@ export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
   {
     id: 'paraguacu',
     label: 'Estuário do Paraguaçu',
-    sublabel: 'Fundo da Baía · Manguezais & Maragogipe',
+    sublabel: 'Fundo da Baía · Manguezais e Maragogipe',
     description: 'Águas estuarinas com gradiente salobro. Parâmetro provisório de modelagem de caixa: circulação lenta, alta retenção de efluentes e sensibilidade a hipóxia.',
     badge: 'Cenário Didático',
     dischargeDays: 75,
@@ -134,11 +134,10 @@ export const PARAMETERS = {
   /**
    * Dias simulados por segundo real na velocidade 1×.
    *
-   * 0,25 = um dia a cada 4 segundos: o relógio anda devagar de propósito, para
-   * a turma ver quanto tempo a consequência leva para aparecer. As velocidades
-   * 3× a 10× servem para adiantar a aula.
+   * 0,5 = um dia simulado a cada 2 segundos reais em 1× (1,5 d/s em 3×;
+   * 2,5 d/s em 5×; 5 d/s em 10×).
    */
-  daysPerRealSecond: 0.25,
+  daysPerRealSecond: 0.5,
   tauDays: {
     temperature: 7,
     ph: 12,
@@ -366,7 +365,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     max: 31,
     step: 0.1,
     unit: '°C',
-    reference: 'BTS: limiar didático 29,0 °C',
+    reference: 'Limiar didático: 29,0 °C',
     warning: 29,
     critical: 30,
     riskDirection: 'above',
@@ -471,7 +470,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     max: 35000,
     step: 1,
     unit: 'part./m³',
-    reference: 'BTS: média 5.180 · máx. 32.784 part./m³',
+    reference: 'Média 5.180 · máx. 32.784 part./m³',
     warning: 5180,
     critical: 24000,
     riskDirection: 'above',
@@ -555,7 +554,7 @@ export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
     unit: 'dias',
     evidenceLevel: 'Publicado',
     sourceOrBasis: 'Cirano & Lessa (2007)',
-    scopeNote: 'Estimativa hidrodinâmica publicada para renovação sazonal da BTS; aplicada aqui a um modelo de caixa homogêneo.',
+    scopeNote: 'Estimativa hidrodinâmica publicada para renovação sazonal da Baía de Todos-os-Santos; aplicada aqui a um modelo de caixa homogêneo.',
   },
   {
     id: 'paraguacu-barra-boxes',
@@ -568,11 +567,11 @@ export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
   },
   {
     id: 'bts-microplastics-range',
-    parameter: 'Faixa de microplásticos em estuários da BTS',
+    parameter: 'Faixa de microplásticos em estuários da Baía de Todos-os-Santos',
     valueDisplay: '5.180 (média) · 32.784 (máx.)',
     unit: 'part./m³',
     evidenceLevel: 'Medido',
-    sourceOrBasis: 'Trindade et al. (2023) — 10 estuários da BTS',
+    sourceOrBasis: 'Trindade et al. (2023) — 10 estuários da Baía de Todos-os-Santos',
     scopeNote: 'Amostragem empírica superficial com redes de 64 e 300 µm. O peso de estresse biológico associado no simulador é Hipótese do Modelo.',
   },
   {
@@ -582,7 +581,7 @@ export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
     unit: 'µg/L',
     evidenceLevel: 'Publicado',
     sourceOrBasis: 'May et al. (2020) — bioensaio controlado (96 h)',
-    scopeNote: 'Referência laboratorial para inibição de regeneração tecidual e retração de pólipos; a partição em 4 reservatórios na BTS é Hipótese do Modelo.',
+    scopeNote: 'Referência laboratorial para inibição de regeneração tecidual e retração de pólipos; a partição em 4 reservatórios na Baía de Todos-os-Santos é Hipótese do Modelo.',
   },
   {
     id: 'carbonate-constants',
@@ -600,7 +599,7 @@ export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
     unit: 'dia⁻¹ / g O₂·m⁻²·d⁻¹',
     evidenceLevel: 'Publicado',
     sourceOrBasis: 'Literatura clássica de qualidade da água (Bowie et al., 1985); limites CONAMA 357',
-    scopeNote: 'Coeficientes típicos de águas costeiras/estuarinas; não calibrados contra séries contínuas de sondas em cada recife da BTS.',
+    scopeNote: 'Coeficientes típicos de águas costeiras/estuarinas; não calibrados contra séries contínuas de sondas em cada recife da Baía de Todos-os-Santos.',
   },
   {
     id: 'didactic-mmm-thermal',
@@ -622,11 +621,11 @@ export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
   },
   {
     id: 'ecological-weights-and-collapse',
-    parameter: 'Pesos de pressão, sensibilidades por espécie e limiar crítico (≤ 33/100)',
+    parameter: 'Pesos de pressão, sensibilidades por espécie e limiar crítico (≤ 33%)',
     valueDisplay: 'collapseDays: 48–78 d',
     unit: 'índice 0–100',
     evidenceLevel: 'Parâmetro Didático',
     sourceOrBasis: 'Síntese qualitativa de vulnerabilidade trófica recifal',
-    scopeNote: 'Convenção interna para investigação comparativa de cenários; não constitui previsão quantitativa de mortalidade ou extinção populacional na BTS.',
+    scopeNote: 'Convenção interna para investigação comparativa de cenários; não constitui previsão quantitativa de mortalidade ou extinção populacional na Baía de Todos-os-Santos.',
   },
 ] as const;

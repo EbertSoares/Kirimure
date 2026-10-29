@@ -36,9 +36,9 @@ O Kirimurê distingue explicitamente quatro categorias de informação ambiental
 - **Monitor de Sistema Carbonato:** Graus de saturação mineral ($\Omega_{\text{arag}}$, $\Omega_{\text{calc}}$) e $p\text{CO}_2$ com alertas de risco de corrosão do esqueleto coralino.
 - **Cinética de Desoxigenação:** Efeitos subletais e hipóxia severa influenciando a sobrevivência de peixes e corais.
 - **Estresse Térmico Simulado vs. DHW Satelital NOAA:** Separação explícita entre o DHW observacional externo da NOAA (baseado na climatologia MMM de cada pixel) e o estresse térmico acumulado do cenário local (`MMM didática = 28,0 °C`, janela móvel de 84 dias).
-- **Comparação Antes/Depois e Guardar Cenário:** Retorno ao estado inicial em um clique, desfazer alterações, salvamento de cenários para comparar dois experimentos (ex.: descarga contínua vs. pulso único) e alternância no mesmo enquadramento 3D.
-- **Painel de Evidências, Fontes e Método:** Gráficos temporais, cadeia causal do modelo, classificação do nível de evidência dos parâmetros (`Medido`, `Publicado`, `Hipótese do Modelo`, `Parâmetro Didático`) e rastreabilidade completa das consultas externas.
-- **Controles de Tempo:** Velocidades 1×, 3×, 5× e 10× com integração física invariante por sub-stepping numérico independente da velocidade.
+- **Restauração e Desfazer:** Retorno imediato ao estado inicial de referência do setor e histórico de desfazer alterações de variáveis.
+- **Painel de Dados e Evolução:** Gráficos temporais, cadeia causal do modelo, classificação do nível de evidência dos parâmetros (`Medido`, `Publicado`, `Hipótese do Modelo`, `Parâmetro Didático`) e rastreabilidade completa das consultas externas.
+- **Controles de Tempo:** Velocidades 1× (`0,5 dia/s`), 3× (`1,5 dia/s`), 5× (`2,5 dias/s`) e 10× (`5 dias/s`) com integração física invariante por sub-stepping numérico independente da velocidade.
 - **Desafios e Marcos Pedagógicos:** Diagnóstico e recuperação de recifes degradados.
 
 ## Tecnologias

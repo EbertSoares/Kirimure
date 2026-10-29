@@ -78,8 +78,8 @@ export function EcosystemRadar({ state, trophic }: EcosystemRadarProps) {
   const statusTone = meanVitality >= 67 ? 'healthy' : meanVitality >= 34 ? 'watch' : 'critical';
 
   // Cores dinâmicas
-  const strokeColor = statusTone === 'healthy' ? '#00e5ff' : statusTone === 'watch' ? '#ffd052' : '#ff5a5a';
-  const fillColor = statusTone === 'healthy' ? 'rgba(0, 229, 255, 0.22)' : statusTone === 'watch' ? 'rgba(255, 208, 82, 0.22)' : 'rgba(255, 90, 90, 0.25)';
+  const strokeColor = statusTone === 'healthy' ? '#86C49A' : statusTone === 'watch' ? '#D7BD80' : '#D7867D';
+  const fillColor = statusTone === 'healthy' ? 'rgba(134, 196, 154, 0.22)' : statusTone === 'watch' ? 'rgba(215, 189, 128, 0.22)' : 'rgba(215, 134, 125, 0.25)';
 
   return (
     <article className="ecosystem-radar-card" aria-label="Radar de Vitalidade Ecosistêmica">
@@ -108,7 +108,7 @@ export function EcosystemRadar({ state, trophic }: EcosystemRadarProps) {
               key={idx}
               points={poly}
               fill="none"
-              stroke="rgba(88, 192, 232, 0.18)"
+              stroke="rgba(242, 244, 238, 0.14)"
               strokeWidth={idx === 3 ? '1.4' : '0.9'}
               strokeDasharray={idx === 3 ? undefined : '2 2'}
             />
@@ -124,7 +124,7 @@ export function EcosystemRadar({ state, trophic }: EcosystemRadarProps) {
                 y1={cy}
                 x2={x.toFixed(1)}
                 y2={y.toFixed(1)}
-                stroke="rgba(88, 192, 232, 0.24)"
+                stroke="rgba(242, 244, 238, 0.18)"
                 strokeWidth="1"
               />
             );
@@ -134,7 +134,7 @@ export function EcosystemRadar({ state, trophic }: EcosystemRadarProps) {
           <polygon
             points={gridPolygons[3]}
             fill="none"
-            stroke="rgba(88, 192, 232, 0.45)"
+            stroke="rgba(242, 244, 238, 0.30)"
             strokeWidth="1.2"
             strokeDasharray="3 3"
           />

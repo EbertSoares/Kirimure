@@ -244,7 +244,7 @@ export function SciencePanel({
                 <button
                   type="button"
                   onClick={() => onTabChange('history')}
-                  style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '11px', cursor: 'pointer', padding: 0 }}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-soft)', fontSize: '11px', cursor: 'pointer', padding: 0 }}
                 >
                   Ver histórico completo →
                 </button>
@@ -318,7 +318,7 @@ export function SciencePanel({
                           min={0}
                           max={item.id === 'oxygen' ? 8 : 100}
                           label={item.label}
-                          stroke={item.tone === 'healthy' ? '#00e5ff' : item.tone === 'watch' ? '#ffd052' : '#ff5a5a'}
+                          stroke={item.tone === 'healthy' ? '#86C49A' : item.tone === 'watch' ? '#D7BD80' : '#D7867D'}
                         />
                         <strong>{item.display}</strong>
                       </div>
@@ -334,7 +334,7 @@ export function SciencePanel({
 
                     <p>{item.note}</p>
                     {item.equation && (
-                      <p style={{ fontFamily: 'monospace', fontSize: '11px', color: '#38bdf8', marginTop: '4px', background: 'rgba(56, 189, 248, 0.08)', padding: '4px 8px', borderRadius: '4px' }}>
+                      <p style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--accent)', marginTop: '4px', background: 'var(--accent-soft)', padding: '4px 8px', borderRadius: '4px' }}>
                         {item.equation}
                       </p>
                     )}
@@ -364,7 +364,7 @@ export function SciencePanel({
                     min={0}
                     max={100}
                     label="Corais"
-                    stroke={levelTone(state.health.coral) === 'healthy' ? '#00e5ff' : '#ffd052'}
+                    stroke={levelTone(state.health.coral) === 'healthy' ? '#86C49A' : '#D7BD80'}
                   />
                   <strong className={levelTone(state.health.coral)}>{Math.round(state.health.coral)}/100</strong>
                 </div>
@@ -408,7 +408,7 @@ export function SciencePanel({
                         min={0}
                         max={100}
                         label={species.label}
-                        stroke={levelTone(health) === 'healthy' ? '#00e5ff' : levelTone(health) === 'watch' ? '#ffd052' : '#ff5a5a'}
+                        stroke={levelTone(health) === 'healthy' ? '#86C49A' : levelTone(health) === 'watch' ? '#D7BD80' : '#D7867D'}
                       />
                       <strong className={levelTone(health)}>{Math.round(health)}/100</strong>
                     </div>
@@ -557,7 +557,7 @@ export function SciencePanel({
                     </div>
                     <div className="mission-live-metric">
                       <span>Oxigênio de Partida:</span>
-                      <strong style={{ color: 'var(--healthy)' }}>{state.dissolvedOxygen.toFixed(1).replace('.', ',')} mg/L (Adequado)</strong>
+                      <strong style={{ color: 'var(--status-good)' }}>{state.dissolvedOxygen.toFixed(1).replace('.', ',')} mg/L (Adequado)</strong>
                     </div>
                     <p className="mission-desc">
                       Nesta aula guiada, você vai investigar o que acontece na água quando o efluente orgânico é despejado,
@@ -631,7 +631,7 @@ export function SciencePanel({
                     />
 
                     {state.dissolvedOxygen < 3.5 || state.elapsedDays >= 6 ? (
-                      <div className="mission-conclusion-card" style={{ borderColor: 'var(--watch)' }}>
+                      <div className="mission-conclusion-card" style={{ borderColor: 'var(--status-warning)' }}>
                         <strong>Queda de oxigênio confirmada!</strong>
                         <p style={{ margin: 0 }}>
                           As bactérias heterotróficas estão decompondo a matéria orgânica e esgotando o oxigênio da enseada,
@@ -722,7 +722,7 @@ export function SciencePanel({
                         if (!hyp) return null;
                         return (
                           <div>
-                            <p style={{ margin: '0 0 6px', color: hyp.isCorrectMechanism ? 'var(--healthy)' : 'var(--watch)' }}>
+                            <p style={{ margin: '0 0 6px', color: hyp.isCorrectMechanism ? 'var(--status-good)' : 'var(--status-warning)' }}>
                               <strong>Você previu:</strong> “{hyp.label}”
                             </p>
                             <p style={{ margin: 0 }}>{hyp.explanation}</p>
@@ -879,9 +879,9 @@ export function SciencePanel({
                     onClick={() => oceanData.refresh()}
                     disabled={oceanData.loading}
                     style={{
-                      background: 'rgba(56, 189, 248, 0.15)',
-                      border: '1px solid rgba(56, 189, 248, 0.4)',
-                      color: '#38bdf8',
+                      background: 'var(--accent-subtle)',
+                      border: '1px solid var(--border-strong)',
+                      color: 'var(--accent-soft)',
                       padding: '4px 10px',
                       borderRadius: '6px',
                       fontSize: '12px',
@@ -1019,7 +1019,7 @@ export function SciencePanel({
                       style={{
                         width: '100%',
                         boxSizing: 'border-box',
-                        background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(56, 189, 248, 0.15))',
+                        background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), var(--accent-subtle))',
                         border: '1px solid rgba(56, 189, 248, 0.45)',
                         color: '#e0f2fe',
                         padding: '8px 12px',
@@ -1101,9 +1101,9 @@ export function SciencePanel({
                       type="button"
                       onClick={() => oceanData.loadHistoricalCrwSnapshot()}
                       style={{
-                        background: 'rgba(56, 189, 248, 0.15)',
-                        border: '1px solid rgba(56, 189, 248, 0.4)',
-                        color: '#38bdf8',
+                        background: 'var(--accent-subtle)',
+                        border: '1px solid var(--border-strong)',
+                        color: 'var(--accent-soft)',
                         padding: '6px 12px',
                         borderRadius: '6px',
                         fontSize: '11.5px',
@@ -1141,9 +1141,9 @@ export function SciencePanel({
                         onClick={() => oceanData.refreshNoaa()}
                         disabled={oceanData.noaaLoading}
                         style={{
-                          background: 'rgba(56, 189, 248, 0.15)',
-                          border: '1px solid rgba(56, 189, 248, 0.4)',
-                          color: '#38bdf8',
+                          background: 'var(--accent-subtle)',
+                          border: '1px solid var(--border-strong)',
+                          color: 'var(--accent-soft)',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '11.5px',
@@ -1187,9 +1187,9 @@ export function SciencePanel({
                         type="button"
                         onClick={() => oceanData.loadHistoricalCrwSnapshot()}
                         style={{
-                          background: 'rgba(56, 189, 248, 0.15)',
-                          border: '1px solid rgba(56, 189, 248, 0.4)',
-                          color: '#38bdf8',
+                          background: 'var(--accent-subtle)',
+                          border: '1px solid var(--border-strong)',
+                          color: 'var(--accent-soft)',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '11.5px',
@@ -1313,9 +1313,9 @@ export function SciencePanel({
                         onClick={() => oceanData.refreshMeteo()}
                         disabled={oceanData.meteoLoading}
                         style={{
-                          background: 'rgba(56, 189, 248, 0.15)',
-                          border: '1px solid rgba(56, 189, 248, 0.4)',
-                          color: '#38bdf8',
+                          background: 'var(--accent-subtle)',
+                          border: '1px solid var(--border-strong)',
+                          color: 'var(--accent-soft)',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '11.5px',

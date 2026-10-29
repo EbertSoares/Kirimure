@@ -1,18 +1,14 @@
 import { useState, type CSSProperties } from 'react';
 import { Icon, type IconName } from './Icons';
 import {
-  BASELINE,
   BTS_SECTORS,
   CONTROL_GROUPS,
   isMassLoadId,
   ITEM_DEFINITIONS,
 } from '../simulation/config';
-import { calculateEquilibriumOxygen } from '../simulation/oxygen';
-import { calculateAlgae, isFactorActive, receivedLoadRange } from '../simulation/model';
+import { isFactorActive } from '../simulation/model';
 import type {
-  BtsSectorId,
   ControlCategoryId,
-  Environment,
   ItemId,
   SimulationState,
 } from '../simulation/types';
@@ -21,11 +17,9 @@ export function formatParameterValue(id: ItemId, value: number, sewageMode: 'con
   value: string;
   unit: string;
 } {
-  const item = ITEM_DEFINITIONS[id];
-
   if (isMassLoadId(id)) {
     const qualifier = id === 'sewage'
-      ? (sewageMode === 'pulse' ? 'DBO₅ (pulso)' : 'DBO₅/dia')
+      ? (sewageMode === 'pulse' ? 'DBO₅' : 'DBO₅/dia')
       : '';
     if (value >= 1000) {
       const tonnes = value / 1000;
@@ -67,31 +61,20 @@ export function formatParameterValue(id: ItemId, value: number, sewageMode: 'con
   };
 }
 
-function getFactorRiskStatus(id: ItemId, value: number): {
-  tone: 'natural' | 'watch' | 'critical';
-  label: string;
-} {
+function getFactorRiskTone(id: ItemId, value: number): 'natural' | 'watch' | 'critical' {
   const item = ITEM_DEFINITIONS[id];
   if (item.warning === undefined || !item.riskDirection) {
-    return {
-      tone: 'natural',
-      label: value > 0 ? 'Manejo ativo' : 'Inativo (0%)',
-    };
+    return 'natural';
   }
-
   const isCritical = item.critical !== undefined && (
     item.riskDirection === 'above' ? value >= item.critical : value <= item.critical
   );
-  if (isCritical) {
-    return { tone: 'critical', label: 'Faixa crítica' };
-  }
+  if (isCritical) return 'critical';
 
   const isWarning = item.riskDirection === 'above' ? value >= item.warning : value <= item.warning;
-  if (isWarning) {
-    return { tone: 'watch', label: 'Atenção' };
-  }
+  if (isWarning) return 'watch';
 
-  return { tone: 'natural', label: 'Referência' };
+  return 'natural';
 }
 
 function getScaleTicks(id: ItemId): readonly string[] | null {
@@ -99,10 +82,10 @@ function getScaleTicks(id: ItemId): readonly string[] | null {
     return ['0', '10 kg', '200 kg', '5 t', '100 t'];
   }
   if (id === 'microplastics') {
-    return ['0', '500', '5,2 mil (média BTS)', '35 mil'];
+    return ['0', '500', '5,2 mil (média)', '35 mil'];
   }
   if (id === 'ph') {
-    return ['7,70 (+150% H⁺)', '8,00', '8,10 (ref.)', '8,20'];
+    return ['7,70', '8,00', '8,10 (ref.)', '8,20'];
   }
   return null;
 }
@@ -125,6 +108,9 @@ interface EnvironmentDrawerProps {
   onClose: () => void;
   simulation: SimulationState;
   focusedFactor: ItemId | null;
+  canUndo: boolean;
+  onUndo: () => void;
+  onResetToInitial: () => void;
   onAdjustFactor: (id: ItemId, value: number) => void;
   onCommitFactor: (id: ItemId) => void;
   onResetSingleFactor: (id: ItemId) => void;
@@ -137,17 +123,24 @@ export function EnvironmentDrawer({
   onClose,
   simulation,
   focusedFactor,
+  canUndo,
+  onUndo,
+  onResetToInitial,
   onAdjustFactor,
   onCommitFactor,
   onResetSingleFactor,
   onSewageModeChange,
   onTriggerSewagePulse,
 }: EnvironmentDrawerProps) {
-  const [expandedGroups, setExpandedGroups] = useState<Record<ControlCategoryId, boolean>>({
-    water: true,
-    pollution: true,
-    ecosystem: false,
-  });
+  const initialCategory: ControlCategoryId = focusedFactor
+    ? ITEM_DEFINITIONS[focusedFactor].category
+    : 'water';
+
+  const [expandedGroups, setExpandedGroups] = useState<Record<ControlCategoryId, boolean>>(() => ({
+    water: initialCategory === 'water',
+    pollution: initialCategory === 'pollution',
+    ecosystem: initialCategory === 'ecosystem',
+  }));
 
   const toggleGroup = (groupId: ControlCategoryId) => {
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -162,25 +155,46 @@ export function EnvironmentDrawer({
   return (
     <aside
       className="env-drawer"
+      role="dialog"
       aria-label="Ajustar condições ambientais"
     >
       <header className="env-drawer-header">
         <div>
-          <h2 className="env-drawer-title">Ajustar ambiente</h2>
-          <p className="env-drawer-subtitle">
-            Manipulação direta · A resposta evolui no tempo do modelo
-          </p>
+          <h2 className="env-drawer-title">Condições ambientais</h2>
+          <p className="env-drawer-subtitle">{sectorDef.label}</p>
         </div>
         <button
           type="button"
-          className="icon-close-btn"
+          className="btn btn--quiet btn--icon"
           onClick={onClose}
-          aria-label="Recolher painel de ajustes"
-          title="Recolher painel para ampliar o recife"
+          aria-label="Fechar painel de condições ambientais"
+          title="Fechar"
         >
           <Icon name="close" />
         </button>
       </header>
+
+      <div className="env-drawer-mobile-actions">
+        <button
+          type="button"
+          className="btn btn--quiet"
+          disabled={!canUndo}
+          onClick={onUndo}
+          title="Desfazer alteração"
+        >
+          <Icon name="undo" />
+          <span>Desfazer</span>
+        </button>
+        <button
+          type="button"
+          className="btn btn--quiet"
+          onClick={onResetToInitial}
+          title="Restaurar estado inicial"
+        >
+          <Icon name="reset" />
+          <span>Estado inicial</span>
+        </button>
+      </div>
 
       <div className="env-drawer-body">
         {CONTROL_GROUPS.map((group) => {
@@ -202,8 +216,8 @@ export function EnvironmentDrawer({
                 </div>
                 <div className="control-group-right">
                   {activeCount > 0 && (
-                    <span className="group-active-pill" title={`${activeCount} variável(is) alterada(s) neste grupo`}>
-                      {activeCount} {activeCount === 1 ? 'ativo' : 'ativos'}
+                    <span className="group-active-pill">
+                      {activeCount}
                     </span>
                   )}
                   <span className={`group-chevron ${isExpanded ? 'rotated' : ''}`} aria-hidden="true">
@@ -223,12 +237,8 @@ export function EnvironmentDrawer({
                     const scaleOptions = item.scaleOptions;
 
                     const displayedTarget = formatParameterValue(id, controlVal, sewageMode);
-                    const displayedCurrent = formatParameterValue(
-                      id,
-                      id === 'oil' && envVal > 0 ? envVal : envVal,
-                      sewageMode,
-                    );
-                    const risk = getFactorRiskStatus(id, controlVal);
+                    const displayedCurrent = formatParameterValue(id, envVal, sewageMode);
+                    const riskTone = getFactorRiskTone(id, controlVal);
                     const ticks = getScaleTicks(id);
 
                     const sliderMin = scaleOptions ? 0 : item.min;
@@ -245,36 +255,24 @@ export function EnvironmentDrawer({
                         : ((item.warning - item.min) / (item.max - item.min)) * 100)
                       : null;
 
-                    // Prévia física coerente: diferencia o valor-alvo ajustado do estado em transição gradual no recife
-                    const isTransitioning = active && Math.abs(simulation.targets[id] - envVal) > (item.step || 1) * 0.35;
-                    const eqOxygenPreview = id === 'sewage' && sewageMode === 'continuous' && controlVal > 0
-                      ? calculateEquilibriumOxygen(
-                        { ...simulation.env, sewage: controlVal },
-                        simulation.sector,
-                        calculateAlgae(simulation.env, simulation.health),
-                        'continuous_daily',
-                      )
-                      : null;
-
-                    const oilRetainedRange = id === 'oil' && controlVal > 0
-                      ? receivedLoadRange(controlVal, simulation.sector as BtsSectorId)
-                      : null;
+                    const isTransitioning = active
+                      && id !== 'oil'
+                      && !(id === 'sewage' && sewageMode === 'pulse')
+                      && Math.abs(simulation.targets[id] - envVal) > (item.step || 1) * 0.35;
 
                     return (
                       <div
                         key={id}
-                        className={`param-row risk-${risk.tone} ${active ? 'is-active' : ''} ${focused ? 'is-focused' : ''}`}
+                        className={`param-row risk-${riskTone} ${active ? 'is-active' : ''} ${focused ? 'is-focused' : ''}`}
                       >
                         <div className="param-row-top">
-                          <label className="param-label" htmlFor={`param-${id}`}>
-                            <span className="param-icon" aria-hidden="true">
-                              <Icon name={item.icon as IconName} />
-                            </span>
-                            <span className="param-name">
-                              {id === 'sewage'
-                                ? (sewageMode === 'pulse' ? 'Esgoto · Pulso DBO₅' : 'Esgoto · DBO₅ contínua')
-                                : item.shortLabel}
-                            </span>
+                          <label
+                            className="param-label"
+                            htmlFor={`param-${id}`}
+                            title={item.reference ?? item.label}
+                          >
+                            <Icon name={item.icon as IconName} className="param-icon-svg" />
+                            <span className="param-name">{item.shortLabel}</span>
                           </label>
 
                           <div className="param-readout-group">
@@ -285,10 +283,10 @@ export function EnvironmentDrawer({
                             {active && (
                               <button
                                 type="button"
-                                className="param-reset-single"
+                                className="btn btn--quiet btn--icon param-reset-single"
                                 onClick={() => onResetSingleFactor(id)}
-                                title={`Restaurar ${item.shortLabel} para o valor de referência`}
-                                aria-label={`Restaurar ${item.shortLabel} para referência`}
+                                title={`Restaurar ${item.shortLabel}`}
+                                aria-label={`Restaurar ${item.shortLabel}`}
                               >
                                 <Icon name="reset" />
                               </button>
@@ -296,7 +294,6 @@ export function EnvironmentDrawer({
                           </div>
                         </div>
 
-                        {/* Seletor de regime contínuo vs. pulso isolado específico para Esgoto */}
                         {id === 'sewage' && (
                           <div className="sewage-mode-switch" role="group" aria-label="Regime de lançamento de esgoto">
                             <button
@@ -305,7 +302,7 @@ export function EnvironmentDrawer({
                               aria-pressed={sewageMode === 'continuous'}
                               onClick={() => onSewageModeChange('continuous')}
                             >
-                              Contínuo (kg/dia)
+                              Contínuo
                             </button>
                             <button
                               type="button"
@@ -313,7 +310,7 @@ export function EnvironmentDrawer({
                               aria-pressed={sewageMode === 'pulse'}
                               onClick={() => onSewageModeChange('pulse')}
                             >
-                              Pulso isolado (kg)
+                              Pulso único
                             </button>
                           </div>
                         )}
@@ -332,7 +329,7 @@ export function EnvironmentDrawer({
                             max={sliderMax}
                             step={sliderStep}
                             value={sliderValue}
-                            aria-label={`${item.label}: ${displayedTarget.value} ${displayedTarget.unit} (${risk.label})`}
+                            aria-label={`${item.label}: ${displayedTarget.value} ${displayedTarget.unit}`}
                             onChange={(e) => {
                               const raw = Number(e.target.value);
                               const resolved = scaleOptions ? scaleOptions[raw] : raw;
@@ -345,12 +342,11 @@ export function EnvironmentDrawer({
                             <i
                               className="param-warning-tick"
                               aria-hidden="true"
-                              title={`Limiar de atenção: ${item.warning}`}
+                              title={`Limiar: ${item.warning}`}
                             />
                           )}
                         </div>
 
-                        {/* Indicação explícita de escala logarítmica / não linear */}
                         {ticks && (
                           <div className="param-scale-ticks" aria-hidden="true">
                             {ticks.map((tick) => (
@@ -359,61 +355,20 @@ export function EnvironmentDrawer({
                           </div>
                         )}
 
-                        <div className="param-meta-line">
-                          <span className={`param-status-tag tone-${risk.tone}`}>
-                            {risk.label}
-                          </span>
-                          {item.scaleBadge && (
-                            <span className="param-scale-badge" title="Movimentos iguais no controle percorrem ordens de grandeza diferentes">
-                              {item.scaleBadge}
-                            </span>
-                          )}
-                          {!item.scaleBadge && item.reference && (
-                            <span className="param-ref-text">{item.reference}</span>
-                          )}
-                        </div>
-
-                        {/* Prévia imediata coerente com a dinâmica temporal gradual */}
                         {id === 'sewage' && sewageMode === 'pulse' && controlVal > 0 && (
-                          <div className="pulse-action-box">
-                            <button
-                              type="button"
-                              className="pulse-trigger-btn"
-                              onClick={() => onTriggerSewagePulse(controlVal)}
-                            >
-                              <Icon name="drop" />
-                              <span>
-                                Despejar pulso de {displayedTarget.value} {displayedTarget.unit} agora
-                              </span>
-                            </button>
-                            <small>
-                              Injeta carga orgânica pontual na caixa de {(sectorDef.mixingVolumeM3 / 1e6).toFixed(0)}M m³; o OD cai nos primeiros dias e recupera por reaeração e maré.
-                            </small>
-                          </div>
+                          <button
+                            type="button"
+                            className="btn btn--primary pulse-trigger-btn"
+                            onClick={() => onTriggerSewagePulse(controlVal)}
+                          >
+                            <Icon name="drop" />
+                            <span>Lançar pulso de {displayedTarget.value} {displayedTarget.unit}</span>
+                          </button>
                         )}
 
-                        {eqOxygenPreview !== null && (
+                        {isTransitioning && (
                           <p className="param-preview-note">
-                            Prévia de equilíbrio do modelo: OD tende a{' '}
-                            <strong>{eqOxygenPreview.toFixed(1).replace('.', ',')} mg/L</strong> com aporte contínuo.
-                          </p>
-                        )}
-
-                        {oilRetainedRange !== null && (
-                          <p className="param-preview-note">
-                            Retido em 30 d neste setor ({sectorDef.retentionDescriptor}):{' '}
-                            <strong>
-                              {formatParameterValue('oil', oilRetainedRange.minimumKg).value}{' '}
-                              {formatParameterValue('oil', oilRetainedRange.minimumKg).unit}–
-                              {formatParameterValue('oil', oilRetainedRange.maximumKg).value}{' '}
-                              {formatParameterValue('oil', oilRetainedRange.maximumKg).unit}
-                            </strong>
-                          </p>
-                        )}
-
-                        {isTransitioning && id !== 'oil' && !(id === 'sewage' && sewageMode === 'pulse') && (
-                          <p className="param-preview-note">
-                            No recife agora: <strong>{displayedCurrent.value} {displayedCurrent.unit}</strong> → evoluindo gradualmente até o alvo.
+                            Na água agora: <strong>{displayedCurrent.value} {displayedCurrent.unit}</strong>
                           </p>
                         )}
                       </div>

@@ -2,13 +2,10 @@ import { useState } from 'react';
 import { Icon } from './Icons';
 import { OxygenTrendChart } from './OxygenTrendChart';
 import { Sparkline } from './Sparkline';
-import { formatParameterValue } from './EnvironmentDrawer';
 import type { OceanDataState } from '../hooks/useOceanData';
 import {
   BTS_SECTORS,
-  FACTOR_ORDER,
   FISH_SPECIES,
-  ITEM_DEFINITIONS,
   PARAMETER_EVIDENCE_REGISTRY,
   PRESSURE_LABELS,
 } from '../simulation/config';
@@ -26,19 +23,16 @@ import type {
   EvidenceLevel,
   FishSpeciesId,
   HistoryPoint,
-  ItemId,
   PressureId,
-  SavedScenario,
   SimulationState,
 } from '../simulation/types';
 
-export type EvidenceTab = 'evolution' | 'compare' | 'sources';
+export type EvidenceTab = 'evolution' | 'sources';
 type ChartSeriesMode = 'oxygen' | 'ecosystem' | 'thermal';
 
 const EVIDENCE_TABS: ReadonlyArray<{ id: EvidenceTab; label: string }> = [
-  { id: 'evolution', label: 'Evolução e mecanismo' },
-  { id: 'compare', label: 'Comparar cenários' },
-  { id: 'sources', label: 'Dados, fontes e método' },
+  { id: 'evolution', label: 'Evolução' },
+  { id: 'sources', label: 'Dados' },
 ];
 
 const NOAA_ALERT_LABELS: Record<number, string> = {
@@ -116,39 +110,38 @@ function MultiMetricChart({
     return (
       <div className="evidence-chart-box" aria-label="Evolução dos índices do ecossistema">
         <div className="evidence-chart-legend">
-          <span className="legend-dot coral"><i /> Corais (/100)</span>
-          <span className="legend-dot fish"><i /> Fauna (/100)</span>
-          <span className="legend-dot algae"><i /> Algas (/100)</span>
+          <span className="legend-dot coral"><i /> Corais (%)</span>
+          <span className="legend-dot fish"><i /> Peixes (%)</span>
+          <span className="legend-dot algae"><i /> Algas (%)</span>
         </div>
         <svg viewBox={`0 0 ${width} ${height}`} className="evidence-chart-svg" role="img">
-          <line x1={padL} y1={padT + plotH} x2={width - padR} y2={padT + plotH} stroke="rgba(255,255,255,0.2)" />
-          <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(255,255,255,0.2)" />
+          <line x1={padL} y1={padT + plotH} x2={width - padR} y2={padT + plotH} stroke="rgba(242,244,238,0.18)" />
+          <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(242,244,238,0.18)" />
           <line
             x1={padL}
             y1={yCritical}
             x2={width - padR}
             y2={yCritical}
-            stroke="rgba(226, 115, 94, 0.55)"
+            stroke="rgba(215, 134, 125, 0.55)"
             strokeDasharray="3 3"
           />
-          <text x={width - padR} y={yCritical - 3} textAnchor="end" fill="rgba(226,115,94,0.9)" fontSize="8.5">
-            33/100 (limiar crítico do modelo)
+          <text x={width - padR} y={yCritical - 3} textAnchor="end" fill="#D7867D" fontSize="9">
+            33% (limiar crítico do modelo)
           </text>
-          <text x={padL - 5} y={getY(100) + 4} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">100</text>
-          <text x={padL - 5} y={getY(50) + 4} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">50</text>
-          <text x={padL - 5} y={getY(0) + 2} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">0</text>
-          <text x={getX(0)} y={height - 7} textAnchor="start" fill="rgba(255,255,255,0.65)" fontSize="8.5">Dia 0</text>
-          <text x={getX(maxDay)} y={height - 7} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">Dia {maxDay}</text>
+          <text x={padL - 5} y={getY(100) + 4} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">100%</text>
+          <text x={padL - 5} y={getY(50) + 4} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">50%</text>
+          <text x={padL - 5} y={getY(0) + 2} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">0%</text>
+          <text x={getX(0)} y={height - 7} textAnchor="start" fill="rgba(242,244,238,0.62)" fontSize="9">Dia 0</text>
+          <text x={getX(maxDay)} y={height - 7} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">Dia {maxDay}</text>
 
-          {algaePath && <path d={algaePath} fill="none" stroke="#84cc16" strokeWidth="1.6" strokeDasharray="3 2" />}
-          {fishPath && <path d={fishPath} fill="none" stroke="#58c0e8" strokeWidth="2" />}
-          {coralPath && <path d={coralPath} fill="none" stroke="#f8b020" strokeWidth="2.2" />}
+          {algaePath && <path d={algaePath} fill="none" stroke="#D7BD80" strokeWidth="1.6" strokeDasharray="3 2" />}
+          {fishPath && <path d={fishPath} fill="none" stroke="#BEDBC7" strokeWidth="2" />}
+          {coralPath && <path d={coralPath} fill="none" stroke="#86C49A" strokeWidth="2.2" />}
         </svg>
       </div>
     );
   }
 
-  // Modo térmico: estresse térmico simulado (0 a max(12, dhw)) + temperatura
   const maxDhw = Math.max(12, ...points.map((p) => p.dhw + 1));
   const getYDhw = (dhw: number) => padT + plotH - (Math.max(0, Math.min(maxDhw, dhw)) / maxDhw) * plotH;
   const getYTemp = (t: number) => padT + plotH - (Math.max(0, Math.min(1, (t - 24) / 8))) * plotH;
@@ -161,28 +154,28 @@ function MultiMetricChart({
   return (
     <div className="evidence-chart-box" aria-label="Evolução da temperatura e estresse térmico simulado">
       <div className="evidence-chart-legend">
-        <span className="legend-dot heat"><i /> Estresse térmico simulado (°C-sem.)</span>
+        <span className="legend-dot heat"><i /> Estresse térmico (°C-sem.)</span>
         <span className="legend-dot temp"><i /> Temperatura (24–32 °C)</span>
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="evidence-chart-svg" role="img">
-        <line x1={padL} y1={padT + plotH} x2={width - padR} y2={padT + plotH} stroke="rgba(255,255,255,0.2)" />
-        <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(255,255,255,0.2)" />
-        <line x1={padL} y1={yAlert1} x2={width - padR} y2={yAlert1} stroke="rgba(248, 176, 32, 0.55)" strokeDasharray="3 3" />
-        <text x={width - padR} y={yAlert1 - 3} textAnchor="end" fill="rgba(248,176,32,0.9)" fontSize="8.5">
-          4 °C-sem. (risco de branqueamento)
+        <line x1={padL} y1={padT + plotH} x2={width - padR} y2={padT + plotH} stroke="rgba(242,244,238,0.18)" />
+        <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(242,244,238,0.18)" />
+        <line x1={padL} y1={yAlert1} x2={width - padR} y2={yAlert1} stroke="rgba(215, 189, 128, 0.55)" strokeDasharray="3 3" />
+        <text x={width - padR} y={yAlert1 - 3} textAnchor="end" fill="#D7BD80" fontSize="9">
+          4 °C-sem. (atenção)
         </text>
-        <line x1={padL} y1={yAlert2} x2={width - padR} y2={yAlert2} stroke="rgba(226, 115, 94, 0.6)" strokeDasharray="3 3" />
-        <text x={width - padR} y={yAlert2 - 3} textAnchor="end" fill="rgba(226,115,94,0.9)" fontSize="8.5">
+        <line x1={padL} y1={yAlert2} x2={width - padR} y2={yAlert2} stroke="rgba(215, 134, 125, 0.6)" strokeDasharray="3 3" />
+        <text x={width - padR} y={yAlert2 - 3} textAnchor="end" fill="#D7867D" fontSize="9">
           8 °C-sem. (estresse severo)
         </text>
-        <text x={padL - 5} y={getYDhw(maxDhw) + 4} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">{Math.round(maxDhw)}</text>
-        <text x={padL - 5} y={getYDhw(4) + 4} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">4</text>
-        <text x={padL - 5} y={getYDhw(0) + 2} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">0</text>
-        <text x={getX(0)} y={height - 7} textAnchor="start" fill="rgba(255,255,255,0.65)" fontSize="8.5">Dia 0</text>
-        <text x={getX(maxDay)} y={height - 7} textAnchor="end" fill="rgba(255,255,255,0.65)" fontSize="8.5">Dia {maxDay}</text>
+        <text x={padL - 5} y={getYDhw(maxDhw) + 4} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">{Math.round(maxDhw)}</text>
+        <text x={padL - 5} y={getYDhw(4) + 4} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">4</text>
+        <text x={padL - 5} y={getYDhw(0) + 2} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">0</text>
+        <text x={getX(0)} y={height - 7} textAnchor="start" fill="rgba(242,244,238,0.62)" fontSize="9">Dia 0</text>
+        <text x={getX(maxDay)} y={height - 7} textAnchor="end" fill="rgba(242,244,238,0.62)" fontSize="9">Dia {maxDay}</text>
 
-        {tempPath && <path d={tempPath} fill="none" stroke="#58c0e8" strokeWidth="1.6" strokeDasharray="4 2" />}
-        {dhwPath && <path d={dhwPath} fill="none" stroke="#e2735e" strokeWidth="2.2" />}
+        {tempPath && <path d={tempPath} fill="none" stroke="#BEDBC7" strokeWidth="1.6" strokeDasharray="4 2" />}
+        {dhwPath && <path d={dhwPath} fill="none" stroke="#D7867D" strokeWidth="2.2" />}
       </svg>
     </div>
   );
@@ -195,14 +188,7 @@ interface EvidenceDrawerProps {
   onClose: () => void;
   simulation: SimulationState;
   oceanData: OceanDataState;
-  referenceScenario: SavedScenario;
-  savedScenarios: SavedScenario[];
-  activeComparisonId: string;
-  onSelectComparisonId: (id: string) => void;
-  isViewingComparisonIn3D: boolean;
-  onToggleViewComparisonIn3D: () => void;
-  onSaveCurrentScenario: (customLabel?: string) => void;
-  onDeleteSavedScenario: (id: string) => void;
+  criticalDays?: number | null;
   onApplySatelliteTemperature: (sst: number) => void;
 }
 
@@ -213,19 +199,11 @@ export function EvidenceDrawer({
   onClose,
   simulation,
   oceanData,
-  referenceScenario,
-  savedScenarios,
-  activeComparisonId,
-  onSelectComparisonId,
-  isViewingComparisonIn3D,
-  onToggleViewComparisonIn3D,
-  onSaveCurrentScenario,
-  onDeleteSavedScenario,
+  criticalDays = null,
   onApplySatelliteTemperature,
 }: EvidenceDrawerProps) {
   const [chartMode, setChartMode] = useState<ChartSeriesMode>('oxygen');
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceLevel | 'all'>('all');
-  const [scenarioNameInput, setScenarioNameInput] = useState('');
 
   if (!open) return null;
 
@@ -252,27 +230,17 @@ export function EvidenceDrawer({
   const oilBudget = oilMassKg > 0 ? calculateOilFateBudget(oilMassKg, simulation.sector, Math.max(0.5, simulation.elapsedDays)) : null;
   const oilEcotox = oilBudget ? evaluateOilEcotoxicity(oilBudget.dissolvedPahConcentrationUgL) : null;
 
-  const allComparisonTargets = [referenceScenario, ...savedScenarios];
-  const baseScenario = allComparisonTargets.find((s) => s.id === activeComparisonId) ?? referenceScenario;
-
-  const changedFactorsBetween = FACTOR_ORDER.filter(
-    (id) => Math.abs(simulation.controls[id] - baseScenario.controls[id]) > 1e-6,
-  );
-  const regimeChanged = simulation.sewageDischargeMode !== baseScenario.sewageDischargeMode
-    && (simulation.controls.sewage > 0 || baseScenario.controls.sewage > 0);
-
   const filteredRegistry = evidenceFilter === 'all'
     ? PARAMETER_EVIDENCE_REGISTRY
     : PARAMETER_EVIDENCE_REGISTRY.filter((rec) => rec.evidenceLevel === evidenceFilter);
 
-  // Estado inequívoco dos dados satelitais NOAA CRW
   const noaaStateBadge = (() => {
     if (oceanData.noaaLoading) return { tone: 'neutral', text: 'Consultando fonte...' };
     if (oceanData.noaaStatus.state === 'no_coverage' || sector.id === 'paraguacu') {
       return { tone: 'watch', text: 'Sem cobertura (grade 5 km mascara canal interno)' };
     }
     if (oceanData.noaaStatus.state === 'error') {
-      return { tone: 'critical', text: 'Erro na consulta (último valor não é exibido como atual)' };
+      return { tone: 'critical', text: 'Erro na consulta' };
     }
     if (oceanData.latestCrw?.provenance.isCachedFallback || oceanData.noaaStatus.state === 'fallback') {
       return { tone: 'watch', text: 'Histórico / Contingência (mar–abr 2024)' };
@@ -286,7 +254,6 @@ export function EvidenceDrawer({
     return { tone: 'neutral', text: 'Aguardando consulta' };
   })();
 
-  // Estado inequívoco do modelo externo Open-Meteo Marine
   const meteoStateBadge = (() => {
     if (oceanData.meteoLoading) return { tone: 'neutral', text: 'Consultando modelo...' };
     if (oceanData.meteoStatus.state === 'error') {
@@ -305,23 +272,24 @@ export function EvidenceDrawer({
   })();
 
   return (
-    <aside className="evidence-drawer" aria-label="Painel de evidências científicas e comparação">
+    <aside className="evidence-drawer" role="dialog" aria-label="Gráficos e dados científicos">
       <header className="evidence-header">
         <div>
-          <span className="evidence-kicker">Investigação e rastreabilidade</span>
-          <h2 className="evidence-title">Evidências e origem dos dados</h2>
+          <h2 className="evidence-title">Gráficos e dados</h2>
+          <p className="evidence-subtitle">Baía de Todos-os-Santos · {sector.label}</p>
         </div>
         <button
           type="button"
-          className="icon-close-btn"
+          className="btn btn--quiet btn--icon"
           onClick={onClose}
-          aria-label="Fechar painel de evidências"
+          aria-label="Fechar painel de gráficos e dados"
+          title="Fechar"
         >
           <Icon name="close" />
         </button>
       </header>
 
-      <nav className="evidence-tabs" role="tablist" aria-label="Seções de evidências">
+      <nav className="evidence-tabs" role="tablist" aria-label="Seções do painel de dados">
         {EVIDENCE_TABS.map((item) => (
           <button
             key={item.id}
@@ -337,15 +305,22 @@ export function EvidenceDrawer({
       </nav>
 
       <div className="evidence-body">
-        {/* ABA 1: EVOLUÇÃO E MECANISMO */}
         {tab === 'evolution' && (
           <div className="evidence-section">
             <article className="evidence-card">
               <div className="evidence-card-head">
                 <div>
-                  <span className="origin-tag local">Resultado da Simulação Local</span>
-                  <h3>Evolução temporal no experimento ({formatSimulatedTime(simulation.elapsedDays)})</h3>
+                  <span className="origin-tag local">Simulação local</span>
+                  <h3>Evolução temporal ({formatSimulatedTime(simulation.elapsedDays)})</h3>
                 </div>
+                {criticalDays !== null && (
+                  <span
+                    className="sector-mini-tag"
+                    title="Tempo estimado até o índice global cruzar ≤ 33% no modelo"
+                  >
+                    Limiar crítico (≤ 33%): ~{formatSimulatedTime(criticalDays)}
+                  </span>
+                )}
               </div>
 
               <div className="chart-mode-pills" role="group" aria-label="Variável exibida no gráfico">
@@ -354,14 +329,14 @@ export function EvidenceDrawer({
                   className={chartMode === 'oxygen' ? 'active' : ''}
                   onClick={() => setChartMode('oxygen')}
                 >
-                  Oxigênio e Fauna
+                  Oxigênio e Peixes
                 </button>
                 <button
                   type="button"
                   className={chartMode === 'ecosystem' ? 'active' : ''}
                   onClick={() => setChartMode('ecosystem')}
                 >
-                  Corais, Fauna e Algas
+                  Corais, Peixes e Algas
                 </button>
                 <button
                   type="button"
@@ -387,14 +362,13 @@ export function EvidenceDrawer({
               )}
             </article>
 
-            {/* Balanço de Oxigênio e Sistema Carbonato */}
             <article className="evidence-card">
               <div className="evidence-card-head">
                 <div>
-                  <span className="origin-tag local">Mecanismo Físico-Químico Calculado</span>
+                  <span className="origin-tag local">Balanço físico-químico</span>
                   <h3>Oxigênio dissolvido e química do carbonato</h3>
                 </div>
-                <span className="sector-mini-tag">{sector.label} · {sector.baselineSalinity} PSU</span>
+                <span className="sector-mini-tag">{sector.baselineSalinity} PSU</span>
               </div>
 
               <div className="metric-grid-4">
@@ -421,7 +395,7 @@ export function EvidenceDrawer({
               </div>
 
               <details className="method-details">
-                <summary>Equações acopladas e componentes calculados ▾</summary>
+                <summary>Equações acopladas e componentes calculados</summary>
                 <div className="method-details-body">
                   <p>
                     <strong>Equação de OD:</strong> <code>d[OD]/dt = ka·(Cs − [OD]) − kd·[CBODu] − SOD/H + (P − R)</code>
@@ -438,12 +412,11 @@ export function EvidenceDrawer({
               </details>
             </article>
 
-            {/* Balanço de Óleo quando ativo */}
             {oilBudget && (
               <article className="evidence-card">
                 <div className="evidence-card-head">
                   <div>
-                    <span className="origin-tag local">Modelo de Partição em 4 Reservatórios</span>
+                    <span className="origin-tag local">Partição em 4 reservatórios</span>
                     <h3>Destino do óleo e fração dissolvida (tPAH50)</h3>
                   </div>
                 </div>
@@ -473,14 +446,13 @@ export function EvidenceDrawer({
               </article>
             )}
 
-            {/* Espécies funcionais */}
             <article className="evidence-card">
               <div className="evidence-card-head">
                 <div>
-                  <span className="origin-tag local">Resposta Ecológica Relativa (Hipótese do Modelo)</span>
-                  <h3>Grupos funcionais da ictiofauna e teia trófica</h3>
+                  <span className="origin-tag local">Resposta ecológica do modelo</span>
+                  <h3>Grupos funcionais de peixes e teia trófica</h3>
                 </div>
-                <span className="sector-mini-tag">Equilíbrio trófico: {Math.round(trophic)}/100</span>
+                <span className="sector-mini-tag">Equilíbrio trófico: {Math.round(trophic)}%</span>
               </div>
               <div className="species-mini-list">
                 {FISH_SPECIES.map((sp) => {
@@ -493,7 +465,7 @@ export function EvidenceDrawer({
                         <strong>{sp.label}</strong>
                         <small>
                           {sp.role}
-                          {topP.length > 0 ? ` · Pressão principal: ${topP.join(', ')}` : ' · Sem estresse relevante'}
+                          {topP.length > 0 ? ` · Pressão: ${topP.join(', ')}` : ' · Sem estresse relevante'}
                         </small>
                       </div>
                       <Sparkline
@@ -502,10 +474,10 @@ export function EvidenceDrawer({
                         max={100}
                         width={84}
                         height={24}
-                        stroke={val >= 67 ? '#3ed39f' : val >= 34 ? '#f8b020' : '#e2735e'}
+                        stroke={val >= 67 ? '#86C49A' : val >= 34 ? '#D7BD80' : '#D7867D'}
                       />
                       <span className={`species-score ${val >= 67 ? 'tone-healthy' : val >= 34 ? 'tone-watch' : 'tone-critical'}`}>
-                        {val}/100
+                        {val}%
                       </span>
                     </div>
                   );
@@ -515,219 +487,19 @@ export function EvidenceDrawer({
           </div>
         )}
 
-        {/* ABA 2: COMPARAR CENÁRIOS (ANTES / DEPOIS) */}
-        {tab === 'compare' && (
+        {tab === 'sources' && (
           <div className="evidence-section">
             <article className="evidence-card">
               <div className="evidence-card-head">
                 <div>
-                  <span className="origin-tag local">Comparação Experimental</span>
-                  <h3>Guardar cenário e comparar Antes / Depois</h3>
+                  <span className="origin-tag local">Região selecionada</span>
+                  <h3>{sector.label}</h3>
                 </div>
+                <span className="sector-mini-tag">{sector.sublabel}</span>
               </div>
-
-              <div className="save-scenario-bar">
-                <input
-                  type="text"
-                  className="scenario-name-input"
-                  placeholder={`Ex.: Esgoto ${simulation.sewageDischargeMode === 'pulse' ? 'pulso' : 'contínuo'} (${formatSimulatedTime(simulation.elapsedDays)})`}
-                  value={scenarioNameInput}
-                  onChange={(e) => setScenarioNameInput(e.target.value)}
-                  aria-label="Nome opcional para guardar o cenário atual"
-                />
-                <button
-                  type="button"
-                  className="primary-action-btn"
-                  onClick={() => {
-                    onSaveCurrentScenario(scenarioNameInput.trim() || undefined);
-                    setScenarioNameInput('');
-                  }}
-                >
-                  <Icon name="bookmark" />
-                  <span>Guardar cenário</span>
-                </button>
-              </div>
-
-              <div className="compare-selector-row">
-                <label htmlFor="compare-base-select">Comparar cenário atual com:</label>
-                <select
-                  id="compare-base-select"
-                  className="compare-select"
-                  value={baseScenario.id}
-                  onChange={(e) => onSelectComparisonId(e.target.value)}
-                >
-                  {allComparisonTargets.map((sc) => (
-                    <option key={sc.id} value={sc.id}>
-                      {sc.label} ({formatSimulatedTime(sc.savedAtDay)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Aviso de controle experimental (isolamento de variáveis) */}
-              <div className={`experiment-control-notice ${changedFactorsBetween.length > 1 ? 'warn' : 'ok'}`}>
-                <Icon name={changedFactorsBetween.length > 1 ? 'alert' : 'check'} />
-                <div>
-                  {changedFactorsBetween.length === 0 && !regimeChanged ? (
-                    <span>Os parâmetros de entrada são idênticos aos de <strong>{baseScenario.label}</strong> (diferença apenas pelo tempo decorrido).</span>
-                  ) : changedFactorsBetween.length === 1 || (changedFactorsBetween.length === 0 && regimeChanged) ? (
-                    <span>
-                      <strong>Controle experimental preservado:</strong> apenas{' '}
-                      <strong>
-                        {regimeChanged && changedFactorsBetween.length === 0
-                          ? 'o regime de lançamento de esgoto (contínuo vs. pulso)'
-                          : ITEM_DEFINITIONS[changedFactorsBetween[0]].shortLabel}
-                      </strong>{' '}
-                      diferencia os dois cenários.
-                    </span>
-                  ) : (
-                    <span>
-                      <strong>Atenção metodológica ({changedFactorsBetween.length} variáveis alteradas):</strong>{' '}
-                      {changedFactorsBetween.map((id) => ITEM_DEFINITIONS[id].shortLabel).join(', ')} mudaram ao mesmo tempo, dificultando atribuir o resultado a uma única causa.
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="compare-3d-toggle-row">
-                <button
-                  type="button"
-                  className={`compare-3d-btn ${isViewingComparisonIn3D ? 'is-active' : ''}`}
-                  onClick={onToggleViewComparisonIn3D}
-                >
-                  <Icon name="compare" />
-                  <span>
-                    {isViewingComparisonIn3D
-                      ? 'Voltar a ver o Cenário Atual no Recife 3D'
-                      : `Visualizar "${baseScenario.label}" no Recife 3D (mesmo enquadramento)`}
-                  </span>
-                </button>
-              </div>
-
-              <div className="compare-table-wrap">
-                <table className="compare-table">
-                  <thead>
-                    <tr>
-                      <th>Indicador / Variável</th>
-                      <th>{baseScenario.label}</th>
-                      <th>Cenário Atual</th>
-                      <th>Diferença (Δ)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {changedFactorsBetween.map((id) => {
-                      const beforeFmt = formatParameterValue(id, baseScenario.controls[id], baseScenario.sewageDischargeMode);
-                      const nowFmt = formatParameterValue(id, simulation.controls[id], simulation.sewageDischargeMode);
-                      return (
-                        <tr key={`param-${id}`} className="row-input-var">
-                          <td>
-                            <span className="row-tag">Entrada</span> {ITEM_DEFINITIONS[id].shortLabel}
-                          </td>
-                          <td>{beforeFmt.value} {beforeFmt.unit}</td>
-                          <td><strong>{nowFmt.value} {nowFmt.unit}</strong></td>
-                          <td>Alterado</td>
-                        </tr>
-                      );
-                    })}
-                    {regimeChanged && (
-                      <tr className="row-input-var">
-                        <td><span className="row-tag">Entrada</span> Regime de esgoto</td>
-                        <td>{baseScenario.sewageDischargeMode === 'pulse' ? 'Pulso único' : 'Contínuo'}</td>
-                        <td><strong>{simulation.sewageDischargeMode === 'pulse' ? 'Pulso único' : 'Contínuo'}</strong></td>
-                        <td>Regime distinto</td>
-                      </tr>
-                    )}
-                    {[
-                      {
-                        label: 'Tempo simulado',
-                        before: formatSimulatedTime(baseScenario.savedAtDay),
-                        now: formatSimulatedTime(simulation.elapsedDays),
-                        delta: `${simulation.elapsedDays - baseScenario.savedAtDay >= 0 ? '+' : ''}${Math.round(simulation.elapsedDays - baseScenario.savedAtDay)} d`,
-                      },
-                      {
-                        label: 'Oxigênio dissolvido',
-                        before: `${baseScenario.dissolvedOxygen.toFixed(2).replace('.', ',')} mg/L`,
-                        now: `${simulation.dissolvedOxygen.toFixed(2).replace('.', ',')} mg/L`,
-                        delta: `${simulation.dissolvedOxygen - baseScenario.dissolvedOxygen >= 0 ? '+' : ''}${(simulation.dissolvedOxygen - baseScenario.dissolvedOxygen).toFixed(2).replace('.', ',')} mg/L`,
-                      },
-                      {
-                        label: 'pH efetivo',
-                        before: baseScenario.effectivePh.toFixed(2).replace('.', ','),
-                        now: currentPh.toFixed(2).replace('.', ','),
-                        delta: `${currentPh - baseScenario.effectivePh >= 0 ? '+' : ''}${(currentPh - baseScenario.effectivePh).toFixed(2).replace('.', ',')}`,
-                      },
-                      {
-                        label: 'Estresse térmico simulado',
-                        before: `${baseScenario.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem.`,
-                        now: `${simulation.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem.`,
-                        delta: `${simulation.degreeHeatingWeeks - baseScenario.degreeHeatingWeeks >= 0 ? '+' : ''}${(simulation.degreeHeatingWeeks - baseScenario.degreeHeatingWeeks).toFixed(1).replace('.', ',')} °C-sem.`,
-                      },
-                      {
-                        label: 'Saúde dos corais (modelo)',
-                        before: `${Math.round(baseScenario.health.coral)}/100`,
-                        now: `${Math.round(simulation.health.coral)}/100`,
-                        delta: `${Math.round(simulation.health.coral - baseScenario.health.coral) >= 0 ? '+' : ''}${Math.round(simulation.health.coral - baseScenario.health.coral)} pts`,
-                      },
-                      {
-                        label: 'Saúde da fauna (modelo)',
-                        before: `${Math.round(baseScenario.health.fish)}/100`,
-                        now: `${Math.round(simulation.health.fish)}/100`,
-                        delta: `${Math.round(simulation.health.fish - baseScenario.health.fish) >= 0 ? '+' : ''}${Math.round(simulation.health.fish - baseScenario.health.fish)} pts`,
-                      },
-                      {
-                        label: 'Pressão de algas (modelo)',
-                        before: `${Math.round(baseScenario.algae)}/100`,
-                        now: `${Math.round(algae)}/100`,
-                        delta: `${Math.round(algae - baseScenario.algae) >= 0 ? '+' : ''}${Math.round(algae - baseScenario.algae)} pts`,
-                      },
-                    ].map((row) => (
-                      <tr key={row.label}>
-                        <td>{row.label}</td>
-                        <td>{row.before}</td>
-                        <td><strong>{row.now}</strong></td>
-                        <td className="delta-col">{row.delta}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {savedScenarios.length > 0 && (
-                <div className="saved-scenarios-list">
-                  <h4>Cenários guardados nesta aula</h4>
-                  <ul>
-                    {savedScenarios.map((sc) => (
-                      <li key={sc.id}>
-                        <button
-                          type="button"
-                          className={`saved-sc-select ${activeComparisonId === sc.id ? 'active' : ''}`}
-                          onClick={() => onSelectComparisonId(sc.id)}
-                        >
-                          <strong>{sc.label}</strong>
-                          <small>{formatSimulatedTime(sc.savedAtDay)} · OD {sc.dissolvedOxygen.toFixed(1).replace('.', ',')} mg/L · Corais {Math.round(sc.health.coral)}/100</small>
-                        </button>
-                        <button
-                          type="button"
-                          className="saved-sc-delete"
-                          onClick={() => onDeleteSavedScenario(sc.id)}
-                          aria-label={`Remover cenário ${sc.label}`}
-                          title="Remover cenário guardado"
-                        >
-                          <Icon name="close" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <p className="method-caveat">{sector.description}</p>
             </article>
-          </div>
-        )}
 
-        {/* ABA 3: DADOS, FONTES E MÉTODO */}
-        {tab === 'sources' && (
-          <div className="evidence-section">
-            {/* Distinção das 3 naturezas de dados */}
             <div className="epistemic-legend-strip">
               <div>
                 <strong>1. Observação satelital:</strong> medição remota indireta (NOAA CRW 5 km).
@@ -740,11 +512,10 @@ export function EvidenceDrawer({
               </div>
             </div>
 
-            {/* 1. NOAA CORAL REEF WATCH */}
             <article className="evidence-card">
               <div className="evidence-card-head">
                 <div>
-                  <span className="origin-tag satellite">1. Dados Derivados de Observação Satelital</span>
+                  <span className="origin-tag satellite">1. Observação satelital</span>
                   <h3>NOAA Coral Reef Watch (grade de ~5 km)</h3>
                 </div>
                 <span className={`source-state-pill tone-${noaaStateBadge.tone}`}>
@@ -752,7 +523,6 @@ export function EvidenceDrawer({
                 </span>
               </div>
 
-              {/* Comparação visual explícita: DHW Oficial NOAA vs Estresse Térmico Simulado */}
               <div className="dhw-separation-grid">
                 <div className="dhw-sep-box external">
                   <small>DHW Oficial da NOAA (Externo)</small>
@@ -772,7 +542,7 @@ export function EvidenceDrawer({
                   <small>Estresse Térmico Simulado (Kirimurê)</small>
                   <strong>{simulation.degreeHeatingWeeks.toFixed(1).replace('.', ',')} °C-sem.</strong>
                   <span>
-                    Calculado localmente a partir do slider de temperatura com referência didática fixa (MMM = 28,0 °C; limiar = 29,0 °C).
+                    Calculado localmente a partir do controle de temperatura com referência didática fixa (MMM = 28,0 °C; limiar = 29,0 °C).
                   </span>
                 </div>
               </div>
@@ -813,10 +583,10 @@ export function EvidenceDrawer({
                   <div className="satellite-apply-row">
                     <button
                       type="button"
-                      className="secondary-action-btn"
+                      className="btn"
                       onClick={() => onApplySatelliteTemperature(oceanData.latestCrw!.seaSurfaceTemperatureDegC)}
                     >
-                      Usar SST satelital ({oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1).replace('.', ',')} °C) como temperatura do experimento
+                      Usar SST satelital ({oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1).replace('.', ',')} °C) no experimento
                     </button>
                     <small>
                       Importa apenas a temperatura inicial; a saúde de corais e peixes continua sendo calculada pela simulação local.
@@ -824,7 +594,7 @@ export function EvidenceDrawer({
                   </div>
 
                   <details className="method-details">
-                    <summary>Proveniência, ordem de consulta e semântica de BAA ▾</summary>
+                    <summary>Proveniência, ordem de consulta e semântica de BAA</summary>
                     <div className="method-details-body">
                       <p>
                         <strong>Fonte efetiva:</strong> {oceanData.latestCrw.provenance.distributor ?? oceanData.latestCrw.provenance.sourceName} ·{' '}
@@ -862,13 +632,13 @@ export function EvidenceDrawer({
                   </p>
                   <div className="source-fallback-actions">
                     {sector.id !== 'paraguacu' && (
-                      <button type="button" className="secondary-action-btn" onClick={() => oceanData.refreshNoaa()}>
-                        Tentar consultar satélite novamente
+                      <button type="button" className="btn" onClick={() => oceanData.refreshNoaa()}>
+                        Tentar consultar novamente
                       </button>
                     )}
                     {sector.id !== 'paraguacu' && (
-                      <button type="button" className="secondary-action-btn" onClick={() => oceanData.loadHistoricalCrwSnapshot()}>
-                        Carregar registro histórico identificado (mar–abr 2024)
+                      <button type="button" className="btn" onClick={() => oceanData.loadHistoricalCrwSnapshot()}>
+                        Carregar registro histórico (mar–abr 2024)
                       </button>
                     )}
                   </div>
@@ -876,11 +646,10 @@ export function EvidenceDrawer({
               )}
             </article>
 
-            {/* 2. OPEN-METEO MARINE */}
             <article className="evidence-card">
               <div className="evidence-card-head">
                 <div>
-                  <span className="origin-tag model-ext">2. Dados Produzidos por Modelo Externo</span>
+                  <span className="origin-tag model-ext">2. Modelo externo</span>
                   <h3>Open-Meteo Marine (ondas, correntes e nível)</h3>
                 </div>
                 <span className={`source-state-pill tone-${meteoStateBadge.tone}`}>
@@ -909,30 +678,29 @@ export function EvidenceDrawer({
                     </div>
                   </div>
                   <p className="method-caveat">
-                    Estimativas numéricas de modelo oceânico externo (~5 a 8 km), não medições de boia local. Conforme alerta da documentação do serviço, estimativas de nível do mar e correntes têm precisão limitada em canais costeiros rasos e estuários estreitos.
+                    Estimativas numéricas de modelo oceânico externo (~5 a 8 km), não medições de boia local. Estimativas de nível do mar e correntes têm precisão limitada em canais costeiros rasos e estuários estreitos.
                   </p>
                 </>
               ) : (
                 <div className="source-empty-box">
                   <p>{oceanData.meteoStatus.error ?? 'Previsão externa indisponível no momento.'}</p>
                   <div className="source-fallback-actions">
-                    <button type="button" className="secondary-action-btn" onClick={() => oceanData.refreshMeteo()}>
+                    <button type="button" className="btn" onClick={() => oceanData.refreshMeteo()}>
                       Tentar reconectar modelo externo
                     </button>
-                    <button type="button" className="secondary-action-btn" onClick={() => oceanData.loadHistoricalMeteoSnapshot()}>
-                      Carregar registro histórico identificado (mar 2024)
+                    <button type="button" className="btn" onClick={() => oceanData.loadHistoricalMeteoSnapshot()}>
+                      Carregar registro histórico (mar 2024)
                     </button>
                   </div>
                 </div>
               )}
             </article>
 
-            {/* 3. CLASSIFICAÇÃO DO NÍVEL DE EVIDÊNCIA DOS PARÂMETROS */}
             <article className="evidence-card">
               <div className="evidence-card-head">
                 <div>
-                  <span className="origin-tag local">3. Transparência Científica do Modelo Local</span>
-                  <h3>Classificação do nível de evidência dos parâmetros</h3>
+                  <span className="origin-tag local">3. Método e parâmetros</span>
+                  <h3>Classificação do nível de evidência</h3>
                 </div>
               </div>
 
@@ -974,7 +742,7 @@ export function EvidenceDrawer({
               </div>
 
               <details className="method-details">
-                <summary>Dados empíricos de microplásticos nos estuários da BTS (Trindade et al., 2023) ▾</summary>
+                <summary>Dados empíricos de microplásticos nos estuários da Baía de Todos-os-Santos (Trindade et al., 2023)</summary>
                 <div className="method-details-body">
                   <ul className="survey-list">
                     {BTS_MICROPLASTICS_SURVEY.map((pt) => (

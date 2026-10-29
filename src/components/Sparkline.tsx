@@ -13,7 +13,6 @@ interface SparklineProps {
 
 /**
  * Gráfico Sparkline vetorial SVG nativo de alto desempenho.
- * Renderiza a série temporal histórica sem carregar bibliotecas externas pesadas.
  */
 export function Sparkline({
   data,
@@ -21,15 +20,14 @@ export function Sparkline({
   height = 26,
   min: userMin,
   max: userMax,
-  stroke = '#00e5ff',
-  fill = 'rgba(0, 229, 255, 0.18)',
+  stroke = '#86C49A',
   label,
 }: SparklineProps) {
   const gradId = useId();
 
   if (!data || data.length < 2) {
     return (
-      <span className="sparkline-placeholder" title="Coletando pontos temporais...">
+      <span className="sparkline-placeholder" title="Aguardando evolução temporal">
         —
       </span>
     );
@@ -60,12 +58,11 @@ export function Sparkline({
   const delta = lastPt.val - firstPt.val;
   const areaD = `${pathD} L ${width - padding},${height} L ${padding},${height} Z`;
 
-  // Indicador de tendência
   const trend = Math.abs(delta) < 0.5 ? 'stable' : delta > 0 ? 'up' : 'down';
   const trendSymbol = trend === 'stable' ? '→' : trend === 'up' ? '↗' : '↘';
 
   return (
-    <div className="sparkline-wrapper" title={label ? `${label}: variação recente ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}` : undefined}>
+    <div className="sparkline-wrapper" title={label ? `${label}: variação ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}` : undefined}>
       <svg
         className="sparkline-svg"
         viewBox={`0 0 ${width} ${height}`}
@@ -75,7 +72,7 @@ export function Sparkline({
       >
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity="0.32" />
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.26" />
             <stop offset="100%" stopColor={stroke} stopOpacity="0.0" />
           </linearGradient>
         </defs>
@@ -90,14 +87,13 @@ export function Sparkline({
           strokeLinejoin="round"
         />
 
-        {/* Ponto atual */}
         <circle
           cx={lastPt.x}
           cy={lastPt.y}
-          r="2.5"
-          fill="#ffffff"
+          r="2.4"
+          fill="#F2F4EE"
           stroke={stroke}
-          strokeWidth="1.5"
+          strokeWidth="1.4"
         />
       </svg>
       <span className={`sparkline-trend ${trend}`}>{trendSymbol}</span>

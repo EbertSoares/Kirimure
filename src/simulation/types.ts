@@ -269,27 +269,6 @@ export interface MissionDefinition {
   transferQuestion: string;
 }
 
-export interface SavedScenario {
-  id: string;
-  label: string;
-  savedAtDay: number;
-  sector: BtsSectorId;
-  sewageDischargeMode: 'continuous' | 'pulse';
-  controls: Environment;
-  env: Environment;
-  dissolvedOxygen: number;
-  biochemicalOxygenDemand: number;
-  effectivePh: number;
-  degreeHeatingWeeks: number;
-  algae: number;
-  trophicBalance: number;
-  health: Health;
-  overall: number;
-  species: Record<FishSpeciesId, number>;
-  /** Cópia congelada do estado completo para alternância visual Antes/Depois no mesmo enquadramento 3D. */
-  snapshotState: SimulationState;
-}
-
 export interface MissionState {
   missionId: string;
   step: MissionStepId;

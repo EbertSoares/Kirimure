@@ -41,7 +41,7 @@ O sistema separa rigorosamente **três naturezas distintas de informação**:
 | Parâmetro | Valor | Unidade | Classificação | Descrição / Função |
 | :--- | :--- | :--- | :--- | :--- |
 | `tickRate` | `10` | Hz | Arquitetura | 10 atualizações por segundo real |
-| `daysPerRealSecond` (1×) | `0.25` | dias / s real | Parâmetro Didático | 1 dia simulado a cada 4 segundos reais |
+| `daysPerRealSecond` (1×) | `0.5` | dias / s real | Parâmetro Didático | 1 dia simulado a cada 2 segundos reais (`0,5 dia/s` em 1×; `5 dias/s` em 10×) |
 | `maxSubStepDays` | `0.05` | dias | Numérico | Passo máximo de Euler (~1,2 h) garantindo invariância entre 1× e 10× |
 
 ### Constantes de Relaxamento Cinético ($\tau_i$ em dias)

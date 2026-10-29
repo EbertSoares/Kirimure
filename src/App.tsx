@@ -1,9 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandLogo } from './components/BrandLogo';
 import { BrazilMapScreen } from './components/BrazilMapScreen';
-import { EnvironmentDrawer, formatParameterValue } from './components/EnvironmentDrawer';
+import { EnvironmentDrawer } from './components/EnvironmentDrawer';
 import { EvidenceDrawer, type EvidenceTab } from './components/EvidenceDrawer';
 import { Icon } from './components/Icons';
+import { IndicatorProgress } from './components/IndicatorProgress';
+import { RegionSelector } from './components/RegionSelector';
 import { useOceanData } from './hooks/useOceanData';
 import { calculateRespirationPhImpact } from './simulation/carbonate';
 import {
@@ -12,7 +14,6 @@ import {
   FACTOR_ORDER,
   ITEM_DEFINITIONS,
 } from './simulation/config';
-import { calculateOilFateBudget } from './simulation/contaminants';
 import { calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL } from './simulation/oxygen';
 import {
   buildTargets,
@@ -30,7 +31,6 @@ import type {
   BtsSectorId,
   Environment,
   ItemId,
-  SavedScenario,
   SimulationSpeed,
   SimulationState,
 } from './simulation/types';
@@ -52,85 +52,17 @@ interface ContextualIndicatorView {
   id: ContextualIndicatorId;
   label: string;
   valueText: string;
-  unitText: string;
-  statusText: string;
-  tone: 'healthy' | 'watch' | 'critical';
-  originLabel: string;
+  unitText?: string;
+  progressPercent?: number;
+  tone: 'good' | 'watch' | 'critical';
   tooltip: string;
 }
-
-const ALL_CONTEXTUAL_INDICATOR_IDS: readonly ContextualIndicatorId[] = [
-  'oxygen',
-  'coral',
-  'fish',
-  'temperature',
-  'thermalStress',
-  'ph',
-  'aragonite',
-  'algae',
-  'trophic',
-];
-
-const INDICATOR_SHORT_NAMES: Record<ContextualIndicatorId, string> = {
-  oxygen: 'Oxigênio dissolvido',
-  coral: 'Saúde dos corais',
-  fish: 'Saúde da fauna',
-  temperature: 'Temperatura da água',
-  thermalStress: 'Estresse térmico simulado',
-  ph: 'pH efetivo',
-  aragonite: 'Saturação de aragonita',
-  algae: 'Pressão de algas',
-  trophic: 'Equilíbrio trófico',
-};
 
 const MarineScene = lazy(() =>
   import('./scene/MarineScene').then((module) => ({
     default: module.MarineScene,
   })),
 );
-
-function cloneSimulationState(state: SimulationState): SimulationState {
-  return {
-    ...state,
-    controls: { ...state.controls },
-    env: { ...state.env },
-    targets: { ...state.targets },
-    health: { ...state.health },
-    species: { ...state.species },
-    pressures: { ...state.pressures },
-    exposure: { ...state.exposure },
-    thermalDose: state.thermalDose.map((d) => ({ ...d })),
-    history: state.history.map((h) => ({ ...h, species: h.species ? { ...h.species } : undefined })),
-    firedMessages: new Set(state.firedMessages),
-    events: state.events.map((e) => ({ ...e })),
-  };
-}
-
-function buildScenarioSnapshot(state: SimulationState, id: string, label: string): SavedScenario {
-  const algae = calculateAlgae(state.env, state.health, state.sewageDischargeMode, state.biochemicalOxygenDemand);
-  const trophic = calculateTrophicBalance(state.species, algae);
-  const ph = effectivePh(state.env, state.biochemicalOxygenDemand, state.sector, state.respiratoryDicUmolKg);
-
-  return {
-    id,
-    label,
-    savedAtDay: state.elapsedDays,
-    sector: state.sector,
-    sewageDischargeMode: state.sewageDischargeMode,
-    controls: { ...state.controls },
-    env: { ...state.env },
-    dissolvedOxygen: state.dissolvedOxygen,
-    biochemicalOxygenDemand: state.biochemicalOxygenDemand,
-    effectivePh: ph,
-    degreeHeatingWeeks: state.degreeHeatingWeeks,
-    algae,
-    trophicBalance: trophic,
-    health: { ...state.health },
-    overall: state.overall,
-    species: { ...state.species },
-    snapshotState: cloneSimulationState(state),
-  };
-}
 
 function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
@@ -162,7 +94,6 @@ interface UndoEntry {
 }
 
 export function App() {
-  // Abre diretamente no recife 3D da Baía de Todos-os-Santos (seleção de mapa permanece como opção secundária)
   const [screen, setScreen] = useState<AppScreen>('simulation');
   const [mapZooming, setMapZooming] = useState(false);
   const [mapReturning, setMapReturning] = useState(false);
@@ -175,70 +106,19 @@ export function App() {
 
   const [focusedFactor, setFocusedFactor] = useState<ItemId | null>(null);
 
-  // Menus suspensos (sobrepostos à cena, sem empurrar nem redimensionar o recife 3D)
+  const [regionOpen, setRegionOpen] = useState(false);
   const [envDrawerOpen, setEnvDrawerOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [evidenceTab, setEvidenceTab] = useState<EvidenceTab>('evolution');
 
-  // Indicadores contextuais customizados opcionalmente pelo usuário
-  const [pinnedIndicators, setPinnedIndicators] = useState<ContextualIndicatorId[] | null>(null);
-  const [indicatorPickerOpen, setIndicatorPickerOpen] = useState(false);
-
-  // Pilha de Desfazer, Cenários Guardados e Alternância Antes/Depois no mesmo enquadramento 3D
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const undoStackRef = useRef<UndoEntry[]>(undoStack);
   undoStackRef.current = undoStack;
   const pendingUndoBaseRef = useRef<UndoEntry | null>(null);
 
-  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
-  const savedScenariosRef = useRef<SavedScenario[]>(savedScenarios);
-  savedScenariosRef.current = savedScenarios;
-  const scenarioSeqRef = useRef(0);
-
-  // Saneamento automático de chaves duplicadas pré-existentes (ex.: estado preservado por HMR em StrictMode)
-  useEffect(() => {
-    const seen = new Set<string>();
-    let hasDuplicate = false;
-    for (const item of savedScenarios) {
-      if (seen.has(item.id)) {
-        hasDuplicate = true;
-        break;
-      }
-      seen.add(item.id);
-    }
-    if (hasDuplicate) {
-      const deduplicated: SavedScenario[] = [];
-      const kept = new Set<string>();
-      for (const item of savedScenarios) {
-        if (!kept.has(item.id)) {
-          kept.add(item.id);
-          deduplicated.push(item);
-        }
-      }
-      setSavedScenarios(deduplicated);
-    }
-  }, [savedScenarios]);
-  const [activeComparisonId, setActiveComparisonId] = useState<string>('reference');
-  const [isViewingComparisonIn3D, setIsViewingComparisonIn3D] = useState(false);
-
   const [criticalDays, setCriticalDays] = useState<number | null>(null);
 
   const oceanData = useOceanData(simulation.sector, screen === 'simulation');
-
-  const referenceScenario = useMemo(
-    () => buildScenarioSnapshot(createSectorBaselineState(simulation.sector), 'reference', 'Estado inicial (referência)'),
-    [simulation.sector],
-  );
-
-  const activeComparisonScenario = useMemo(() => {
-    if (activeComparisonId === 'reference') return referenceScenario;
-    return savedScenarios.find((s) => s.id === activeComparisonId) ?? referenceScenario;
-  }, [activeComparisonId, referenceScenario, savedScenarios]);
-
-  // Estado efetivamente enviado à cena 3D (permite alternar Antes/Depois preservando o mesmo enquadramento!)
-  const displayedSceneState = isViewingComparisonIn3D
-    ? activeComparisonScenario.snapshotState
-    : simulation;
 
   const sectorDef = useMemo(
     () => BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0],
@@ -253,7 +133,7 @@ export function App() {
     [simulation.controls, sectorDef.baselineTemperature],
   );
 
-  // Laço temporal determinístico a 10 Hz
+  // Laço temporal determinístico a 10 Hz (velocidade aplicada uma única vez em tickSimulation)
   useEffect(() => {
     let frame = 0;
     let previous = performance.now();
@@ -292,7 +172,7 @@ export function App() {
     };
   }, []);
 
-  // Recálculo assíncrono (debounce 260 ms) do tempo até o limiar crítico do modelo para manter arraste fluido
+  // Recálculo assíncrono (debounce 260 ms) do tempo até o limiar crítico do modelo
   useEffect(() => {
     if (activeFactorIds.length === 0 && simulation.biochemicalOxygenDemand < 0.05) {
       setCriticalDays(null);
@@ -320,7 +200,6 @@ export function App() {
     simulation.biochemicalOxygenDemand > 0.1,
   ]);
 
-  // Atalhos de teclado acessíveis (Espaço pausa/retoma fora de inputs; Esc fecha gavetas ou sai da comparação 3D)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -335,20 +214,17 @@ export function App() {
         e.preventDefault();
         setSimulation((curr) => ({ ...curr, paused: !curr.paused }));
       } else if (e.key === 'Escape') {
-        if (indicatorPickerOpen) setIndicatorPickerOpen(false);
-        else if (isViewingComparisonIn3D) setIsViewingComparisonIn3D(false);
+        if (regionOpen) setRegionOpen(false);
         else if (evidenceOpen) setEvidenceOpen(false);
         else if (envDrawerOpen) setEnvDrawerOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [screen, indicatorPickerOpen, isViewingComparisonIn3D, evidenceOpen, envDrawerOpen]);
+  }, [screen, regionOpen, evidenceOpen, envDrawerOpen]);
 
-  // Manipulação direta de parâmetros: atualiza alvos imediatamente sem botão "Aplicar Alterações"
   const handleAdjustFactor = useCallback((id: ItemId, value: number) => {
     setFocusedFactor(id);
-    setIsViewingComparisonIn3D(false);
 
     setSimulation((current) => {
       if (!pendingUndoBaseRef.current) {
@@ -385,7 +261,6 @@ export function App() {
     const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
     const defaultVal = id === 'temperature' ? sector.baselineTemperature : BASELINE[id];
 
-    setIsViewingComparisonIn3D(false);
     setUndoStack((prev) => [
       ...prev.slice(-24),
       { controls: { ...curr.controls }, sewageDischargeMode: curr.sewageDischargeMode },
@@ -413,14 +288,12 @@ export function App() {
       sewageDischargeMode: previousEntry.sewageDischargeMode,
       targets: buildTargets(previousEntry.controls, current.sector, previousEntry.sewageDischargeMode),
     }));
-    setIsViewingComparisonIn3D(false);
   }, []);
 
   const handleResetToInitial = useCallback(() => {
     pendingUndoBaseRef.current = null;
     setUndoStack([]);
     setFocusedFactor(null);
-    setIsViewingComparisonIn3D(false);
     setCriticalDays(null);
     setResetToken((t) => t + 1);
     setSimulation((curr) => createSectorBaselineState(curr.sector));
@@ -430,8 +303,6 @@ export function App() {
     pendingUndoBaseRef.current = null;
     setUndoStack([]);
     setFocusedFactor(null);
-    setIsViewingComparisonIn3D(false);
-    setActiveComparisonId('reference');
     setCriticalDays(null);
     setResetToken((t) => t + 1);
     setSimulation(createSectorBaselineState(nextSector));
@@ -439,7 +310,6 @@ export function App() {
 
   const handleSewageModeChange = useCallback((mode: 'continuous' | 'pulse') => {
     setFocusedFactor('sewage');
-    setIsViewingComparisonIn3D(false);
     setSimulation((curr) => ({
       ...curr,
       sewageDischargeMode: mode,
@@ -450,7 +320,6 @@ export function App() {
   const handleTriggerSewagePulse = useCallback((massKg: number) => {
     if (massKg <= 0) return;
     setFocusedFactor('sewage');
-    setIsViewingComparisonIn3D(false);
     setSimulation((curr) => {
       const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
       const deltaBod = convertBOD5ToPulseDeltaMgL(massKg, sector.mixingVolumeM3);
@@ -460,36 +329,6 @@ export function App() {
         paused: false,
       };
     });
-  }, []);
-
-  const handleSaveCurrentScenario = useCallback((customLabel?: string) => {
-    const curr = simulationRef.current;
-    const nextOrdinal = savedScenariosRef.current.length + 1;
-    const activeSummary = FACTOR_ORDER
-      .filter((id) => isFactorActive(id, curr.controls[id]))
-      .slice(0, 2)
-      .map((id) => {
-        const fmt = formatParameterValue(id, curr.controls[id], curr.sewageDischargeMode);
-        return `${ITEM_DEFINITIONS[id].shortLabel} ${fmt.value} ${fmt.unit}`;
-      })
-      .join(' + ');
-
-    const autoLabel = customLabel
-      || (activeSummary
-        ? `Cenário ${nextOrdinal}: ${activeSummary}`
-        : `Cenário ${nextOrdinal} (${formatSimulatedTime(curr.elapsedDays)})`);
-    scenarioSeqRef.current += 1;
-    const id = `saved-${Date.now()}-${scenarioSeqRef.current}`;
-    const snapshot = buildScenarioSnapshot(curr, id, autoLabel);
-
-    setSavedScenarios((prev) => (prev.some((s) => s.id === id) ? prev : [...prev, snapshot]));
-    setActiveComparisonId(id);
-  }, []);
-
-  const handleDeleteSavedScenario = useCallback((id: string) => {
-    setSavedScenarios((prev) => prev.filter((s) => s.id !== id));
-    setActiveComparisonId((currId) => (currId === id ? 'reference' : currId));
-    setIsViewingComparisonIn3D(false);
   }, []);
 
   const handleApplySatelliteTemperature = useCallback((sst: number) => {
@@ -503,212 +342,197 @@ export function App() {
     }));
   }, [handleAdjustFactor, oceanData.noaaStatus.state]);
 
-  // Cálculo de todos os indicadores contextuais disponíveis (fonte única, sem duplicação na tela)
   const indicatorViews = useMemo<Record<ContextualIndicatorId, ContextualIndicatorView>>(() => {
-    const state = displayedSceneState;
-    const algae = calculateAlgae(state.env, state.health, state.sewageDischargeMode, state.biochemicalOxygenDemand);
-    const trophic = calculateTrophicBalance(state.species, algae);
-    const ph = effectivePh(state.env, state.biochemicalOxygenDemand, state.sector, state.respiratoryDicUmolKg);
-    const sector = BTS_SECTORS.find((s) => s.id === state.sector) ?? BTS_SECTORS[0];
+    const algae = calculateAlgae(
+      simulation.env,
+      simulation.health,
+      simulation.sewageDischargeMode,
+      simulation.biochemicalOxygenDemand,
+    );
+    const trophic = calculateTrophicBalance(simulation.species, algae);
+    const ph = effectivePh(
+      simulation.env,
+      simulation.biochemicalOxygenDemand,
+      simulation.sector,
+      simulation.respiratoryDicUmolKg,
+    );
+    const sector = BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0];
     const carbonate = calculateRespirationPhImpact(
-      state.env.ph,
-      state.respiratoryDicUmolKg ?? 0,
+      simulation.env.ph,
+      simulation.respiratoryDicUmolKg ?? 0,
       2350 * (sector.baselineSalinity / 35.0),
-      state.env.temperature,
+      simulation.env.temperature,
       sector.baselineSalinity,
     ).carbonateSystem;
 
-    const doVal = state.dissolvedOxygen;
-    const doTone = doVal >= 5 ? 'healthy' : doVal >= 3 ? 'watch' : 'critical';
-    const doStatus = doVal >= 5 ? 'Adequado (≥ 5)' : doVal >= 2 ? 'Estresse / Hipóxia' : 'Hipóxia severa';
+    const doVal = simulation.dissolvedOxygen;
+    const doTone = doVal >= 5 ? 'good' : doVal >= 3 ? 'watch' : 'critical';
 
-    const tempVal = state.env.temperature;
-    const tempTone = tempVal >= 30 ? 'critical' : tempVal >= 29 ? 'watch' : 'healthy';
-    const tempStatus = tempVal >= 30 ? 'Acima de 30 °C' : tempVal >= 29 ? 'Acima do limiar (29 °C)' : 'Faixa de referência';
+    const tempVal = simulation.env.temperature;
+    const tempTone = tempVal >= 30 ? 'critical' : tempVal >= 29 ? 'watch' : 'good';
 
-    const dhwVal = state.degreeHeatingWeeks;
-    const dhwTone = dhwVal >= 8 ? 'critical' : dhwVal >= 4 ? 'watch' : dhwVal > 0.2 ? 'watch' : 'healthy';
-    const dhwStatus = dhwVal >= 8 ? 'Risco severo (≥ 8)' : dhwVal >= 4 ? 'Risco branq. (≥ 4)' : dhwVal > 0.1 ? 'Acumulando' : 'Sem acúmulo';
+    const dhwVal = simulation.degreeHeatingWeeks;
+    const dhwTone = dhwVal >= 8 ? 'critical' : dhwVal > 0.2 ? 'watch' : 'good';
 
-    const phTone = ph <= 7.8 ? 'critical' : ph < 8.0 ? 'watch' : 'healthy';
-    const phStatus = ph <= 7.8 ? 'Acidificação crítica' : ph < 8.0 ? 'Atenção (< 8,00)' : 'Referência';
+    const phTone = ph <= 7.8 ? 'critical' : ph < 8.0 ? 'watch' : 'good';
 
     const aragVal = carbonate.omegaAragonite;
-    const aragTone = aragVal < 2.0 ? 'critical' : aragVal < 3.0 ? 'watch' : 'healthy';
-    const aragStatus = aragVal >= 3.0 ? 'Favorável (≥ 3,0)' : aragVal >= 2.0 ? 'Marginal' : 'Sub-saturação';
+    const aragTone = aragVal < 2.0 ? 'critical' : aragVal < 3.0 ? 'watch' : 'good';
 
-    const coralVal = Math.round(state.health.coral);
-    const coralTone = coralVal >= 67 ? 'healthy' : coralVal >= 34 ? 'watch' : 'critical';
-    const coralStatus = coralVal >= 67 ? 'Estável' : coralVal >= 34 ? 'Em declínio' : 'Crítico (≤ 33)';
+    const coralVal = Math.max(0, Math.min(100, Math.round(simulation.health.coral)));
+    const coralTone = coralVal >= 67 ? 'good' : coralVal >= 34 ? 'watch' : 'critical';
 
-    const fishVal = Math.round(state.health.fish);
-    const fishTone = fishVal >= 67 ? 'healthy' : fishVal >= 34 ? 'watch' : 'critical';
-    const fishStatus = fishVal >= 67 ? 'Comunidade ativa' : fishVal >= 34 ? 'Sob pressão' : 'Crítico (≤ 33)';
+    const fishVal = Math.max(0, Math.min(100, Math.round(simulation.health.fish)));
+    const fishTone = fishVal >= 67 ? 'good' : fishVal >= 34 ? 'watch' : 'critical';
 
-    const algaeVal = Math.round(algae);
-    const algaeTone = algaeVal <= 33 ? 'healthy' : algaeVal <= 62 ? 'watch' : 'critical';
-    const algaeStatus = algaeVal <= 33 ? 'Controlada' : algaeVal <= 62 ? 'Em expansão' : 'Dominante';
+    const algaeVal = Math.max(0, Math.min(100, Math.round(algae)));
+    const algaeTone = algaeVal <= 33 ? 'good' : algaeVal <= 62 ? 'watch' : 'critical';
 
-    const trophicVal = Math.round(trophic);
-    const trophicTone = trophicVal >= 67 ? 'healthy' : trophicVal >= 45 ? 'watch' : 'critical';
-    const trophicStatus = trophicVal >= 67 ? 'Equilibrado' : trophicVal >= 45 ? 'Alterado' : 'Desequilibrado';
+    const trophicVal = Math.max(0, Math.min(100, Math.round(trophic)));
+    const trophicTone = trophicVal >= 67 ? 'good' : trophicVal >= 45 ? 'watch' : 'critical';
 
     return {
       oxygen: {
         id: 'oxygen',
-        label: 'Oxigênio dissolvido',
+        label: 'Oxigênio',
         valueText: doVal.toFixed(1).replace('.', ','),
         unitText: 'mg/L',
-        statusText: doStatus,
         tone: doTone,
-        originLabel: 'Simulação',
-        tooltip: 'Concentração de O₂ calculada pelo balanço acoplado Weiss (1970) + DBO + reaeração (CONAMA 357).',
+        tooltip: 'Oxigênio dissolvido na água.',
       },
       temperature: {
         id: 'temperature',
         label: 'Temperatura',
         valueText: tempVal.toFixed(1).replace('.', ','),
         unitText: '°C',
-        statusText: tempStatus,
         tone: tempTone,
-        originLabel: simulation.initialConditionSource === 'NOAA_CRW_LIVE' ? 'Entrada NOAA → Modelo' : 'Simulação',
-        tooltip: 'Temperatura atual da camada de mistura no compartimento simulado.',
+        tooltip: 'Temperatura da água.',
       },
       thermalStress: {
         id: 'thermalStress',
-        label: 'Estresse térmico (modelo)',
+        label: 'Estresse térmico',
         valueText: dhwVal.toFixed(1).replace('.', ','),
-        unitText: '°C-sem.',
-        statusText: dhwStatus,
+        unitText: '°C-semanas',
         tone: dhwTone,
-        originLabel: 'Simulação',
-        tooltip: 'Calor acumulado em 84 dias usando a MMM didática fixa de 28,0 °C (distinto do DHW satelital oficial da NOAA).',
+        tooltip: 'Calor acumulado no cenário.',
       },
       ph: {
         id: 'ph',
-        label: 'pH efetivo',
+        label: 'pH',
         valueText: ph.toFixed(2).replace('.', ','),
-        unitText: 'pH',
-        statusText: phStatus,
         tone: phTone,
-        originLabel: 'Simulação',
-        tooltip: 'pH resultante na escala total, incluindo o CO₂ liberado pela respiração bacteriana da DBO.',
+        tooltip: 'Acidez da água.',
       },
       aragonite: {
         id: 'aragonite',
-        label: 'Saturação aragonita',
+        label: 'Aragonita',
         valueText: aragVal.toFixed(2).replace('.', ','),
         unitText: 'Ωarag',
-        statusText: aragStatus,
         tone: aragTone,
-        originLabel: 'Simulação',
-        tooltip: 'Estado termodinâmico de saturação de carbonato de cálcio (Lueker et al., 2000; Mucci, 1983).',
+        tooltip: 'Saturação de aragonita na água.',
       },
       coral: {
         id: 'coral',
-        label: 'Corais (índice)',
-        valueText: `${coralVal}`,
-        unitText: '/100',
-        statusText: coralStatus,
+        label: 'Corais',
+        valueText: `${coralVal}%`,
+        progressPercent: coralVal,
         tone: coralTone,
-        originLabel: 'Simulação',
-        tooltip: 'Índice relativo do modelo para a vitalidade dos corais construtores (não é medição de cobertura em campo).',
+        tooltip: 'Saúde dos corais no modelo.',
       },
       fish: {
         id: 'fish',
-        label: 'Fauna (índice)',
-        valueText: `${fishVal}`,
-        unitText: '/100',
-        statusText: fishStatus,
+        label: 'Peixes',
+        valueText: `${fishVal}%`,
+        progressPercent: fishVal,
         tone: fishTone,
-        originLabel: 'Simulação',
-        tooltip: 'Média relativa dos três grupos funcionais de peixes recifais no modelo.',
+        tooltip: 'Saúde dos peixes no modelo.',
       },
       algae: {
         id: 'algae',
-        label: 'Pressão de algas',
-        valueText: `${algaeVal}`,
-        unitText: '/100',
-        statusText: algaeStatus,
+        label: 'Algas',
+        valueText: `${algaeVal}%`,
+        progressPercent: algaeVal,
         tone: algaeTone,
-        originLabel: 'Simulação',
-        tooltip: 'Índice relativo de crescimento de macroalgas em função de nutrientes, espaço e perda de herbívoros.',
+        tooltip: 'Cobertura de algas no modelo.',
       },
       trophic: {
         id: 'trophic',
         label: 'Equilíbrio trófico',
-        valueText: `${trophicVal}`,
-        unitText: '/100',
-        statusText: trophicStatus,
+        valueText: `${trophicVal}%`,
+        progressPercent: trophicVal,
         tone: trophicTone,
-        originLabel: 'Simulação',
-        tooltip: 'Relação calculada entre herbivoria ativa (peixe-papagaio e cirurgião) e cobertura de algas.',
+        tooltip: 'Equilíbrio alimentar no modelo.',
       },
     };
-  }, [displayedSceneState, simulation.initialConditionSource]);
+  }, [simulation]);
 
-  // Seleção automática dos 3 indicadores pertinentes à variável investigada (ou os escolhidos manualmente)
   const visibleIndicatorIds = useMemo<readonly ContextualIndicatorId[]>(() => {
-    if (pinnedIndicators && pinnedIndicators.length > 0) {
-      return pinnedIndicators;
-    }
     const driverFactor = focusedFactor && isFactorActive(focusedFactor, simulation.controls[focusedFactor])
       ? focusedFactor
       : (activeFactorIds[activeFactorIds.length - 1] ?? focusedFactor);
     if (driverFactor) {
-      return ITEM_DEFINITIONS[driverFactor].primaryIndicators;
+      return ITEM_DEFINITIONS[driverFactor].primaryIndicators.slice(0, 3);
     }
-    return ['oxygen', 'coral', 'fish'];
-  }, [pinnedIndicators, focusedFactor, simulation.controls, activeFactorIds]);
+    return ['coral', 'fish', 'oxygen'];
+  }, [focusedFactor, simulation.controls, activeFactorIds]);
 
-  const activeCausalFactor = useMemo<ItemId | null>(() => {
-    if (focusedFactor && activeFactorIds.includes(focusedFactor)) return focusedFactor;
-    return activeFactorIds[activeFactorIds.length - 1] ?? null;
-  }, [focusedFactor, activeFactorIds]);
-
-  const oilContextConcentration = useMemo(() => {
-    const mass = Math.max(displayedSceneState.controls.oil, displayedSceneState.env.oil);
-    if (mass <= 0) return null;
-    const budget = calculateOilFateBudget(mass, displayedSceneState.sector, Math.max(0.5, displayedSceneState.elapsedDays));
-    return budget.dissolvedPahConcentrationUgL;
-  }, [displayedSceneState.controls.oil, displayedSceneState.env.oil, displayedSceneState.sector, displayedSceneState.elapsedDays]);
-
-  const togglePinnedIndicator = (id: ContextualIndicatorId) => {
-    setPinnedIndicators((prev) => {
-      const current = prev ?? [...visibleIndicatorIds];
-      if (current.includes(id)) {
-        if (current.length <= 1) return current;
-        return current.filter((item) => item !== id);
+  const toggleEnvDrawer = () => {
+    setEnvDrawerOpen((open) => {
+      const next = !open;
+      if (next) {
+        setEvidenceOpen(false);
+        setRegionOpen(false);
       }
-      if (current.length >= 4) {
-        return [...current.slice(1), id];
-      }
-      return [...current, id];
+      return next;
     });
   };
 
-  // Transições secundárias para o Mapa do Brasil (opcional)
+  const toggleEvidenceDrawer = () => {
+    setEvidenceOpen((open) => {
+      const next = !open;
+      if (next) {
+        setEnvDrawerOpen(false);
+        setRegionOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const openIndicatorDetails = () => {
+    setEnvDrawerOpen(false);
+    setRegionOpen(false);
+    setEvidenceOpen(true);
+    setEvidenceTab('evolution');
+  };
+
+  const closeAllOverlays = () => {
+    setRegionOpen(false);
+    setEnvDrawerOpen(false);
+    setEvidenceOpen(false);
+  };
+
   const handleSelectBahiaFromMap = () => {
     if (mapZooming) return;
     setMapZooming(true);
-    window.setTimeout(() => setTransitionDark(true), 30);
+    setTransitionDark(true);
     window.setTimeout(() => {
       setScreen('simulation');
       setMapZooming(false);
-      window.setTimeout(() => setTransitionDark(false), 200);
-    }, 900);
+      window.setTimeout(() => setTransitionDark(false), 160);
+    }, 220);
   };
 
   const handleOpenMap = () => {
+    closeAllOverlays();
     setTransitionDark(true);
     window.setTimeout(() => {
       setScreen('map');
       setMapReturning(true);
       window.setTimeout(() => {
         setTransitionDark(false);
-        window.setTimeout(() => setMapReturning(false), 700);
-      }, 100);
-    }, 260);
+        window.setTimeout(() => setMapReturning(false), 240);
+      }, 60);
+    }, 180);
   };
 
   if (screen === 'map') {
@@ -720,94 +544,58 @@ export function App() {
           isReturning={mapReturning}
         />
         <div
-          className={`screen-transition-veil ${transitionDark ? 'active' : ''} ${mapZooming ? 'cinematic-dive' : ''}`}
+          className={`screen-transition-veil ${transitionDark ? 'active' : ''}`}
           aria-hidden="true"
         />
       </>
     );
   }
 
+  const anyOverlayOpen = regionOpen || envDrawerOpen || evidenceOpen;
+
   return (
     <div className="lab-shell">
-      {/* BARRA SUPERIOR UNIFICADA: Localização + Tempo/Execução + Ações de Experimento */}
       <header className="lab-topbar">
-        <div className="lab-topbar-brand">
-          <div className="brand-compact-wrap">
-            <BrandLogo />
-          </div>
+        <div className="lab-topbar-left">
+          <RegionSelector
+            sectors={BTS_SECTORS}
+            selectedSectorId={simulation.sector}
+            open={regionOpen}
+            onOpenChange={(next) => {
+              setRegionOpen(next);
+              if (next) {
+                setEnvDrawerOpen(false);
+                setEvidenceOpen(false);
+              }
+            }}
+            onSelectSector={handleChangeSector}
+          />
 
-          <div className="location-cluster">
-            <label htmlFor="bts-sector-select" className="sr-only">
-              Compartimento da Baía de Todos-os-Santos
-            </label>
-            <select
-              id="bts-sector-select"
-              className="sector-select"
-              value={simulation.sector}
-              onChange={(e) => handleChangeSector(e.target.value as BtsSectorId)}
-              title={sectorDef.description}
-            >
-              {BTS_SECTORS.map((sec) => (
-                <option key={sec.id} value={sec.id}>
-                  BTS · {sec.label}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              className="topbar-ghost-btn"
-              onClick={handleOpenMap}
-              title="Ver localização geográfica no mapa do Brasil"
-            >
-              <Icon name="location" />
-              <span className="hide-narrow">Mapa</span>
-            </button>
-          </div>
-        </div>
-
-        {/* CONTROLES UNIFICADOS DE TEMPO E EXECUÇÃO */}
-        <div className="time-execution-bar" role="group" aria-label="Tempo e execução da simulação">
           <button
             type="button"
-            className={`play-pause-btn ${simulation.paused ? 'is-paused' : 'is-running'}`}
-            aria-pressed={simulation.paused}
-            onClick={() => setSimulation((curr) => ({ ...curr, paused: !curr.paused }))}
-            title="Iniciar ou pausar a evolução temporal (atalho: barra de espaço)"
+            className="btn map-return-btn"
+            onClick={handleOpenMap}
+            aria-label="Voltar ao mapa do Brasil"
+            title="Voltar ao mapa"
           >
-            <Icon name={simulation.paused ? 'play' : 'pause'} />
-            <span>{simulation.paused ? 'Iniciar' : 'Pausar'}</span>
+            <Icon name="map" />
+            <span className="map-return-btn__desktop">Voltar ao mapa</span>
+            <span className="map-return-btn__mobile">Mapa</span>
           </button>
-
-          <div className="sim-clock-readout" title="Tempo decorrido no cenário simulado (1x = 1 dia a cada 4 segundos)">
-            <small>Tempo</small>
-            <strong>{formatSimulatedTime(displayedSceneState.elapsedDays)}</strong>
-          </div>
-
-          <div className="speed-pills" role="group" aria-label="Velocidade do tempo simulado">
-            {SIMULATION_SPEEDS.map((spd: SimulationSpeed) => (
-              <button
-                key={spd}
-                type="button"
-                className={simulation.speed === spd ? 'active' : ''}
-                aria-pressed={simulation.speed === spd}
-                onClick={() => setSimulation((curr) => ({ ...curr, speed: spd }))}
-                title={`Velocidade ${spd}x`}
-              >
-                {spd}×
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* COMANDOS DE EXPERIMENTO EM SALA E GAVETAS */}
+        <div className="lab-topbar-center">
+          <BrandLogo />
+        </div>
+
         <div className="experiment-actions-bar">
           <button
             type="button"
-            className="topbar-action-btn"
+            className="btn btn--quiet"
             disabled={undoStack.length === 0}
             onClick={handleUndo}
-            title="Desfazer última alteração de parâmetro"
+            aria-label="Desfazer alteração"
+            title="Desfazer alteração"
           >
             <Icon name="undo" />
             <span className="hide-tablet">Desfazer</span>
@@ -815,9 +603,10 @@ export function App() {
 
           <button
             type="button"
-            className="topbar-action-btn"
+            className="btn btn--quiet"
             onClick={handleResetToInitial}
-            title="Retornar todo o ecossistema ao estado inicial de referência"
+            aria-label="Restaurar estado inicial"
+            title="Restaurar estado inicial"
           >
             <Icon name="reset" />
             <span className="hide-tablet">Estado inicial</span>
@@ -825,92 +614,43 @@ export function App() {
 
           <button
             type="button"
-            className="topbar-action-btn"
-            onClick={() => {
-              handleSaveCurrentScenario();
-              setEnvDrawerOpen(false);
-              setIndicatorPickerOpen(false);
-              setEvidenceOpen(true);
-              setEvidenceTab('compare');
-            }}
-            title="Guardar combinação atual para comparar dois experimentos"
-          >
-            <Icon name="bookmark" />
-            <span className="hide-laptop">Guardar</span>
-          </button>
-
-          <button
-            type="button"
-            className={`topbar-action-btn ${isViewingComparisonIn3D ? 'is-comparing' : ''}`}
-            disabled={activeFactorIds.length === 0 && simulation.elapsedDays < 0.5 && savedScenarios.length === 0}
-            onClick={() => setIsViewingComparisonIn3D((v) => !v)}
-            title={`Alternar entre "${activeComparisonScenario.label}" e o cenário atual no mesmo enquadramento 3D`}
-          >
-            <Icon name="compare" />
-            <span className="hide-tablet">{isViewingComparisonIn3D ? 'Vendo referência' : 'Comparar'}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`topbar-drawer-btn ${envDrawerOpen ? 'active' : ''}`}
+            className={`btn ${envDrawerOpen ? 'btn--selected' : ''}`}
             aria-haspopup="dialog"
             aria-expanded={envDrawerOpen}
-            onClick={() => {
-              setEnvDrawerOpen((open) => {
-                const next = !open;
-                if (next) {
-                  setEvidenceOpen(false);
-                  setIndicatorPickerOpen(false);
-                }
-                return next;
-              });
-            }}
+            aria-pressed={envDrawerOpen}
+            title="Ajustar condições ambientais"
+            onClick={toggleEnvDrawer}
           >
             <Icon name="sliders" />
             <span>Ajustar</span>
             {activeFactorIds.length > 0 && (
               <em className="drawer-count-badge">{activeFactorIds.length}</em>
             )}
-            <Icon name="chevronDown" className="menu-caret" />
           </button>
 
           <button
             type="button"
-            className={`topbar-drawer-btn ${evidenceOpen ? 'active' : ''}`}
+            className={`btn ${evidenceOpen ? 'btn--selected' : ''}`}
             aria-haspopup="dialog"
             aria-expanded={evidenceOpen}
-            onClick={() => {
-              setEvidenceOpen((open) => {
-                const next = !open;
-                if (next) {
-                  setEnvDrawerOpen(false);
-                  setIndicatorPickerOpen(false);
-                }
-                return next;
-              });
-            }}
+            aria-pressed={evidenceOpen}
+            title="Ver gráficos e dados"
+            onClick={toggleEvidenceDrawer}
           >
             <Icon name="chart" />
-            <span>Evidências</span>
-            {savedScenarios.length > 0 && (
-              <em className="drawer-count-badge">{savedScenarios.length}</em>
-            )}
-            <Icon name="chevronDown" className="menu-caret" />
+            <span>Dados</span>
           </button>
         </div>
       </header>
 
-      {/* ÁREA DE TRABALHO PRINCIPAL: RECIFE 3D EM TELA CHEIA (100%) + MENUS SUSPENSOS */}
-      <main className="lab-workspace">
+      <main className={`lab-workspace ${envDrawerOpen || evidenceOpen ? 'has-drawer-open' : ''}`}>
         <section className="reef-stage" aria-label="Recife 3D da Baía de Todos-os-Santos">
           <div
             className="reef-canvas-frame"
             onPointerDown={(e) => {
               const tag = (e.target as HTMLElement | null)?.tagName;
               if (tag === 'CANVAS') {
-                if (indicatorPickerOpen) setIndicatorPickerOpen(false);
-                if (envDrawerOpen) setEnvDrawerOpen(false);
-                if (evidenceOpen) setEvidenceOpen(false);
+                closeAllOverlays();
               }
             }}
           >
@@ -922,173 +662,135 @@ export function App() {
                 </div>
               }
             >
-              <MarineScene state={displayedSceneState} resetToken={resetToken} />
+              <MarineScene state={simulation} resetToken={resetToken} />
             </Suspense>
 
-            {/* Banner explícito quando estiver comparando o estado de referência/cenário salvo no 3D */}
-            {isViewingComparisonIn3D && (
-              <div className="comparison-3d-banner" role="status">
-                <div>
-                  <strong>Comparação Antes / Depois ativa:</strong> exibindo{' '}
-                  <em>{activeComparisonScenario.label}</em> ({formatSimulatedTime(activeComparisonScenario.savedAtDay)}) no mesmo enquadramento.
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsViewingComparisonIn3D(false)}
-                >
-                  Voltar ao cenário atual
-                </button>
-              </div>
-            )}
-
-            {/* FAIXA SUPERIOR DISCRETA: APENAS 2–3 INDICADORES PERTINENTES AO CENÁRIO + MENU SUSPENSO INDICADORES */}
-            <div className="contextual-telemetry-bar" aria-label="Indicadores pertinentes à investigação">
+            <div className="contextual-telemetry-bar" aria-label="Indicadores do ecossistema">
               <div className="telemetry-pills">
                 {visibleIndicatorIds.map((indId) => {
                   const view = indicatorViews[indId];
+                  if (view.progressPercent !== undefined) {
+                    return (
+                      <IndicatorProgress
+                        key={view.id}
+                        label={view.label}
+                        value={view.progressPercent}
+                        tone={view.tone}
+                        tooltip={view.tooltip}
+                        onClick={openIndicatorDetails}
+                      />
+                    );
+                  }
                   return (
                     <button
                       key={view.id}
                       type="button"
-                      className={`telemetry-pill tone-${view.tone}`}
-                      title={`${view.tooltip} (Clique para abrir gráficos e método em Evidências)`}
-                      onClick={() => {
-                        setEnvDrawerOpen(false);
-                        setIndicatorPickerOpen(false);
-                        setEvidenceOpen(true);
-                        setEvidenceTab('evolution');
-                      }}
+                      className={`indicator-metric tone-${view.tone}`}
+                      title={view.tooltip}
+                      aria-label={`${view.label}: ${view.valueText}${view.unitText ? ` ${view.unitText}` : ''}. Abrir detalhes`}
+                      onClick={openIndicatorDetails}
                     >
-                      <div className="telemetry-pill-head">
-                        <span className="telemetry-label">{view.label}</span>
-                        <span className="telemetry-origin">{view.originLabel}</span>
-                      </div>
-                      <div className="telemetry-pill-main">
-                        <strong>{view.valueText}</strong>
-                        <span className="telemetry-unit">{view.unitText}</span>
-                        <span className={`telemetry-status-text tone-${view.tone}`}>{view.statusText}</span>
-                      </div>
+                      <span className="indicator-metric__label">{view.label}</span>
+                      <span className="indicator-metric__reading">
+                        <strong className="indicator-metric__value">{view.valueText}</strong>
+                        {view.unitText && (
+                          <span className="indicator-metric__unit">{view.unitText}</span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
-
-                {oilContextConcentration !== null && focusedFactor === 'oil' && (
-                  <button
-                    type="button"
-                    className={`telemetry-pill tone-${oilContextConcentration >= 10 ? 'critical' : oilContextConcentration >= 3 ? 'watch' : 'healthy'}`}
-                    onClick={() => {
-                      setEnvDrawerOpen(false);
-                      setIndicatorPickerOpen(false);
-                      setEvidenceOpen(true);
-                      setEvidenceTab('evolution');
-                    }}
-                    title="Fração dissolvida biodisponível de hidrocarbonetos policíclicos aromáticos (modelo de 4 caixas)"
-                  >
-                    <div className="telemetry-pill-head">
-                      <span className="telemetry-label">HPA dissolvido (tPAH50)</span>
-                      <span className="telemetry-origin">Simulação</span>
-                    </div>
-                    <div className="telemetry-pill-main">
-                      <strong>{oilContextConcentration.toFixed(2).replace('.', ',')}</strong>
-                      <span className="telemetry-unit">µg/L</span>
-                      <span className="telemetry-status-text">
-                        {oilContextConcentration >= 10 ? 'Acima de EC50' : 'Subletal'}
-                      </span>
-                    </div>
-                  </button>
-                )}
-
-                {criticalDays !== null && !isViewingComparisonIn3D && (
-                  <div
-                    className="critical-threshold-pill"
-                    title="Convenção didática interna (índice global ≤ 33/100). Não representa previsão de extinção de populações naturais."
-                  >
-                    <small>Tempo estimado até o limiar crítico do modelo</small>
-                    <strong>~{formatSimulatedTime(criticalDays)}</strong>
-                  </div>
-                )}
-
-                <div className="telemetry-customize-wrap">
-                  <button
-                    type="button"
-                    className={`telemetry-picker-btn ${indicatorPickerOpen ? 'active' : ''}`}
-                    aria-haspopup="dialog"
-                    aria-expanded={indicatorPickerOpen}
-                    onClick={() => {
-                      setIndicatorPickerOpen((v) => {
-                        const next = !v;
-                        if (next) {
-                          setEnvDrawerOpen(false);
-                          setEvidenceOpen(false);
-                        }
-                        return next;
-                      });
-                    }}
-                    title="Escolher quais indicadores acompanhar na cena"
-                  >
-                    <span>Indicadores</span>
-                    <Icon name="chevronDown" className="menu-caret" />
-                  </button>
-
-                  {indicatorPickerOpen && (
-                    <div className="telemetry-picker-popover" role="dialog" aria-label="Escolher indicadores visíveis">
-                      <div className="picker-popover-head">
-                        <strong>Acompanhar na tela (até 4)</strong>
-                        {pinnedIndicators && (
-                          <button
-                            type="button"
-                            className="picker-auto-btn"
-                            onClick={() => setPinnedIndicators(null)}
-                          >
-                            Automático por variável
-                          </button>
-                        )}
-                      </div>
-                      <div className="picker-options">
-                        {ALL_CONTEXTUAL_INDICATOR_IDS.map((id) => {
-                          const checked = visibleIndicatorIds.includes(id);
-                          return (
-                            <label key={id} className="picker-option-row">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => togglePinnedIndicator(id)}
-                              />
-                              <span>{INDICATOR_SHORT_NAMES[id]}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
-
-            {/* RODAPÉ CONTEXTUAL DISCRETO: RELAÇÃO CAUSAL DO MODELO */}
-            {activeCausalFactor && !isViewingComparisonIn3D && (
-              <div className="causal-chain-strip" aria-live="polite">
-                <span className="causal-kicker">Mecanismo no modelo:</span>
-                <span className="causal-text">{ITEM_DEFINITIONS[activeCausalFactor].causalChain}</span>
-                {activeFactorIds.length > 1 && (
-                  <span
-                    className="multi-var-tag"
-                    title="Para isolar a causa de uma mudança, altere uma variável por vez ou compare cenários"
-                  >
-                    {activeFactorIds.length} variáveis alteradas
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         </section>
 
-        {/* MENU SUSPENSO: AJUSTAR AMBIENTE (SOBREPOSTO, SEM EMPURRAR A CENA 3D) */}
+        <div className="time-execution-bar" role="group" aria-label="Tempo e execução da simulação">
+          <button
+            type="button"
+            className={`btn play-pause-btn ${simulation.paused ? 'btn--primary' : ''}`}
+            aria-pressed={!simulation.paused}
+            aria-label={simulation.paused ? 'Iniciar simulação' : 'Pausar simulação'}
+            onClick={() => setSimulation((curr) => ({ ...curr, paused: !curr.paused }))}
+            title={simulation.paused ? 'Iniciar simulação' : 'Pausar simulação'}
+          >
+            <Icon name={simulation.paused ? 'play' : 'pause'} />
+            <span>{simulation.paused ? 'Iniciar' : 'Pausar'}</span>
+          </button>
+
+          <div className="sim-clock-readout" title="Tempo simulado">
+            <strong>{formatSimulatedTime(simulation.elapsedDays)}</strong>
+          </div>
+
+          <div
+            className="speed-pills"
+            role="group"
+            aria-label="Velocidade da simulação"
+            title="Velocidade da simulação"
+          >
+            {SIMULATION_SPEEDS.map((spd: SimulationSpeed) => (
+              <button
+                key={spd}
+                type="button"
+                className={simulation.speed === spd ? 'active' : ''}
+                aria-pressed={simulation.speed === spd}
+                onClick={() => setSimulation((curr) => ({ ...curr, speed: spd }))}
+                title="Velocidade da simulação"
+              >
+                {spd}×
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mobile-panel-dock" role="toolbar" aria-label="Painéis do laboratório">
+          <button
+            type="button"
+            className={`btn ${envDrawerOpen ? 'btn--selected' : ''}`}
+            aria-haspopup="dialog"
+            aria-expanded={envDrawerOpen}
+            aria-pressed={envDrawerOpen}
+            title="Ajustar condições ambientais"
+            onClick={toggleEnvDrawer}
+          >
+            <Icon name="sliders" />
+            <span>Ajustar</span>
+            {activeFactorIds.length > 0 && (
+              <em className="drawer-count-badge">{activeFactorIds.length}</em>
+            )}
+          </button>
+
+          <button
+            type="button"
+            className={`btn ${evidenceOpen ? 'btn--selected' : ''}`}
+            aria-haspopup="dialog"
+            aria-expanded={evidenceOpen}
+            aria-pressed={evidenceOpen}
+            title="Ver gráficos e dados"
+            onClick={toggleEvidenceDrawer}
+          >
+            <Icon name="chart" />
+            <span>Dados</span>
+          </button>
+        </div>
+
+        {anyOverlayOpen && (
+          <button
+            type="button"
+            className="drawer-scrim"
+            aria-label="Fechar painel aberto"
+            onClick={closeAllOverlays}
+          />
+        )}
+
         <EnvironmentDrawer
           open={envDrawerOpen}
           onClose={() => setEnvDrawerOpen(false)}
           simulation={simulation}
           focusedFactor={focusedFactor}
+          canUndo={undoStack.length > 0}
+          onUndo={handleUndo}
+          onResetToInitial={handleResetToInitial}
           onAdjustFactor={handleAdjustFactor}
           onCommitFactor={handleCommitFactor}
           onResetSingleFactor={handleResetSingleFactor}
@@ -1096,7 +798,6 @@ export function App() {
           onTriggerSewagePulse={handleTriggerSewagePulse}
         />
 
-        {/* MENU SUSPENSO: EVIDÊNCIAS, GRÁFICOS, COMPARAÇÃO E ORIGEM DOS DADOS */}
         <EvidenceDrawer
           open={evidenceOpen}
           tab={evidenceTab}
@@ -1104,14 +805,7 @@ export function App() {
           onClose={() => setEvidenceOpen(false)}
           simulation={simulation}
           oceanData={oceanData}
-          referenceScenario={referenceScenario}
-          savedScenarios={savedScenarios}
-          activeComparisonId={activeComparisonId}
-          onSelectComparisonId={setActiveComparisonId}
-          isViewingComparisonIn3D={isViewingComparisonIn3D}
-          onToggleViewComparisonIn3D={() => setIsViewingComparisonIn3D((v) => !v)}
-          onSaveCurrentScenario={handleSaveCurrentScenario}
-          onDeleteSavedScenario={handleDeleteSavedScenario}
+          criticalDays={criticalDays}
           onApplySatelliteTemperature={handleApplySatelliteTemperature}
         />
       </main>

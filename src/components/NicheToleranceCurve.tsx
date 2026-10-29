@@ -54,7 +54,7 @@ export function NicheToleranceCurve({
       ? `Estresse Fisiológico (${primaryStressor})`
       : `Colapso Agudo / Limiar Letal`;
 
-  const markerColor = zone === 'conforto' ? '#00e5ff' : zone === 'estresse' ? '#ffd052' : '#ff5a5a';
+  const markerColor = zone === 'conforto' ? '#86C49A' : zone === 'estresse' ? '#D7BD80' : '#D7867D';
 
   return (
     <div className="niche-curve-container" title={`${speciesLabel}: ${zoneText} (sensibilidade x${sensitivityMultiplier.toFixed(2)})`}>
@@ -72,9 +72,9 @@ export function NicheToleranceCurve({
       >
         <defs>
           <linearGradient id="niche-gradient" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#00e5ff" stopOpacity="0.45" />
-            <stop offset="45%" stopColor="#ffd052" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#ff5a5a" stopOpacity="0.45" />
+            <stop offset="0%" stopColor="#86C49A" stopOpacity="0.45" />
+            <stop offset="45%" stopColor="#D7BD80" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#D7867D" stopOpacity="0.45" />
           </linearGradient>
         </defs>
 
@@ -82,7 +82,7 @@ export function NicheToleranceCurve({
         <path
           d={pathD}
           fill="none"
-          stroke="rgba(88, 192, 232, 0.65)"
+          stroke="rgba(242, 244, 238, 0.55)"
           strokeWidth="1.5"
           strokeLinecap="round"
         />
