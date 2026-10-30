@@ -271,27 +271,65 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [screen, regionOpen, evidenceOpen, envDrawerOpen]);
 
-  const handleAdjustFactor = useCallback((id: ItemId, value: number) => {
-    setFocusedFactor(id);
+  const pendingAdjustRef = useRef<{ id: ItemId; value: number } | null>(null);
+  const adjustRafRef = useRef<number | null>(null);
 
-    setSimulation((current) => {
-      if (!pendingUndoBaseRef.current) {
-        pendingUndoBaseRef.current = {
-          controls: { ...current.controls },
-          sewageDischargeMode: current.sewageDischargeMode,
-        };
+  useEffect(() => {
+    return () => {
+      if (adjustRafRef.current !== null) {
+        cancelAnimationFrame(adjustRafRef.current);
       }
-      const nextControls: Environment = { ...current.controls, [id]: value };
-      const nextTargets = buildTargets(nextControls, current.sector, current.sewageDischargeMode);
-      return {
-        ...current,
-        controls: nextControls,
-        targets: nextTargets,
-      };
-    });
+    };
+  }, []);
+
+  const handleAdjustFactor = useCallback((id: ItemId, value: number) => {
+    setFocusedFactor((prev) => (prev === id ? prev : id));
+    pendingAdjustRef.current = { id, value };
+
+    if (adjustRafRef.current === null) {
+      adjustRafRef.current = requestAnimationFrame(() => {
+        adjustRafRef.current = null;
+        const pending = pendingAdjustRef.current;
+        if (!pending) return;
+
+        setSimulation((current) => {
+          if (!pendingUndoBaseRef.current) {
+            pendingUndoBaseRef.current = {
+              controls: { ...current.controls },
+              sewageDischargeMode: current.sewageDischargeMode,
+            };
+          }
+          const nextControls: Environment = { ...current.controls, [pending.id]: pending.value };
+          const nextTargets = buildTargets(nextControls, current.sector, current.sewageDischargeMode);
+          return {
+            ...current,
+            controls: nextControls,
+            targets: nextTargets,
+          };
+        });
+      });
+    }
   }, []);
 
   const handleCommitFactor = useCallback((_id: ItemId) => {
+    if (adjustRafRef.current !== null) {
+      cancelAnimationFrame(adjustRafRef.current);
+      adjustRafRef.current = null;
+    }
+    const pending = pendingAdjustRef.current;
+    if (pending) {
+      pendingAdjustRef.current = null;
+      setSimulation((current) => {
+        const nextControls: Environment = { ...current.controls, [pending.id]: pending.value };
+        const nextTargets = buildTargets(nextControls, current.sector, current.sewageDischargeMode);
+        return {
+          ...current,
+          controls: nextControls,
+          targets: nextTargets,
+        };
+      });
+    }
+
     const base = pendingUndoBaseRef.current;
     if (!base) return;
     pendingUndoBaseRef.current = null;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Icon, type IconName } from './Icons';
 import {
   BTS_SECTORS,
@@ -135,7 +135,178 @@ interface EnvironmentDrawerProps {
   timelineMilestones?: ImpactMilestone[];
 }
 
-export function EnvironmentDrawer({
+interface FactorRowProps {
+  id: ItemId;
+  controlVal: number;
+  envVal: number;
+  targetVal: number;
+  sewageMode: 'continuous' | 'pulse';
+  focused: boolean;
+  onAdjustFactor: (id: ItemId, value: number) => void;
+  onCommitFactor: (id: ItemId) => void;
+  onResetSingleFactor: (id: ItemId) => void;
+  onSewageModeChange: (mode: 'continuous' | 'pulse') => void;
+  onTriggerSewagePulse: (massKg: number) => void;
+}
+
+const FactorRow = memo(function FactorRow({
+  id,
+  controlVal,
+  envVal,
+  targetVal,
+  sewageMode,
+  focused,
+  onAdjustFactor,
+  onCommitFactor,
+  onResetSingleFactor,
+  onSewageModeChange,
+  onTriggerSewagePulse,
+}: FactorRowProps) {
+  const item = ITEM_DEFINITIONS[id];
+  const active = isFactorActive(id, controlVal);
+  const scaleOptions = item.scaleOptions;
+
+  const displayedTarget = formatParameterValue(id, controlVal, sewageMode);
+  const displayedCurrent = formatParameterValue(id, envVal, sewageMode);
+  const riskTone = getFactorRiskTone(id, controlVal);
+  const ticks = getScaleTicks(id);
+
+  const sliderMin = scaleOptions ? 0 : item.min;
+  const sliderMax = scaleOptions ? scaleOptions.length - 1 : item.max;
+  const sliderStep = scaleOptions ? 1 : item.step;
+  const sliderValue = scaleOptions
+    ? findClosestScaleIndex(scaleOptions, controlVal)
+    : controlVal;
+
+  const progress = ((sliderValue - sliderMin) / (sliderMax - sliderMin)) * 100;
+  const warningPos = item.warning !== undefined
+    ? (scaleOptions
+      ? (findClosestScaleIndex(scaleOptions, item.warning) / (scaleOptions.length - 1)) * 100
+      : ((item.warning - item.min) / (item.max - item.min)) * 100)
+    : null;
+
+  const isTransitioning = active
+    && id !== 'oil'
+    && !(id === 'sewage' && sewageMode === 'pulse')
+    && Math.abs(targetVal - envVal) > (item.step || 1) * 0.35;
+
+  return (
+    <div
+      className={`param-row risk-${riskTone} ${active ? 'is-active' : ''} ${focused ? 'is-focused' : ''}`}
+    >
+      <div className="param-row-top">
+        <label
+          className="param-label"
+          htmlFor={`param-${id}`}
+          title={item.reference ?? item.label}
+        >
+          <Icon name={item.icon as IconName} className="param-icon-svg" />
+          <span className="param-name">{item.shortLabel}</span>
+        </label>
+
+        <div className="param-readout-group">
+          <output className="param-output" htmlFor={`param-${id}`}>
+            <strong>{displayedTarget.value}</strong>
+            <small>{displayedTarget.unit}</small>
+          </output>
+          <button
+            type="button"
+            className={`btn btn--quiet btn--icon param-reset-single ${active ? 'is-visible' : 'is-hidden'}`}
+            onClick={() => onResetSingleFactor(id)}
+            title={`Restaurar ${item.shortLabel}`}
+            aria-label={`Restaurar ${item.shortLabel}`}
+            tabIndex={active ? 0 : -1}
+            aria-hidden={!active}
+          >
+            <Icon name="reset" />
+          </button>
+        </div>
+      </div>
+
+      {id === 'sewage' && (
+        <div className="sewage-mode-switch" role="group" aria-label="Regime de lançamento de esgoto">
+          <button
+            type="button"
+            className={sewageMode === 'continuous' ? 'active' : ''}
+            aria-pressed={sewageMode === 'continuous'}
+            onClick={() => onSewageModeChange('continuous')}
+          >
+            Contínuo
+          </button>
+          <button
+            type="button"
+            className={sewageMode === 'pulse' ? 'active' : ''}
+            aria-pressed={sewageMode === 'pulse'}
+            onClick={() => onSewageModeChange('pulse')}
+          >
+            Pulso único
+          </button>
+        </div>
+      )}
+
+      <div
+        className="param-slider-track"
+        style={{
+          '--progress': `${progress}%`,
+          '--threshold': warningPos !== null ? `${warningPos}%` : '0%',
+        } as CSSProperties}
+      >
+        <input
+          id={`param-${id}`}
+          type="range"
+          min={sliderMin}
+          max={sliderMax}
+          step={sliderStep}
+          value={sliderValue}
+          aria-label={`${item.label}: ${displayedTarget.value} ${displayedTarget.unit}`}
+          onChange={(e) => {
+            const raw = Number(e.target.value);
+            const resolved = scaleOptions ? scaleOptions[raw] : raw;
+            const newProgress = ((raw - sliderMin) / (sliderMax - sliderMin)) * 100;
+            e.currentTarget.parentElement?.style.setProperty('--progress', `${newProgress}%`);
+            onAdjustFactor(id, resolved);
+          }}
+          onPointerUp={() => onCommitFactor(id)}
+          onKeyUp={() => onCommitFactor(id)}
+        />
+        {warningPos !== null && (
+          <i
+            className="param-warning-tick"
+            aria-hidden="true"
+            title={`Limiar: ${item.warning}`}
+          />
+        )}
+      </div>
+
+      {ticks && (
+        <div className="param-scale-ticks" aria-hidden="true">
+          {ticks.map((tick) => (
+            <span key={tick}>{tick}</span>
+          ))}
+        </div>
+      )}
+
+      {id === 'sewage' && sewageMode === 'pulse' && controlVal > 0 && (
+        <button
+          type="button"
+          className="btn btn--primary pulse-trigger-btn"
+          onClick={() => onTriggerSewagePulse(controlVal)}
+        >
+          <Icon name="drop" />
+          <span>Lançar pulso de {displayedTarget.value} {displayedTarget.unit}</span>
+        </button>
+      )}
+
+      <div className={`param-preview-note ${isTransitioning ? 'is-visible' : 'is-empty'}`} aria-live="polite">
+        <span className="param-preview-text">
+          Na água agora: <strong>{displayedCurrent.value} {displayedCurrent.unit}</strong>
+        </span>
+      </div>
+    </div>
+  );
+});
+
+export const EnvironmentDrawer = memo(function EnvironmentDrawer({
   open,
   onClose,
   simulation,
@@ -274,152 +445,22 @@ export function EnvironmentDrawer({
 
               {isExpanded && (
                 <div id={`group-panel-${group.id}`} className="control-group-items">
-                  {group.items.map((id) => {
-                    const item = ITEM_DEFINITIONS[id];
-                    const controlVal = controls[id];
-                    const envVal = simulation.env[id];
-                    const active = isFactorActive(id, controlVal);
-                    const focused = focusedFactor === id;
-                    const scaleOptions = item.scaleOptions;
-
-                    const displayedTarget = formatParameterValue(id, controlVal, sewageMode);
-                    const displayedCurrent = formatParameterValue(id, envVal, sewageMode);
-                    const riskTone = getFactorRiskTone(id, controlVal);
-                    const ticks = getScaleTicks(id);
-
-                    const sliderMin = scaleOptions ? 0 : item.min;
-                    const sliderMax = scaleOptions ? scaleOptions.length - 1 : item.max;
-                    const sliderStep = scaleOptions ? 1 : item.step;
-                    const sliderValue = scaleOptions
-                      ? findClosestScaleIndex(scaleOptions, controlVal)
-                      : controlVal;
-
-                    const progress = ((sliderValue - sliderMin) / (sliderMax - sliderMin)) * 100;
-                    const warningPos = item.warning !== undefined
-                      ? (scaleOptions
-                        ? (findClosestScaleIndex(scaleOptions, item.warning) / (scaleOptions.length - 1)) * 100
-                        : ((item.warning - item.min) / (item.max - item.min)) * 100)
-                      : null;
-
-                    const isTransitioning = active
-                      && id !== 'oil'
-                      && !(id === 'sewage' && sewageMode === 'pulse')
-                      && Math.abs(simulation.targets[id] - envVal) > (item.step || 1) * 0.35;
-
-                    return (
-                      <div
-                        key={id}
-                        className={`param-row risk-${riskTone} ${active ? 'is-active' : ''} ${focused ? 'is-focused' : ''}`}
-                      >
-                        <div className="param-row-top">
-                          <label
-                            className="param-label"
-                            htmlFor={`param-${id}`}
-                            title={item.reference ?? item.label}
-                          >
-                            <Icon name={item.icon as IconName} className="param-icon-svg" />
-                            <span className="param-name">{item.shortLabel}</span>
-                          </label>
-
-                          <div className="param-readout-group">
-                            <output className="param-output" htmlFor={`param-${id}`}>
-                              <strong>{displayedTarget.value}</strong>
-                              <small>{displayedTarget.unit}</small>
-                            </output>
-                            {active && (
-                              <button
-                                type="button"
-                                className="btn btn--quiet btn--icon param-reset-single"
-                                onClick={() => onResetSingleFactor(id)}
-                                title={`Restaurar ${item.shortLabel}`}
-                                aria-label={`Restaurar ${item.shortLabel}`}
-                              >
-                                <Icon name="reset" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {id === 'sewage' && (
-                          <div className="sewage-mode-switch" role="group" aria-label="Regime de lançamento de esgoto">
-                            <button
-                              type="button"
-                              className={sewageMode === 'continuous' ? 'active' : ''}
-                              aria-pressed={sewageMode === 'continuous'}
-                              onClick={() => onSewageModeChange('continuous')}
-                            >
-                              Contínuo
-                            </button>
-                            <button
-                              type="button"
-                              className={sewageMode === 'pulse' ? 'active' : ''}
-                              aria-pressed={sewageMode === 'pulse'}
-                              onClick={() => onSewageModeChange('pulse')}
-                            >
-                              Pulso único
-                            </button>
-                          </div>
-                        )}
-
-                        <div
-                          className="param-slider-track"
-                          style={{
-                            '--progress': `${progress}%`,
-                            '--threshold': warningPos !== null ? `${warningPos}%` : '0%',
-                          } as CSSProperties}
-                        >
-                          <input
-                            id={`param-${id}`}
-                            type="range"
-                            min={sliderMin}
-                            max={sliderMax}
-                            step={sliderStep}
-                            value={sliderValue}
-                            aria-label={`${item.label}: ${displayedTarget.value} ${displayedTarget.unit}`}
-                            onChange={(e) => {
-                              const raw = Number(e.target.value);
-                              const resolved = scaleOptions ? scaleOptions[raw] : raw;
-                              onAdjustFactor(id, resolved);
-                            }}
-                            onPointerUp={() => onCommitFactor(id)}
-                            onKeyUp={() => onCommitFactor(id)}
-                          />
-                          {warningPos !== null && (
-                            <i
-                              className="param-warning-tick"
-                              aria-hidden="true"
-                              title={`Limiar: ${item.warning}`}
-                            />
-                          )}
-                        </div>
-
-                        {ticks && (
-                          <div className="param-scale-ticks" aria-hidden="true">
-                            {ticks.map((tick) => (
-                              <span key={tick}>{tick}</span>
-                            ))}
-                          </div>
-                        )}
-
-                        {id === 'sewage' && sewageMode === 'pulse' && controlVal > 0 && (
-                          <button
-                            type="button"
-                            className="btn btn--primary pulse-trigger-btn"
-                            onClick={() => onTriggerSewagePulse(controlVal)}
-                          >
-                            <Icon name="drop" />
-                            <span>Lançar pulso de {displayedTarget.value} {displayedTarget.unit}</span>
-                          </button>
-                        )}
-
-                        {isTransitioning && (
-                          <p className="param-preview-note">
-                            Na água agora: <strong>{displayedCurrent.value} {displayedCurrent.unit}</strong>
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {group.items.map((id) => (
+                    <FactorRow
+                      key={id}
+                      id={id}
+                      controlVal={controls[id]}
+                      envVal={simulation.env[id]}
+                      targetVal={simulation.targets[id]}
+                      sewageMode={sewageMode}
+                      focused={focusedFactor === id}
+                      onAdjustFactor={onAdjustFactor}
+                      onCommitFactor={onCommitFactor}
+                      onResetSingleFactor={onResetSingleFactor}
+                      onSewageModeChange={onSewageModeChange}
+                      onTriggerSewagePulse={onTriggerSewagePulse}
+                    />
+                  ))}
                 </div>
               )}
             </section>
@@ -626,4 +667,4 @@ export function EnvironmentDrawer({
       )}
     </aside>
   );
-}
+});
