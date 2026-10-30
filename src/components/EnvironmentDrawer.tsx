@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Icon, type IconName } from './Icons';
 import {
   BTS_SECTORS,
@@ -11,10 +11,7 @@ import {
   type InterventionDefinition,
   type InterventionId,
 } from '../simulation/interventions';
-import {
-  getRecommendedInterventions,
-  isInterventionActive,
-} from '../simulation/interventionModel';
+import { isInterventionActive } from '../simulation/interventionModel';
 import { isFactorActive, type ImpactMilestone } from '../simulation/model';
 import { formatSimulatedDuration } from '../simulation/time';
 import type {
@@ -155,19 +152,37 @@ export function EnvironmentDrawer({
   onOpenInterventionLimits,
   timelineMilestones,
 }: EnvironmentDrawerProps) {
-  const initialCategory: ControlCategoryId = focusedFactor
-    ? ITEM_DEFINITIONS[focusedFactor].category
-    : 'water';
-
-  const [expandedGroups, setExpandedGroups] = useState<Record<ControlCategoryId, boolean>>(() => ({
-    water: initialCategory === 'water',
-    pollution: initialCategory === 'pollution',
+  const [expandedGroups, setExpandedGroups] = useState<Record<ControlCategoryId, boolean>>({
+    water: false,
+    pollution: false,
     ecosystem: false,
-  }));
+  });
 
-  const [showAllInterventions, setShowAllInterventions] = useState(false);
-  const [recoveryExpanded, setRecoveryExpanded] = useState<boolean>(true);
+  const [recoveryExpanded, setRecoveryExpanded] = useState<boolean>(false);
   const [selectedLimitIntervention, setSelectedLimitIntervention] = useState<InterventionDefinition | null>(null);
+
+  const prevOpenRef = useRef(open);
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      if (focusedFactor) {
+        const targetCategory = ITEM_DEFINITIONS[focusedFactor]?.category ?? 'water';
+        setExpandedGroups({
+          water: targetCategory === 'water',
+          pollution: targetCategory === 'pollution',
+          ecosystem: targetCategory === 'ecosystem',
+        });
+        setRecoveryExpanded(false);
+      } else {
+        setExpandedGroups({
+          water: false,
+          pollution: false,
+          ecosystem: false,
+        });
+        setRecoveryExpanded(false);
+      }
+    }
+    prevOpenRef.current = open;
+  }, [open, focusedFactor]);
 
   const toggleGroup = (groupId: ControlCategoryId) => {
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -176,15 +191,6 @@ export function EnvironmentDrawer({
   const sectorDef = BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0];
   const controls = simulation.controls;
   const sewageMode = simulation.sewageDischargeMode;
-
-  const { recommended } = useMemo(
-    () => getRecommendedInterventions(simulation),
-    [simulation]
-  );
-
-  const displayedInterventions = showAllInterventions
-    ? INTERVENTIONS
-    : (recommended.length > 0 ? recommended : INTERVENTIONS.slice(0, 3));
 
   const hasActiveInterventions = (simulation.activeInterventions?.length ?? 0) > 0;
   const activeInterventionsCount = simulation.activeInterventions?.length ?? 0;
@@ -420,7 +426,10 @@ export function EnvironmentDrawer({
           );
         })}
 
-        <section className={`control-group recovery-group recovery-section ${recoveryExpanded ? 'is-open' : 'is-collapsed'}`} aria-label="Ações de recuperação ambiental">
+        <section
+          className={`control-group recovery-group recovery-section ${recoveryExpanded ? 'is-open' : 'is-collapsed'}`}
+          aria-label="Ações de recuperação ambiental"
+        >
           <button
             type="button"
             className="control-group-trigger"
@@ -446,72 +455,64 @@ export function EnvironmentDrawer({
 
           {recoveryExpanded && (
             <div id="group-panel-recovery" className="control-group-items">
-              <div className="recovery-section-subhead">
-                <span className="recovery-filter-note">
-                  {showAllInterventions ? `Todas as intervenções (${INTERVENTIONS.length})` : 'Recomendadas para as pressões ativas'}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn--quiet btn--compact see-all-toggle-btn"
-                  onClick={() => setShowAllInterventions((prev) => !prev)}
-                >
-                  {showAllInterventions ? 'Ver recomendadas' : `Ver todas (${INTERVENTIONS.length})`}
-                </button>
-              </div>
-
-              <div className="interventions-grid">
-                {displayedInterventions.map((item) => {
-                  const active = isInterventionActive(simulation.activeInterventions, item.id);
-                  return (
-                    <article
-                      key={item.id}
-                      className={`intervention-card ${active ? 'is-active' : ''} ${!item.modeled ? 'is-conceptual' : ''}`}
-                    >
-                      <div className="intervention-card-top">
-                        <div className="intervention-title-row">
-                          <Icon name={item.icon as any} className="intervention-icon" />
-                          <h4 className="intervention-title">{item.title}</h4>
-                        </div>
-                        <div className="intervention-badges">
-                          {active && <span className="intervention-badge is-active">Ativa</span>}
-                          {!item.modeled && (
-                            <span
-                              className="intervention-badge is-conceptual"
-                              title="Ação para reflexão pedagógica; não altera numericamente o modelo no momento"
-                            >
-                              Exploração conceitual
-                            </span>
-                          )}
-                        </div>
+              {INTERVENTIONS.map((item) => {
+                const active = isInterventionActive(simulation.activeInterventions, item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`param-row recovery-param-row ${active ? 'is-active' : ''} ${!item.modeled ? 'is-conceptual' : ''}`}
+                  >
+                    <div className="param-row-top">
+                      <div className="param-label">
+                        <Icon name={item.icon as any} className="param-icon-svg" />
+                        <span className="param-name">{item.title}</span>
+                        {!item.modeled && (
+                          <span
+                            className="param-badge-conceptual"
+                            title="Ação para reflexão pedagógica; não altera numericamente o modelo no momento"
+                          >
+                            Conceitual
+                          </span>
+                        )}
                       </div>
 
-                      <p className="intervention-desc">{item.description}</p>
-                      <p className="intervention-effect-line">
-                        <strong>Efeito:</strong> {item.effectLabel}
-                      </p>
-
-                      <div className="intervention-actions">
+                      <div className="param-readout-group recovery-actions">
                         <button
                           type="button"
-                          className={`btn btn--compact ${active ? 'btn--primary' : 'btn--quiet'}`}
+                          className="btn btn--quiet btn--compact recovery-limits-btn"
+                          onClick={() => setSelectedLimitIntervention(item)}
+                          title="Ver limite biofísico e operacional desta recuperação"
+                          aria-label={`Ver limites de ${item.title}`}
+                        >
+                          Limites
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn--compact recovery-toggle-btn ${active ? 'btn--primary' : 'btn--quiet'}`}
                           onClick={() => onToggleIntervention(item.id)}
                           aria-pressed={active}
                         >
-                          {active ? 'Desativar' : 'Ativar'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--quiet btn--compact"
-                          onClick={() => setSelectedLimitIntervention(item)}
-                          title="Ver limite biofísico e operacional desta recuperação"
-                        >
-                          Ver limites
+                          {active ? 'Ativa' : 'Ativar'}
                         </button>
                       </div>
-                    </article>
-                  );
-                })}
-              </div>
+                    </div>
+
+                    <div className="recovery-desc">
+                      <span className="recovery-effect-label">{item.effectLabel}</span>
+                      {active && (
+                        <span className="recovery-status-active">
+                          {' '}· {item.activeStatusLabel}
+                        </span>
+                      )}
+                      {item.id === 'oilContainmentSkimming' && (simulation.recoveredOilKg ?? 0) > 0 && (
+                        <span className="recovery-oil-skimmed">
+                          {' '}· ({Math.round(simulation.recoveredOilKg!).toLocaleString('pt-BR')} kg recolhidos)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
 
               <div className="timeline-preview-strip">
                 <div className="timeline-preview-row">

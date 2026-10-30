@@ -70,6 +70,9 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     const envDrawer = page.locator('.env-drawer');
     await expect(envDrawer).toBeVisible();
 
+    // Como todos os 3 menus iniciam fechados por padrão, abre Água
+    await envDrawer.getByRole('button', { name: /Água/i }).click();
+
     const tempSlider = envDrawer.locator('input[type="range"]').first();
     await tempSlider.fill('30.2');
     await tempSlider.dispatchEvent('change');
@@ -77,8 +80,9 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await expect(telemetry).toContainText('°C');
     await expect(telemetry).toContainText('Estresse térmico');
 
-    // Expande Poluição e verifica a seção de Recuperação para testar a rolagem real com roda do mouse
+    // Expande Poluição e Recuperação para testar a rolagem real com roda do mouse
     await envDrawer.getByRole('button', { name: /Poluição/i }).click();
+    await envDrawer.getByRole('button', { name: /Recuperação/i }).click();
     await expect(envDrawer.locator('.recovery-section')).toBeVisible();
     const envBody = envDrawer.locator('.env-drawer-body');
     const envBodyBox = await envBody.boundingBox();
@@ -181,6 +185,9 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await expect(envDrawer).toBeVisible();
     await expect(scrim).toBeVisible();
     await expect(envDrawer.locator('.env-drawer-mobile-actions')).toBeVisible();
+
+    // Como todos os 3 menus iniciam fechados por padrão, abre Recuperação para testar rolagem
+    await envDrawer.getByRole('button', { name: /Recuperação/i }).click();
 
     const envBody = envDrawer.locator('.env-drawer-body');
     const envBodyBox = await envBody.boundingBox();
