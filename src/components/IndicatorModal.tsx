@@ -213,29 +213,3 @@ export function IndicatorContextCard({
     </article>
   );
 }
-
-/**
- * Componente de retrocompatibilidade para cenários onde uma gaveta contextual é aberta.
- * Não bloqueia a tela com overlay escuro nem interrompe a visão do modelo marinho.
- */
-export function IndicatorModal({
-  indicatorId,
-  onClose,
-  currentValue,
-}: {
-  indicatorId: IndicatorDetailId | null;
-  onClose: () => void;
-  currentValue?: string;
-}) {
-  if (!indicatorId) return null;
-
-  return (
-    <aside className="indicator-floating-drawer" role="complementary" aria-label="Detalhes contextuais do indicador">
-      <IndicatorContextCard
-        indicatorId={indicatorId}
-        currentValue={currentValue}
-        onClose={onClose}
-      />
-    </aside>
-  );
-}

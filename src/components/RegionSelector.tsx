@@ -55,7 +55,7 @@ export function RegionSelector({
   }, [open, onOpenChange, closeAndReturnFocus]);
 
   return (
-    <div className="region-selector" ref={containerRef}>
+    <div className={`region-selector ${open ? 'is-open' : ''}`} ref={containerRef}>
       <button
         ref={triggerRef}
         type="button"

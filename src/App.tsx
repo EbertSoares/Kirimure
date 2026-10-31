@@ -8,6 +8,7 @@ import { Icon } from './components/Icons';
 import { IndicatorProgress } from './components/IndicatorProgress';
 import { RegionSelector } from './components/RegionSelector';
 import { useOceanData } from './hooks/useOceanData';
+import { getSavedSst, saveSst } from './services/oceanStorage';
 import { calculateRespirationPhImpact } from './simulation/carbonate';
 import {
   BASELINE,
@@ -86,11 +87,13 @@ const MarineScene = lazy(() =>
 function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const base = createInitialState(sectorId);
+  const savedSst = getSavedSst(sectorId);
+  const effectiveTemp = savedSst ?? sector.baselineTemperature;
   const sectorEnv: Environment = {
     ...BASELINE,
-    temperature: sector.baselineTemperature,
+    temperature: effectiveTemp,
   };
-  const initialDo = calculateWeissOxygenSaturation(sector.baselineTemperature, sector.baselineSalinity);
+  const initialDo = calculateWeissOxygenSaturation(effectiveTemp, sector.baselineSalinity);
   return {
     ...base,
     sector: sectorId,
@@ -100,7 +103,7 @@ function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
     dissolvedOxygen: initialDo,
     history: base.history.map((pt) => ({
       ...pt,
-      temperature: sector.baselineTemperature,
+      temperature: effectiveTemp,
       dissolvedOxygen: initialDo,
       saturationOxygen: initialDo,
     })),
@@ -113,7 +116,7 @@ interface UndoEntry {
 }
 
 export function App() {
-  const [screen, setScreen] = useState<AppScreen>('simulation');
+  const [screen, setScreen] = useState<AppScreen>('map');
   const [mapZooming, setMapZooming] = useState(false);
   const [mapReturning, setMapReturning] = useState(false);
   const [transitionDark, setTransitionDark] = useState(false);
@@ -148,6 +151,13 @@ export function App() {
     'ph',
   ]);
   const [metricsSelectorOpen, setMetricsSelectorOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 680 : false));
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 680);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const oceanData = useOceanData(simulation.sector, screen === 'simulation');
 
@@ -417,16 +427,25 @@ export function App() {
     });
   }, []);
 
-  const handleApplySatelliteTemperature = useCallback((sst: number) => {
+  useEffect(() => {
+    const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
+    if (typeof sst !== 'number' || !Number.isFinite(sst)) return;
     const rounded = parseFloat(sst.toFixed(1));
-    handleAdjustFactor('temperature', rounded);
-    setSimulation((curr) => ({
-      ...curr,
-      initialConditionSource: oceanData.noaaStatus.state === 'success'
-        ? 'NOAA_CRW_LIVE'
-        : 'NOAA_CRW_HISTORICAL_SNAPSHOT',
-    }));
-  }, [handleAdjustFactor, oceanData.noaaStatus.state]);
+    saveSst(simulation.sector, rounded);
+
+    setSimulation((curr) => {
+      if (Math.abs(curr.controls.temperature - rounded) < 0.05 && Math.abs(curr.env.temperature - rounded) < 0.05) {
+        return curr;
+      }
+      return {
+        ...curr,
+        controls: { ...curr.controls, temperature: rounded },
+        env: { ...curr.env, temperature: rounded },
+        targets: { ...curr.targets, temperature: rounded },
+        initialConditionSource: 'NOAA_CRW_LIVE',
+      };
+    });
+  }, [oceanData.latestCrw, simulation.sector]);
 
   const handleToggleIntervention = useCallback((id: InterventionId) => {
     setSimulation((current) => {
@@ -649,19 +668,9 @@ export function App() {
     };
   }, [simulation]);
 
-  const visibleIndicatorIds = useMemo<readonly ContextualIndicatorId[]>(() => {
-    const list = new Set<ContextualIndicatorId>(selectedIndicatorIds);
-    const driverFactor = focusedFactor && isFactorActive(focusedFactor, simulation.controls[focusedFactor])
-      ? focusedFactor
-      : (activeFactorIds[activeFactorIds.length - 1] ?? focusedFactor);
-    if (driverFactor) {
-      const primary = ITEM_DEFINITIONS[driverFactor].primaryIndicators as readonly ContextualIndicatorId[];
-      for (const p of primary) {
-        list.add(p);
-      }
-    }
-    return Array.from(list);
-  }, [selectedIndicatorIds, focusedFactor, simulation.controls, activeFactorIds]);
+  const displayedIndicatorIds = useMemo<readonly ContextualIndicatorId[]>(() => {
+    return isMobile ? selectedIndicatorIds.slice(0, 3) : selectedIndicatorIds;
+  }, [isMobile, selectedIndicatorIds]);
 
   const toggleEnvDrawer = () => {
     setEnvDrawerOpen((open) => {
@@ -752,7 +761,7 @@ export function App() {
 
   return (
     <div className="lab-shell">
-      <header className="lab-topbar">
+      <header className={`lab-topbar ${regionOpen ? 'has-region-open' : ''}`}>
         <div className="lab-topbar-left">
           <RegionSelector
             sectors={BTS_SECTORS}
@@ -779,10 +788,42 @@ export function App() {
             <span className="map-return-btn__desktop">Voltar ao mapa</span>
             <span className="map-return-btn__mobile">Mapa</span>
           </button>
+
+          <div
+            className={`api-status-badge tone-${oceanData.noaaStatus.state === 'error' ? 'error' : oceanData.latestCrw ? 'healthy' : 'loading'}`}
+            title={
+              oceanData.noaaStatus.state === 'error'
+                ? 'Falha na busca da API NOAA (mantendo último valor salvo)'
+                : oceanData.latestCrw
+                  ? `API NOAA Funcionando: SST ${simulation.env.temperature.toFixed(1)} °C aplicada`
+                  : 'Buscando dados da API NOAA...'
+            }
+          >
+            <span className="api-status-dot" aria-hidden="true" />
+            <span className="api-status-label">
+              {oceanData.noaaLoading
+                ? 'Buscando API...'
+                : oceanData.noaaStatus.state === 'error'
+                  ? 'Falha na busca'
+                  : 'API Funcionando'}
+            </span>
+          </div>
         </div>
 
         <div className="lab-topbar-center">
           <BrandLogo />
+          <a
+            href="https://www.vakinha.com.br/vaquinha/da-bahia-para-a-franca-leve-a-equipe-kirimure-a-grande-final-mundial?utm_campaign=whatsapp&utm_content=6425557&utm_medium=website&utm_source=social-shares"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-support-project"
+            title="Apoie a equipe Kirimurê na final mundial na França (Vakinha)"
+            aria-label="Apoiar o projeto na Vakinha: Da Bahia para a França"
+          >
+            <Icon name="heart" />
+            <span className="btn-support-text desktop">Apoiar o Projeto</span>
+            <span className="btn-support-text mobile">Apoiar</span>
+          </a>
         </div>
 
         <div className="experiment-actions-bar">
@@ -868,7 +909,7 @@ export function App() {
 
             <div className="contextual-telemetry-bar" aria-label="Indicadores do ecossistema">
               <div className="telemetry-pills">
-                {visibleIndicatorIds.map((indId) => {
+                {displayedIndicatorIds.map((indId) => {
                   const view = indicatorViews[indId];
                   if (!view) return null;
                   return (
@@ -1007,7 +1048,6 @@ export function App() {
           simulation={simulation}
           oceanData={oceanData}
           criticalDays={criticalDays}
-          onApplySatelliteTemperature={handleApplySatelliteTemperature}
           focusedInterventionId={focusedInterventionId}
           timelineMilestones={timelineMilestones}
         />
@@ -1030,7 +1070,11 @@ export function App() {
                   <Icon name="sliders" className="limits-modal-icon" />
                   <div>
                     <h3 id="metrics-modal-title" className="limits-modal-title">Métricas no Visualizador</h3>
-                    <span className="limits-modal-target">Selecione quais indicadores exibir com barra sobre o recife</span>
+                    <span className="limits-modal-target">
+                      {isMobile
+                        ? 'No celular, são exibidas as 3 primeiras métricas selecionadas'
+                        : 'Selecione quais indicadores exibir com barra sobre o recife'}
+                    </span>
                   </div>
                 </div>
                 <button

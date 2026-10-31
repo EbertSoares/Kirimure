@@ -213,13 +213,13 @@ export const PARAMETERS = {
     // Concentração didática de saturação de CBODu na água para efeitos de pressão trófica/nutrientes (mg O₂/L)
     saturationBodConcentrationMgL: 5.0,
   },
-  // Peso de cada poluente no estresse (0 a 1 na escala máxima do cenário).
+  // Peso de cada poluente no estresse de corais (0 a 1 na escala máxima do cenário).
+  // Para peixes, as respostas a poluentes e forçantes são individualizadas por espécie em FISH_SPECIES.
   pollutantWeights: {
     coral: { microplastics: 0.14, oil: 0.75, sewage: 0.55, turbidity: 0.6, fishing: 0.3 },
-    fish: { microplastics: 0.35, oil: 0.55, sewage: 0.4, turbidity: 0.35, fishing: 0.85 },
-  } satisfies Record<'coral' | 'fish', Partial<Record<PressureId, number>>>,
+  } satisfies Record<'coral', Partial<Record<PressureId, number>>>,
   synergy: 0.5,
-  collapseDays: { coral: 75, fish: 60 },
+  collapseDays: { coral: 75 },
   recoveryFactor: 5,
   recoveryThreshold: 0.1,
   // Recuperação ambiental: reduz o dano, acelera a volta e permite recuperar

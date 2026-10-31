@@ -567,6 +567,10 @@ summary:focus-visible {
   z-index: 20;
 }
 
+.lab-topbar.has-region-open {
+  z-index: 100;
+}
+
 .lab-topbar-left {
   display: flex;
   align-items: center;
@@ -580,14 +584,118 @@ summary:focus-visible {
   align-items: center;
   justify-content: center;
   justify-self: center;
+  gap: 12px;
 }
 
 .lab-topbar-center .brand-logo {
   width: clamp(114px, 9.5vw, 138px);
 }
 
+.btn-support-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(248, 176, 32, 0.18), rgba(248, 176, 32, 0.30));
+  border: 1px solid rgba(248, 176, 32, 0.65);
+  color: #fff2cc;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  line-height: 1;
+  white-space: nowrap;
+  transition: all 200ms ease;
+  box-shadow: 0 2px 10px rgba(248, 176, 32, 0.16);
+  cursor: pointer;
+}
+
+.btn-support-project:hover {
+  background: linear-gradient(135deg, rgba(248, 176, 32, 0.32), rgba(248, 176, 32, 0.48));
+  border-color: rgba(248, 176, 32, 0.95);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(248, 176, 32, 0.35);
+}
+
+.btn-support-project svg {
+  width: 14px;
+  height: 14px;
+  color: #f8b020;
+  fill: rgba(248, 176, 32, 0.4);
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+}
+
+.btn-support-project:hover svg {
+  transform: scale(1.15);
+  fill: #f8b020;
+}
+
+.btn-support-text.mobile {
+  display: none;
+}
+
 .map-return-btn__mobile {
   display: none;
+}
+
+.api-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 200ms ease;
+}
+
+.api-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.api-status-badge.tone-healthy {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+.api-status-badge.tone-healthy .api-status-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.api-status-badge.tone-error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+.api-status-badge.tone-error .api-status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+.api-status-badge.tone-loading {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+.api-status-badge.tone-loading .api-status-dot {
+  background: #f59e0b;
+}
+
+@media (max-width: 640px) {
+  .api-status-badge {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
 }
 
 /* ── Seletor da Região da Baía de Todos-os-Santos ──────────────────────── */
@@ -1030,7 +1138,7 @@ summary:focus-visible {
   top: 12px;
   left: 12px;
   z-index: 7;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - 130px);
   pointer-events: none;
 }
 
@@ -1039,12 +1147,15 @@ summary:focus-visible {
   flex-wrap: wrap;
   align-items: stretch;
   gap: 8px;
+  row-gap: 8px;
+  max-width: 100%;
   pointer-events: none;
 }
 
 .indicator-progress {
   pointer-events: auto;
   min-width: 116px;
+  flex: 0 1 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-content: start;
@@ -2793,10 +2904,27 @@ summary:focus-visible {
     grid-row: 1;
     grid-column: 2;
     justify-self: center;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .lab-topbar-center .brand-logo {
-    width: 116px;
+    width: 104px;
+  }
+
+  .btn-support-text.desktop {
+    display: none;
+  }
+
+  .btn-support-text.mobile {
+    display: inline;
+  }
+
+  .btn-support-project {
+    padding: 5px 9px;
+    font-size: 11px;
+    gap: 4px;
   }
 
   .region-selector {
@@ -2907,31 +3035,45 @@ summary:focus-visible {
     border-radius: 16px;
   }
 
+  .fps-counter-overlay {
+    display: none !important;
+  }
+
   .contextual-telemetry-bar {
-    top: 10px;
-    left: 10px;
-    max-width: calc(100vw - 36px);
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 16px);
   }
 
   .telemetry-pills {
     max-width: 100%;
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
+    row-gap: 6px;
+    overflow: visible;
   }
 
   .telemetry-pills::-webkit-scrollbar {
     display: none;
   }
 
+  /* Garante estritamente apenas 3 métricas exibidas no mobile */
+  .telemetry-pills > .indicator-progress:nth-of-type(n+4) {
+    display: none !important;
+  }
+
   .indicator-progress,
   .indicator-metric {
-    min-width: 104px;
-    padding: 9px 10px 8px;
-    flex: 0 0 auto;
+    min-width: 86px;
+    padding: 7px 8px 6px;
+    flex: 1 1 0;
+  }
+
+  .btn-customize-metrics {
+    min-height: 36px;
+    padding: 5px 8px;
   }
 
   .indicator-progress {
@@ -2984,9 +3126,23 @@ summary:focus-visible {
     cursor: pointer;
   }
 
+  .lab-topbar.has-region-open {
+    z-index: 100 !important;
+  }
+
+  .has-region-open ~ .lab-workspace .time-execution-bar {
+    z-index: 10 !important;
+    pointer-events: none !important;
+    opacity: 0.35;
+  }
+
+  .region-selector.is-open {
+    z-index: 100 !important;
+  }
+
   .region-menu {
     position: fixed;
-    z-index: 50;
+    z-index: 110 !important;
     top: auto;
     left: 12px;
     right: 12px;
@@ -2995,6 +3151,9 @@ summary:focus-visible {
     max-height: min(68dvh, 460px);
     padding: 10px;
     border-radius: var(--radius-sheet);
+    background: var(--surface-1);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
     display: flex;
     flex-direction: column;
     animation: bottomSheetIn var(--motion-standard) ease-out both;

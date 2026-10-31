@@ -99,7 +99,6 @@ interface SciencePanelProps {
   tab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
   oceanData?: OceanDataState;
-  onApplySatelliteConditions?: (temperature: number) => void;
   missionState?: MissionState | null;
   onStartMission?: (id: string) => void;
   onMissionStepChange?: (step: MissionStepId) => void;
@@ -122,7 +121,6 @@ export function SciencePanel({
   tab,
   onTabChange,
   oceanData,
-  onApplySatelliteConditions,
   missionState,
   onStartMission,
   onMissionStepChange,
@@ -918,21 +916,31 @@ export function SciencePanel({
                 <div>
                   <span
                     className="live-notice-pill"
-                    title={
-                      oceanData?.latestCrw?.provenance?.isCachedFallback
-                        ? 'Snapshot de contingência setorial (mar/abr 2024)'
-                        : 'Dado obtido de servidor remoto'
-                    }
+                    style={{
+                      background: oceanData?.noaaStatus?.state === 'error'
+                        ? 'rgba(239, 68, 68, 0.2)'
+                        : oceanData?.latestCrw
+                          ? 'rgba(16, 185, 129, 0.2)'
+                          : 'rgba(255, 255, 255, 0.1)',
+                      color: oceanData?.noaaStatus?.state === 'error'
+                        ? '#ef4444'
+                        : oceanData?.latestCrw
+                          ? '#10b981'
+                          : '#fff',
+                      borderColor: oceanData?.noaaStatus?.state === 'error'
+                        ? 'rgba(239, 68, 68, 0.4)'
+                        : oceanData?.latestCrw
+                          ? 'rgba(16, 185, 129, 0.4)'
+                          : 'transparent',
+                    }}
                   >
                     {oceanData?.noaaLoading
-                      ? 'Consultando satélite...'
+                      ? 'Buscando dados...'
                       : oceanData?.noaaStatus?.state === 'error'
-                        ? 'Servidor offline / indisponível'
-                        : oceanData?.latestCrw?.provenance?.isCachedFallback
-                          ? 'Snapshot histórico (mar/2024)'
-                          : oceanData?.latestCrw?.provenance?.fetchStatus === 'online_valid'
-                            ? `Produto de satélite operacional (${oceanData.latestCrw.timestampUtc ? oceanData.latestCrw.timestampUtc.substring(0, 10) : ''})`
-                            : 'Dados disponíveis'}
+                        ? 'Falha na busca'
+                        : oceanData?.latestCrw
+                          ? 'Funcionando'
+                          : 'Aguardando busca'}
                   </span>
                 </div>
               </div>
@@ -1012,38 +1020,32 @@ export function SciencePanel({
                     </div>
                   </div>
 
-                  {onApplySatelliteConditions && (
-                    <button
-                      type="button"
-                      onClick={() => onApplySatelliteConditions(oceanData.latestCrw!.seaSurfaceTemperatureDegC)}
-                      style={{
-                        width: '100%',
-                        boxSizing: 'border-box',
-                        background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), var(--accent-subtle))',
-                        border: '1px solid rgba(56, 189, 248, 0.45)',
-                        color: '#e0f2fe',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        textAlign: 'center',
-                      }}
-                    >
-                      <Icon name="check" />
-                      <span style={{ lineHeight: 1.3 }}>
-                        {oceanData.latestCrw.provenance.isCachedFallback
-                          ? `Usar SST do snapshot histórico NOAA (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`
-                          : oceanData.latestCrw.isVirtualStation
-                            ? `Usar SST da estação virtual (${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C${oceanData.latestCrw.sst90thPercentileDegC ? `; P90: ${oceanData.latestCrw.sst90thPercentileDegC.toFixed(1)} °C` : ''}) como condição inicial`
-                            : `Usar SST satelital (CRW_SST: ${oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1)} °C) como condição inicial`}
-                      </span>
-                    </button>
-                  )}
+                  <div style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    background: oceanData.noaaStatus.state === 'error' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                    border: `1px solid ${oceanData.noaaStatus.state === 'error' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
+                    color: oceanData.noaaStatus.state === 'error' ? '#fca5a5' : '#a7f3d0',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: oceanData.noaaStatus.state === 'error' ? '#ef4444' : '#10b981',
+                      flexShrink: 0,
+                    }} />
+                    <span>
+                      {oceanData.noaaStatus.state === 'error'
+                        ? 'Falha na busca da API: o sistema continuará utilizando a última temperatura salva.'
+                        : 'Dados da API injetados diretamente na simulação e salvos no sistema.'}
+                    </span>
+                  </div>
 
                   <details className="source-method-fold">
                     <summary className="source-method-summary">Fonte, método e limitações ▾</summary>

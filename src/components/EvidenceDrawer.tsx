@@ -194,7 +194,6 @@ interface EvidenceDrawerProps {
   simulation: SimulationState;
   oceanData: OceanDataState;
   criticalDays?: number | null;
-  onApplySatelliteTemperature: (sst: number) => void;
   focusedInterventionId?: InterventionId | null;
   timelineMilestones?: ImpactMilestone[];
 }
@@ -207,7 +206,6 @@ export function EvidenceDrawer({
   simulation,
   oceanData,
   criticalDays = null,
-  onApplySatelliteTemperature,
   focusedInterventionId = null,
   timelineMilestones = [],
 }: EvidenceDrawerProps) {
@@ -256,23 +254,20 @@ export function EvidenceDrawer({
     : PARAMETER_EVIDENCE_REGISTRY.filter((rec) => rec.evidenceLevel === evidenceFilter);
 
   const noaaStateBadge = (() => {
-    if (oceanData.noaaLoading) return { tone: 'neutral', text: 'Consultando fonte...' };
-    if (oceanData.noaaStatus.state === 'no_coverage' || sector.id === 'paraguacu') {
-      return { tone: 'watch', text: 'Sem cobertura (grade 5 km mascara canal interno)' };
-    }
+    if (oceanData.noaaLoading) return { tone: 'neutral', text: 'Buscando dados...' };
     if (oceanData.noaaStatus.state === 'error') {
-      return { tone: 'critical', text: 'Erro na consulta' };
+      return { tone: 'critical', text: 'Falha na busca' };
     }
-    if (oceanData.latestCrw?.provenance.isCachedFallback || oceanData.noaaStatus.state === 'fallback') {
-      return { tone: 'watch', text: 'Histórico / Contingência (mar–abr 2024)' };
+    if (oceanData.noaaStatus.state === 'no_coverage' || sector.id === 'paraguacu') {
+      return { tone: 'watch', text: 'Sem cobertura (canal estuarino)' };
     }
     if (oceanData.latestCrw) {
       return {
         tone: 'healthy',
-        text: `Atualizado (${formatShortUtc(oceanData.latestCrw.provenance.retrievedAtUtc)})`,
+        text: 'Funcionando',
       };
     }
-    return { tone: 'neutral', text: 'Aguardando consulta' };
+    return { tone: 'neutral', text: 'Aguardando busca' };
   })();
 
   const meteoStateBadge = (() => {
@@ -665,17 +660,31 @@ export function EvidenceDrawer({
                     </div>
                   </div>
 
-                  <div className="satellite-apply-row">
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => onApplySatelliteTemperature(oceanData.latestCrw!.seaSurfaceTemperatureDegC)}
-                    >
-                      Usar SST satelital ({oceanData.latestCrw.seaSurfaceTemperatureDegC.toFixed(1).replace('.', ',')} °C) no experimento
-                    </button>
-                    <small>
-                      Importa apenas a temperatura inicial; a saúde de corais e peixes continua sendo calculada pela simulação local.
-                    </small>
+                  <div className="satellite-injection-notice" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: oceanData.noaaStatus.state === 'error' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                    border: `1px solid ${oceanData.noaaStatus.state === 'error' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
+                    marginTop: '12px',
+                    marginBottom: '12px',
+                    fontSize: '12px',
+                    color: oceanData.noaaStatus.state === 'error' ? '#fca5a5' : '#a7f3d0',
+                  }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: oceanData.noaaStatus.state === 'error' ? '#ef4444' : '#10b981',
+                      flexShrink: 0,
+                    }} />
+                    <span>
+                      {oceanData.noaaStatus.state === 'error'
+                        ? 'Falha na busca da API: o sistema continuará utilizando a última temperatura salva.'
+                        : 'Dados da API injetados diretamente na simulação e salvos no sistema.'}
+                    </span>
                   </div>
 
                   <details className="method-details">

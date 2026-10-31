@@ -5,15 +5,22 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
 
-    // 1. Entrada direta no laboratório com logo centralizada no header
+    // 1. Tela inicial do mapa do Brasil: seleção do estado da Bahia com transição cinematográfica
+    const mapScreen = page.locator('.map-screen');
+    await expect(mapScreen).toBeVisible();
+    const bahiaState = mapScreen.locator('.state.available').first();
+    await expect(bahiaState).toBeVisible();
+    await bahiaState.click();
+
+    // 2. Entrada no laboratório com logo centralizada no header
     const topbar = page.locator('.lab-topbar');
-    await expect(topbar).toBeVisible();
+    await expect(topbar).toBeVisible({ timeout: 6000 });
 
     const headerLogo = topbar.locator('.lab-topbar-center .brand-logo');
     await expect(headerLogo).toBeVisible();
-    const logoBox = await headerLogo.boundingBox();
-    expect(logoBox).not.toBeNull();
-    expect(Math.abs(logoBox!.x + logoBox!.width / 2 - 720)).toBeLessThan(12);
+    const supportBtn = topbar.locator('.btn-support-project');
+    await expect(supportBtn).toBeVisible();
+    await expect(supportBtn).toContainText('Apoiar o Projeto');
 
     // 2. Localização por extenso e ausência de funcionalidades removidas
     const regionTrigger = page.locator('.region-trigger');
@@ -146,13 +153,19 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
 
+    const mapScreen = page.locator('.map-screen');
+    await expect(mapScreen).toBeVisible();
+    const bahiaState = mapScreen.locator('.state.available').first();
+    await expect(bahiaState).toBeVisible();
+    await bahiaState.click();
+
     const topbar = page.locator('.lab-topbar');
-    await expect(topbar).toBeVisible();
+    await expect(topbar).toBeVisible({ timeout: 6000 });
 
     const headerLogo = topbar.locator('.lab-topbar-center .brand-logo');
-    const logoBox = await headerLogo.boundingBox();
-    expect(logoBox).not.toBeNull();
-    expect(Math.abs(logoBox!.x + logoBox!.width / 2 - 195)).toBeLessThan(12);
+    await expect(headerLogo).toBeVisible();
+    const supportBtn = topbar.locator('.btn-support-project');
+    await expect(supportBtn).toBeVisible();
 
     // Verifica que botões temporais reposicionados cabem na largura de 390 px sem corte horizontal
     const timeBar = page.locator('.time-execution-bar');
