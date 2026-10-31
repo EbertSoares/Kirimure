@@ -1,132 +1,130 @@
 # Kirimurê — Laboratório Digital Marinho
 
-Aplicativo educacional e simulador interativo dos efeitos de alterações ambientais e pressões antrópicas em recifes costeiros da Baía de Todos-os-Santos (BTS), Bahia.
+> **Ferramenta educacional de Cultura Oceânica** voltada para estudantes do Ensino Fundamental II (11 a 14 anos) e professores, com simulação interativa, computação gráfica 3D e governança de dados científicos aplicada aos recifes e ecossistemas costeiros da **Baía de Todos-os-Santos (BTS), Bahia**.
 
-A aplicação permite modificar temperatura da água, pH, cargas de matéria orgânica (esgoto / DBO), óleo e microplásticos, além de pressão pesqueira. A cena marinha em 3D reage progressivamente, apresentando respostas fisiológicas e ecológicas nos corais construtores, nas populações de peixes recifais e no balanço biogeoquímico.
+A aplicação permite investigar de forma investigativa e gradual as consequências de variações na temperatura da água, acidificação (pH), cargas de matéria orgânica (esgoto / DBO), vazamentos de óleo, microplásticos e pressão pesqueira. O ecossistema marinho tridimensional responde continuamente em tempo real, integrando modelos físico-químicos determinísticos, telemetria satelital e respostas ecológicas da ictiofauna e dos corais construtores.
 
-## Acesso
+---
+
+## Acesso e Apoio ao Projeto
 
 - **Repositório oficial:** [github.com/EbertSoares/Kirimure](https://github.com/EbertSoares/Kirimure)
-- **Aplicação publicada:** [laboratorio-digital-marinho.neatowl9.chatgpt.site](https://laboratorio-digital-marinho.neatowl9.chatgpt.site)
-- **Aplicação Web / PWA:** compatível com desktop e dispositivos móveis, com suporte offline via Service Worker e snapshots setoriais de contingência.
+- **Campanha Oficial Vakinha:** [Da Bahia para a França: Leve a Equipe Kirimurê à Grande Final Mundial](https://www.vakinha.com.br/vaquinha/da-bahia-para-a-franca-leve-a-equipe-kirimure-a-grande-final-mundial?utm_campaign=whatsapp&utm_content=6425557&utm_medium=website&utm_source=social-shares)
+- **Plataforma:** Aplicação Web moderna de alta fidelidade visual, responsiva para Desktop e dispositivos móveis (smartphones e tablets), com injeção automática de telemetria oceanográfica e persistência local no navegador.
+
+---
 
 ## Arquitetura Científica e Governança Epistemológica
 
-O Kirimurê distingue explicitamente quatro categorias de informação ambiental para manter total transparência epistemológica:
+O Kirimurê adota uma classificação epistemológica rigorosa de proveniência de dados, distinguindo as naturezas de cada informação para assegurar a integridade didática e científica:
 
-1. **Produtos de Satélite (NOAA Coral Reef Watch):** SST, anomalia térmica, HotSpot térmico, Degree Heating Weeks (DHW) oficial e nível ordinal de alerta (`CRW_BAA`, escala 0 a 7 por pixel) obtidos na grade operacional de 5 km, com arquitetura multi-fonte com failover ordenado e orçamento global de tempo (16s):
-   - **Fonte 1 (Primária — ERDDAP CORS):** Espelho oficial PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu`, dataset `dhw_5km`, pixel costeiro local de 5 km);
-   - **Fonte 2 (Secundária — ERDDAP NOAA):** NOAA CoastWatch ERDDAP PFEG (`coastwatch.pfeg.noaa.gov`, dataset `NOAA_DHW`);
-   - **Fonte 3 (Contingência Regional Externa):** Coral Watch Virtual Station API (`api.coral.tsr.lol`, serviço externo com estação virtual `todos_os_santos` na plataforma adjacente à entrada da BTS).
-   Pixels oceânicos calibrados para Frades e Barra; canais estuarinos interiores estreitos (Paraguaçu) são identificados explicitamente com estado de sem cobertura (`no_coverage`), sem emissão de requisições espúrias. Em contingência, erros reais de protocolo são apresentados sem mascaramento, com acesso manual explícito a snapshots históricos identificados (El Niño mar/abr 2024).
-2. **Produtos de Modelo Numérico Global (Open-Meteo Marine):** Séries horárias de altura de onda ($H_s$), correntes e nível do mar baseadas em modelos Copernicus/ECMWF para o canal da BTS, com normalização estrita de carimbos de data/hora em UTC.
-3. **Modelos Físico-Químicos Acoplados da Simulação:**
-   - **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Cinética acoplada ar-mar baseada em Weiss (1970) para saturação termodinâmica, Streeter-Phelps para reaeração atmosférica e desoxigenação por DBO, demanda de oxigênio bentônica (SOD; Bowie et al., 1985) e fotossíntese/respiração líquida de algas e corais. Piso numérico de proteção termodinâmica a 0,05 mg/L.
-   - **Sistema Carbonato Marinho (`carbonate.ts`):** Equilíbrio termodinâmico do $\text{CO}_2$ marinho ($K_1, K_2, K_w, K_B$ de Lueker et al., 2000 e Dickson, 1990; $K'_{sp}$ de Mucci, 1983) calculando pH efetivo, $p\text{CO}_2$, saturação de aragonita ($\Omega_{\text{arag}}$) e calcita ($\Omega_{\text{calc}}$), acoplado à produção respiratória de $\text{CO}_2$.
-   - **Destino e Balanço de Óleo (`contaminants.ts`):** Balanço de massa em 4 compartimentos (filme superficial, dispersão em gotículas, dissolução de HPAs biodisponíveis e deposição em sedimento) com atenuação luminosa, perdas atmosféricas e exportação oceânica hidrodinâmica.
-   - **Ecotoxicologia Subletal de HPAs:** Curvas de inibição de regeneração tecidual em corais recifais baseadas em May et al. (2020) com EC50 de 10 µg/L tPAH50.
-   - **Microplásticos nos Estuários (`part./m³`):** Controle e resposta modelados diretamente em concentração superficial (`0 a 35.000 part./m³`), ancorados nas faixas medidas nos estuários da BTS por Trindade et al. (2023, v. 323) sem conversão arbitrária para massa.
-4. **Cenário Experimental Interativo:** Bancada didática em que o usuário manipula forçantes e observa a resposta ecossistêmica sem sobrescrever os registros observacionais externos.
+1. **`satellite-derived` (Sensoriamento Remoto Satelital — NOAA Coral Reef Watch):**
+   * SST (Temperatura da Superfície do Mar), anomalia térmica, HotSpot, Degree Heating Weeks (DHW) oficial e nível de alerta de branqueamento (`CRW_BAA`, 0 a 7) na grade global de 5 km.
+   * Arquitetura resiliente multi-fonte: PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu`), NOAA CoastWatch ERDDAP (`coastwatch.pfeg.noaa.gov`) e Coral Watch Virtual Station API (`api.coral.tsr.lol`).
+   * A temperatura retornada pela API é injetada diretamente na simulação e salva em armazenamento local persistente (`localStorage`). O usuário acompanha visualmente o status da conexão via badge dedicado no menu de Dados.
+   * *Restrição metodológica estrita:* Coordenadas de pixels da grade de satélite não são exibidas como marcadores geográficos locais na baía, respeitando as limitações de resolução espacial costeira.
 
-## Funcionalidades
+2. **`external-model` (Modelagem Numérica Oceânica Externa — Open-Meteo Marine):**
+   * Séries temporais de altura significativa de onda ($H_s$), correntes e maré derivadas dos modelos Copernicus/ECMWF para a boca da BTS, com carimbos normalizados em UTC.
 
-- **Cena marinha 3D em tempo real** renderizada via Babylon.js 9 com carregamento sob demanda (`React.lazy`/`Suspense`).
-- **Compartimentalização por Setores da BTS:** Calibração central com foco no recife da Ilha dos Frades (Baía Central / Recifes de Franja; Cirano & Lessa, 2007), complementado pelo Estuário do Rio Paraguaçu (manguezais / fundo da baía) e Boca da Barra (acesso oceânico), com batimetrias, volumes de mistura, tempos de descarga hidrodinâmica e salinidades específicas.
-- **Regimes de Esgoto Selecionáveis:** Aporte contínuo diário ($\text{kg DBO}_5/\text{dia}$) ou pulso pontual instantâneo ($\Delta\text{DBO}$).
-- **Monitor de Sistema Carbonato:** Graus de saturação mineral ($\Omega_{\text{arag}}$, $\Omega_{\text{calc}}$) e $p\text{CO}_2$ com alertas de risco de corrosão do esqueleto coralino.
-- **Cinética de Desoxigenação:** Efeitos subletais e hipóxia severa influenciando a sobrevivência de peixes e corais.
-- **Estresse Térmico Simulado vs. DHW Satelital NOAA:** Separação explícita entre o DHW observacional externo da NOAA (baseado na climatologia MMM de cada pixel) e o estresse térmico acumulado do cenário local (`MMM didática = 28,0 °C`, janela móvel de 84 dias).
-- **Restauração e Desfazer:** Retorno imediato ao estado inicial de referência do setor e histórico de desfazer alterações de variáveis.
-- **Painel de Dados e Evolução:** Gráficos temporais, cadeia causal do modelo, classificação do nível de evidência dos parâmetros (`Medido`, `Publicado`, `Hipótese do Modelo`, `Parâmetro Didático`) e rastreabilidade completa das consultas externas.
-- **Controles de Tempo:** Velocidades 1× (`0,5 dia/s`), 3× (`1,5 dia/s`), 5× (`2,5 dias/s`) e 10× (`5 dias/s`) com integração física invariante por sub-stepping numérico independente da velocidade.
-- **Desafios e Marcos Pedagógicos:** Diagnóstico e recuperação de recifes degradados.
+3. **`kirimure-model` (Modelos Físico-Químicos Acoplados da Simulação Local):**
+   * **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Saturação termodinâmica de Weiss (1970), cinética de reaeração ar-mar de Streeter-Phelps, decaimento de $\text{DBO}_5 \rightarrow \text{CBOD}_u$, demanda bentônica de oxigênio (SOD; Bowie et al., 1985) e trocas metabólicas líquidas. Piso termodinâmico a $0{,}05\text{ mg/L}$.
+   * **Sistema Carbonato Marinho (`carbonate.ts`):** Equilíbrio de $\text{CO}_2$ marinho pelos coeficientes de Lueker et al. (2000), Dickson (1990) e Mucci (1983). Calcula pH efetivo, $p\text{CO}_2$ e saturação de aragonita ($\Omega_{\text{arag}}$) e calcita ($\Omega_{\text{calc}}$).
+   * **Dinâmica e Balanço de Massa de Óleo (`contaminants.ts`):** Particionamento em filme superficial, gotículas dispersas na coluna, HPAs biodisponíveis dissolvidos e adsorção no sedimento bentônico, com atenuação luminosa e ecotoxicologia em corais (May et al., 2020).
+   * **Microplásticos Estuarinos (`part./m³`):** Concentração volumétrica superficial balizada pelas medições empíricas dos estuários da BTS (Trindade et al., 2023; 5.176 a 32.784 itens/m³).
+
+4. **`didactic-assumption` (Cenário Interativo Experimental):**
+   * Bancada pedagógica interativa para experimentação de hipóteses em sala de aula, sem sobrescrever ou mascarar dados empíricos reais.
+
+---
+
+## Visualização 3D Científica (Babylon.js 9)
+
+O motor gráfico tridimensional em tempo real utiliza Babylon.js 9 (`WebGL` / `WebGPU`) com carregamento sob demanda:
+
+* **Biofísica e Estresse Respiratório dos Peixes:** Quando o Oxigênio Dissolvido ($OD$) decai abaixo de $5{,}0\text{ mg/L}$, os cardumes exibem desaceleração natatória e letargia metabólica progressiva. Sob anóxia severa ($OD < 2{,}0\text{ mg/L}$), ocorre colapso biológico com inversão e sedimentação.
+* **Branqueamento Coralino Gradual:** Degradação de zooxantelas ativada por estresse térmico prolongado (DHW acumulado) e acidificação da água ($\Omega_{\text{arag}} < 3{,}0$).
+* **Atenuação Luminosa e Cáusticas Bentônicas:** Reflexos de cáusticas solares na areia do fundo atenuados dinamicamente pela presença combinada de óleo, esgoto orgânico e turbidez associada à hipóxia.
+* **Plumas Difusas de Esgoto:** Dispersão subaquática restrita à coluna d'água ($v > 0{,}285$), preservando céu, sol e barco.
+* **Microplásticos com Curl Noise:** Advecção hidrodinâmica suave via campo de vetores, flutuação por densidade e cintilações ópticas quando as facetas refletem raios solares.
+
+---
+
+## Experiência do Usuário e Responsividade
+
+* **Seletor de Métricas Dinâmico:**
+  * **Desktop:** Indicadores ilimitados com quebra automática de linha (*flex-wrap*) para garantir legibilidade integral.
+  * **Mobile:** Limite de 3 métricas em smartphones padrão ($\le 680\text{px}$) e 2 métricas em telas ultra-compactas ($\le 390\text{px}$).
+  * **Substituição Inteligente FIFO:** Ao marcar uma nova métrica no mobile, a primeira selecionada é desmarcada automaticamente, mantendo a tela despoluída.
+* **Controles Temporais e Escala de Simulação:** Velocidades 1× (`0,5 dia/s`), 3×, 5× e 10× (`5 dias/s`), com integração numérica por sub-stepping para invariância física dos resultados.
+* **Botão de Apoio à Causa:** Integrado na barra superior com estilo e curvatura unificados aos botões de controle (`var(--radius-control)`).
+
+---
 
 ## Tecnologias
 
-### Linguagens e Frameworks
+* **Linguagem & Tipagem:** TypeScript 6 (com tipagem estrita no simulador e na camada de rede).
+* **Interface:** React 19.
+* **Engine Gráfica 3D:** Babylon.js 9 (`@babylonjs/core`, `@babylonjs/loaders`).
+* **Qualidade de Código & Linting:** ESLint 10 (Flat Config com `@eslint/js`, `typescript-eslint` e `eslint-plugin-react-hooks`).
+* **Testes Automatizados:** Vitest (133 testes cobrindo todo o modelo científico, adaptadores e componentes).
+* **Build & Bundler:** Vite 8 com tree-shaking para produção.
 
-- **TypeScript** (tipagem estrita em todo o motor de simulação e serviços).
-- **React 19** para arquitetura de componentes reativos e interface.
-- **Babylon.js 9** (`@babylonjs/core`, `@babylonjs/loaders`) para renderização 3D WebGL/WebGPU.
-- **Vite 8** para empacotamento, compilação e tree-shaking otimizado.
-- **Vitest** para testes de unidade e integração contínua das rotinas científicas.
+---
 
-## Executando localmente
+## Desenvolvimento e Execução Local
 
 ### Pré-requisitos
-
-- Node.js 20 ou superior.
-- npm.
+* Node.js 20 ou superior
+* npm
 
 ### Instalação
-
 ```bash
 git clone https://github.com/EbertSoares/Kirimure.git
 cd Kirimure
 npm install
 ```
 
-### Ambiente de desenvolvimento
+### Comandos Disponíveis
 
-```bash
-npm run dev
-```
+| Comando | Descrição |
+| :--- | :--- |
+| `npm run dev` | Inicia o servidor local de desenvolvimento Vite com HMR |
+| `npm run build` | Validação de tipos (`tsc --noEmit`) e compilação para produção em `dist/` |
+| `npm run lint` | Executa o linter ESLint em todo o código-fonte `src` |
+| `npm run lint:fix` | Corrige automaticamente problemas de formatação e lint |
+| `npm run test:run` | Executa a suíte de 133 testes automatizados via Vitest |
+| `npm run preview` | Pré-visualização local dos artefatos compilados de produção |
 
-### Build de produção
+---
 
-```bash
-npm run build
-```
-
-O comando de build executa três etapas sequenciais obrigatórias:
-1. `check:offline`: Auditoria estática de código que assegura que chamadas de rede estejam confinadas estritamente a `src/services/`, impedindo vazamento de dependências de rede no runtime da simulação.
-2. `tsc --noEmit`: Verificação rigorosa de contratos e tipos TypeScript.
-3. `vite build`: Empacotamento otimizado de produção em `dist/`.
-
-### Testes automatizados
-
-```bash
-npm test
-```
-
-Executa a suíte de testes cobrindo o modelo de simulação, cinética de oxigênio, sistema carbonato, particionamento de contaminantes e adaptadores de proveniência de dados.
-
-## Estrutura do Projeto
+## Estrutura do Código-Fonte
 
 ```text
 src/
-├── assets/               Modelos 3D, texturas e artes visuais
-├── components/           Componentes de interface, gráficos e Painel de Ciência
-├── hooks/
-│   └── useOceanData.ts   Hook de sincronização com NOAA CRW e Open-Meteo
-├── scene/                Cena 3D Babylon.js e animação procedural dos peixes
-├── services/             Adaptadores de dados externos, tratamento e contingência
-│   ├── http.ts           Cliente HTTP resiliente com timeout total de leitura, retry e classificação de erros
-│   ├── coralWatchApi.ts  Adaptador Coral Watch Virtual Station API (api.coral.tsr.lol)
-│   ├── noaaCrw.ts        Cliente NOAA CRW multi-fonte (Coral Watch / PacIOOS ERDDAP / CoastWatch PFEG)
-│   ├── noaaCrwSnapshots.ts Snapshots históricos calibrados (El Niño 2024) do NOAA CRW
-│   ├── openMeteo.ts      Cliente Copernicus/ECMWF Open-Meteo Marine com normalização UTC
-│   ├── openMeteoSnapshots.ts Snapshots históricos meteorológicos e hidrodinâmicos
-│   └── types.ts          Tipagem estrita de proveniência de dados oceanográficos
-├── simulation/           Motor de simulação científica determinística
-│   ├── carbonate.ts      Equilíbrio termodinâmico do sistema carbonato (Lueker/Mucci)
-│   ├── contaminants.ts   Balanço de óleo em 4 reservatórios e dados de microplásticos
-│   ├── oxygen.ts         Solubilidade de Weiss e cinética DBO/OD Streeter-Phelps
-│   ├── sectors.ts        Parâmetros oceanográficos e hidrodinâmicos dos setores da BTS
-│   ├── model.ts          Acoplamento ecológico, cálculo de estresse e saúde
-│   └── types.ts          Tipos de forçantes, estado e indicadores
-├── App.tsx               Coordenação do estado, alternância de cenários e controles
-└── main.tsx              Ponto de entrada da aplicação
-scripts/
-└── check-offline-runtime.mjs  Auditoria de desacoplamento de rede
+├── assets/               Modelos 3D, texturas procedurais e artes visuais
+├── components/           Interface, Topbar, Controles de Métricas, Mapa da Bahia e Painel de Ciência
+├── hooks/                Sincronização de dados oceanográficos e estado de redimensionamento
+├── scene/                Cena 3D Babylon.js, cardumes e simulação de fluidos
+├── services/             Clientes NOAA CRW, Open-Meteo, tipos de proveniência e persistência
+├── simulation/           Modelos acoplados de oxigênio, sistema carbonato, óleo, microplásticos e setores da BTS
+├── styles.css            Design system responsivo com temas oceânicos e suporte a toque
+├── App.tsx               Orquestrador principal de estado da simulação e interface
+└── main.tsx              Ponto de entrada React 19
+docs/
+├── architecture/         Decisões arquiteturais (ADR Babylon.js WebGPU)
+├── data-sources/         Mapeamento de fontes locais da BTS (UFBA, INEMA)
+└── science/              Equações, limites e pressupostos analíticos do modelo
 ```
+
+---
 
 ## Referências Científicas Principais
 
-- **Solubilidade de Oxigênio:** Weiss, R. F. (1970). *The solubility of nitrogen, oxygen and argon in water and seawater*. Deep Sea Research, 17(4), 721-735.
-- **Sistema Carbonato:** Lueker, T. J., Dickson, A. G., & Keeling, C. D. (2000). *Ocean pCO2 calculated from dissolved inorganic carbon, alkalinity, and equations for K1 and K2*. Marine Chemistry, 70(1-3), 105-119.
-- **Solubilidade de Aragonita e Calcita:** Mucci, A. (1983). *The solubility of calcite and aragonite in seawater at various salinities, temperatures, and one atmosphere total pressure*. American Journal of Science, 283(7), 780-799.
-- **Estresse Térmico em Corais:** NOAA Coral Reef Watch (CRW). *Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring*.
-- **Ecotoxicologia em Recifes:** May, L. A., et al. (2020). *Ecotoxicological effects of petroleum hydrocarbons on tropical reef-building corals*. Aquatic Toxicology, 226, 105454.
-- **Microplásticos na BTS:** Trindade, R. F., et al. (2023). *Microplastics in estuaries of Todos os Santos Bay, Bahia, Brazil*. Environmental Pollution, 323, 121224.
-- **Oceanografia da BTS:** Cirano, M., & Lessa, G. C. (2007). *Oceanographic characteristics of Baía de Todos os Santos, Brazil*. Revista Brasileira de Geofísica, 25(4), 363-387.
+1. **Weiss, R. F. (1970).** *The solubility of nitrogen, oxygen and argon in water and seawater*. Deep Sea Research, 17(4), 721-735.
+2. **Lueker, T. J., Dickson, A. G., & Keeling, C. D. (2000).** *Ocean pCO2 calculated from dissolved inorganic carbon, alkalinity, and equations for K1 and K2*. Marine Chemistry, 70(1-3), 105-119.
+3. **Mucci, A. (1983).** *The solubility of calcite and aragonite in seawater at various salinities, temperatures, and one atmosphere total pressure*. American Journal of Science, 283(7), 780-799.
+4. **NOAA Coral Reef Watch (CRW).** *Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring*.
+5. **May, L. A., et al. (2020).** *Ecotoxicological effects of petroleum hydrocarbons on tropical reef-building corals*. Aquatic Toxicology, 226, 105454.
+6. **Trindade, R. F., et al. (2023).** *Microplastics in estuaries of Todos os Santos Bay, Bahia, Brazil*. Environmental Pollution, 323, 121224.
+7. **Cirano, M., & Lessa, G. C. (2007).** *Oceanographic characteristics of Baía de Todos os Santos, Brazil*. Revista Brasileira de Geofísica, 25(4), 363-387.
