@@ -133,6 +133,7 @@ interface EnvironmentDrawerProps {
   onToggleIntervention: (id: InterventionId) => void;
   onOpenInterventionLimits: (id: InterventionId) => void;
   timelineMilestones?: ImpactMilestone[];
+  referenceTemperature?: number;
 }
 
 interface FactorRowProps {
@@ -142,6 +143,7 @@ interface FactorRowProps {
   targetVal: number;
   sewageMode: 'continuous' | 'pulse';
   focused: boolean;
+  referenceTemperature?: number;
   onAdjustFactor: (id: ItemId, value: number) => void;
   onCommitFactor: (id: ItemId) => void;
   onResetSingleFactor: (id: ItemId) => void;
@@ -156,6 +158,7 @@ const FactorRow = memo(function FactorRow({
   targetVal,
   sewageMode,
   focused,
+  referenceTemperature,
   onAdjustFactor,
   onCommitFactor,
   onResetSingleFactor,
@@ -163,7 +166,8 @@ const FactorRow = memo(function FactorRow({
   onTriggerSewagePulse,
 }: FactorRowProps) {
   const item = ITEM_DEFINITIONS[id];
-  const active = isFactorActive(id, controlVal);
+  const baselineVal = id === 'temperature' && referenceTemperature !== undefined ? referenceTemperature : undefined;
+  const active = isFactorActive(id, controlVal, baselineVal);
   const scaleOptions = item.scaleOptions;
 
   const displayedTarget = formatParameterValue(id, controlVal, sewageMode);
@@ -322,6 +326,7 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
   onToggleIntervention,
   onOpenInterventionLimits,
   timelineMilestones,
+  referenceTemperature,
 }: EnvironmentDrawerProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<ControlCategoryId, boolean>>({
     water: false,
@@ -416,7 +421,10 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
       <div className="env-drawer-body">
         {CONTROL_GROUPS.map((group) => {
           const isExpanded = expandedGroups[group.id];
-          const activeCount = group.items.filter((id) => isFactorActive(id, controls[id])).length;
+          const activeCount = group.items.filter((id) => {
+            const baseRef = id === 'temperature' && referenceTemperature !== undefined ? referenceTemperature : undefined;
+            return isFactorActive(id, controls[id], baseRef);
+          }).length;
 
           return (
             <section key={group.id} className={`control-group ${isExpanded ? 'is-open' : 'is-collapsed'}`}>
@@ -454,6 +462,7 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
                       targetVal={simulation.targets[id]}
                       sewageMode={sewageMode}
                       focused={focusedFactor === id}
+                      referenceTemperature={referenceTemperature}
                       onAdjustFactor={onAdjustFactor}
                       onCommitFactor={onCommitFactor}
                       onResetSingleFactor={onResetSingleFactor}

@@ -45,8 +45,9 @@ function combine(stresses: number[]) {
   return 1 - stresses.reduce((product, stress) => product * (1 - stress), 1);
 }
 
-export function isFactorActive(id: ItemId, value: number) {
-  return Math.abs(value - BASELINE[id]) > 1e-9;
+export function isFactorActive(id: ItemId, value: number, baselineValue?: number) {
+  const ref = baselineValue !== undefined ? baselineValue : BASELINE[id];
+  return Math.abs(value - ref) > 1e-9;
 }
 
 /** Um fator entra na simulação quando a barra sai da posição inicial. */

@@ -151,10 +151,15 @@ export function App() {
     'ph',
   ]);
   const [metricsSelectorOpen, setMetricsSelectorOpen] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1200));
   const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 680 : false));
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 680);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setWindowWidth(width);
+      setIsMobile(width <= 680);
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -166,12 +171,24 @@ export function App() {
     [simulation.sector],
   );
 
+  const apiTemperatureRef = useMemo(() => {
+    const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
+    if (typeof sst === 'number' && Number.isFinite(sst)) {
+      return parseFloat(sst.toFixed(1));
+    }
+    const saved = getSavedSst(simulation.sector);
+    if (typeof saved === 'number' && Number.isFinite(saved)) {
+      return saved;
+    }
+    return sectorDef.baselineTemperature;
+  }, [oceanData.latestCrw, simulation.sector, sectorDef.baselineTemperature]);
+
   const activeFactorIds = useMemo(
     () => FACTOR_ORDER.filter((id) => {
-      const refVal = id === 'temperature' ? sectorDef.baselineTemperature : BASELINE[id];
+      const refVal = id === 'temperature' ? apiTemperatureRef : BASELINE[id];
       return Math.abs(simulation.controls[id] - refVal) > 1e-6;
     }),
-    [simulation.controls, sectorDef.baselineTemperature],
+    [simulation.controls, apiTemperatureRef],
   );
 
   // Laço temporal determinístico a 10 Hz (velocidade aplicada uma única vez em tickSimulation)
@@ -354,8 +371,7 @@ export function App() {
 
   const handleResetSingleFactor = useCallback((id: ItemId) => {
     const curr = simulationRef.current;
-    const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
-    const defaultVal = id === 'temperature' ? sector.baselineTemperature : BASELINE[id];
+    const defaultVal = id === 'temperature' ? apiTemperatureRef : BASELINE[id];
 
     setUndoStack((prev) => [
       ...prev.slice(-24),
@@ -370,7 +386,7 @@ export function App() {
         targets: nextTargets,
       };
     });
-  }, []);
+  }, [apiTemperatureRef]);
 
   const handleUndo = useCallback(() => {
     const stack = undoStackRef.current;
@@ -668,9 +684,18 @@ export function App() {
     };
   }, [simulation]);
 
+  const maxMetricsCount = useMemo(() => {
+    if (windowWidth <= 390) return 2;
+    if (windowWidth <= 680) return 3;
+    return Infinity;
+  }, [windowWidth]);
+
   const displayedIndicatorIds = useMemo<readonly ContextualIndicatorId[]>(() => {
-    return isMobile ? selectedIndicatorIds.slice(0, 3) : selectedIndicatorIds;
-  }, [isMobile, selectedIndicatorIds]);
+    if (Number.isFinite(maxMetricsCount)) {
+      return selectedIndicatorIds.slice(0, maxMetricsCount);
+    }
+    return selectedIndicatorIds;
+  }, [maxMetricsCount, selectedIndicatorIds]);
 
   const toggleEnvDrawer = () => {
     setEnvDrawerOpen((open) => {
@@ -788,30 +813,13 @@ export function App() {
             <span className="map-return-btn__desktop">Voltar ao mapa</span>
             <span className="map-return-btn__mobile">Mapa</span>
           </button>
-
-          <div
-            className={`api-status-badge tone-${oceanData.noaaStatus.state === 'error' ? 'error' : oceanData.latestCrw ? 'healthy' : 'loading'}`}
-            title={
-              oceanData.noaaStatus.state === 'error'
-                ? 'Falha na busca da API NOAA (mantendo último valor salvo)'
-                : oceanData.latestCrw
-                  ? `API NOAA Funcionando: SST ${simulation.env.temperature.toFixed(1)} °C aplicada`
-                  : 'Buscando dados da API NOAA...'
-            }
-          >
-            <span className="api-status-dot" aria-hidden="true" />
-            <span className="api-status-label">
-              {oceanData.noaaLoading
-                ? 'Buscando API...'
-                : oceanData.noaaStatus.state === 'error'
-                  ? 'Falha na busca'
-                  : 'API Funcionando'}
-            </span>
-          </div>
         </div>
 
         <div className="lab-topbar-center">
           <BrandLogo />
+        </div>
+
+        <div className="lab-topbar-right">
           <a
             href="https://www.vakinha.com.br/vaquinha/da-bahia-para-a-franca-leve-a-equipe-kirimure-a-grande-final-mundial?utm_campaign=whatsapp&utm_content=6425557&utm_medium=website&utm_source=social-shares"
             target="_blank"
@@ -824,20 +832,19 @@ export function App() {
             <span className="btn-support-text desktop">Apoiar o Projeto</span>
             <span className="btn-support-text mobile">Apoiar</span>
           </a>
-        </div>
 
-        <div className="experiment-actions-bar">
-          <button
-            type="button"
-            className="btn btn--quiet"
-            disabled={undoStack.length === 0}
-            onClick={handleUndo}
-            aria-label="Desfazer alteração"
-            title="Desfazer alteração"
-          >
-            <Icon name="undo" />
-            <span className="hide-tablet">Desfazer</span>
-          </button>
+          <div className="experiment-actions-bar">
+            <button
+              type="button"
+              className="btn btn--quiet"
+              disabled={undoStack.length === 0}
+              onClick={handleUndo}
+              aria-label="Desfazer alteração"
+              title="Desfazer alteração"
+            >
+              <Icon name="undo" />
+              <span className="hide-tablet">Desfazer</span>
+            </button>
 
           <button
             type="button"
@@ -879,7 +886,8 @@ export function App() {
             <span>Dados</span>
           </button>
         </div>
-      </header>
+      </div>
+    </header>
 
       <main className={`lab-workspace ${envDrawerOpen || evidenceOpen ? 'has-drawer-open' : ''}`}>
         <section className="reef-stage" aria-label="Recife 3D da Baía de Todos-os-Santos">
@@ -1035,6 +1043,7 @@ export function App() {
           onToggleIntervention={handleToggleIntervention}
           onOpenInterventionLimits={handleOpenInterventionLimits}
           timelineMilestones={timelineMilestones}
+          referenceTemperature={apiTemperatureRef}
         />
 
         <EvidenceDrawer
@@ -1071,9 +1080,11 @@ export function App() {
                   <div>
                     <h3 id="metrics-modal-title" className="limits-modal-title">Métricas no Visualizador</h3>
                     <span className="limits-modal-target">
-                      {isMobile
-                        ? 'No celular, são exibidas as 3 primeiras métricas selecionadas'
-                        : 'Selecione quais indicadores exibir com barra sobre o recife'}
+                      {windowWidth <= 390
+                        ? 'Em telas compactas (≤ 390px), são exibidas até 2 métricas simultâneas'
+                        : windowWidth <= 680
+                          ? 'No celular, são exibidas até 3 métricas simultâneas'
+                          : 'Selecione quais indicadores exibir no laboratório'}
                     </span>
                   </div>
                 </div>
