@@ -3633,8 +3633,10 @@ export class BabylonOceanRuntime {
         fish.verticalVelocity = 0;
 
         const school = this.schools[fish.schoolId] ?? this.schools[0];
-        const stressRatio = clamp((70 - health) / 70);
-        const speedMul = 0.52 + (1 - stressRatio) * 0.48;
+        const healthStress = clamp((70 - health) / 70);
+        const hypoxiaStress = clamp((5.0 - dissolvedOxygen) / 3.0);
+        const stressRatio = Math.max(healthStress, hypoxiaStress);
+        const speedMul = 0.40 + (1 - stressRatio) * 0.60;
         fish.swimPhase += dt * fish.speed * speedMul;
 
         // Oscilação individual suave e serena dentro do cardume
@@ -3948,8 +3950,10 @@ export class BabylonOceanRuntime {
         fish.stageElapsed = 0;
         fish.verticalVelocity = 0;
 
-        const stressRatio = clamp((70 - overallHealth) / 70);
-        const speedMul = 0.54 + (1 - stressRatio) * 0.46;
+        const healthStress = clamp((70 - overallHealth) / 70);
+        const hypoxiaStress = clamp((5.0 - dissolvedOxygen) / 3.0);
+        const stressRatio = Math.max(healthStress, hypoxiaStress);
+        const speedMul = 0.42 + (1 - stressRatio) * 0.58;
         const stepAdvance = dt * fish.speed * speedMul;
         fish.swimPhase += stepAdvance;
 
@@ -4587,8 +4591,10 @@ export class BabylonOceanRuntime {
     const oilStrength = Math.pow(clamp(this.visualOil), 0.68);
     updateOilSpillSystem(this.oilSpillSystem, oilStrength, this.elapsed, dt, this.aspect, this.fitting);
 
-    // 3b. Atualiza cáusticas e feixes de luz solar passando na areia (atenuados pela turbidez/óleo)
-    const waterClarity = clamp(1 - oilStrength * 0.72 - sewageStrength * 0.48, 0.12, 1.0);
+    // 3b. Atualiza cáusticas e feixes de luz solar passando na areia (atenuados pela turbidez/óleo e hipóxia)
+    const dissolvedOxygen = this.state.dissolvedOxygen ?? 7.12;
+    const hypoxiaTurbidity = clamp((4.5 - dissolvedOxygen) / 3.5) * 0.22;
+    const waterClarity = clamp(1 - oilStrength * 0.72 - sewageStrength * 0.48 - hypoxiaTurbidity, 0.10, 1.0);
     updateSandCausticsSystem(this.sandCausticsSystem, this.elapsed, dt, waterClarity, this.aspect, this.fitting);
 
     // 4. Atualiza advecção por vórtices (Curl Noise) e tombamento 3D dos microplásticos

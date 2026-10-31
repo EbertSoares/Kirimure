@@ -122,7 +122,7 @@ export function calculateCarbonateSystem(
   const omegaAragonite = (caMolKg * co3MolKg) / kspArag;
   const omegaCalcite = (caMolKg * co3MolKg) / kspCalc;
 
-  let calcificationStatus: CarbonateSystemState['calcificationStatus'] = 'optimum';
+  let calcificationStatus: CarbonateSystemState['calcificationStatus'];
   if (omegaAragonite >= 3.5) calcificationStatus = 'optimum';
   else if (omegaAragonite >= 3.0) calcificationStatus = 'adequate';
   else if (omegaAragonite >= 2.0) calcificationStatus = 'marginal';

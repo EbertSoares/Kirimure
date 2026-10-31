@@ -176,7 +176,7 @@ export function SciencePanel({
             className={tab === item.id ? 'active' : ''}
             onClick={() => onTabChange(item.id)}
             onKeyDown={(e) => {
-              let nextIndex = index;
+              let nextIndex: number;
               if (e.key === 'ArrowRight') nextIndex = (index + 1) % TABS.length;
               else if (e.key === 'ArrowLeft') nextIndex = (index - 1 + TABS.length) % TABS.length;
               else if (e.key === 'Home') nextIndex = 0;

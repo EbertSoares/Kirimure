@@ -14,7 +14,6 @@ import {
   BASELINE,
   BTS_SECTORS,
   FACTOR_ORDER,
-  ITEM_DEFINITIONS,
 } from './simulation/config';
 import { type ActiveIntervention, type InterventionId } from './simulation/interventions';
 import { calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL } from './simulation/oxygen';
@@ -27,7 +26,6 @@ import {
   effectivePh,
   estimateCriticalDays,
   estimateImpactTimeline,
-  isFactorActive,
   tickSimulation,
   type ImpactMilestone,
 } from './simulation/model';
@@ -152,13 +150,10 @@ export function App() {
   ]);
   const [metricsSelectorOpen, setMetricsSelectorOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1200));
-  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 680 : false));
 
   useEffect(() => {
     const handleResize = () => {
-      const width = window.innerWidth;
-      setWindowWidth(width);
-      setIsMobile(width <= 680);
+      setWindowWidth(window.innerWidth);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -509,7 +504,7 @@ export function App() {
 
     // 1. Oxigênio (OD em mg/L): >= 6.0 ideal (azul); 3.5 a 6.0 alerta (amarelo); < 3.5 hipóxia (vermelho)
     const doVal = simulation.dissolvedOxygen;
-    let oxHealth = 100;
+    let oxHealth: number;
     if (doVal >= 6.0) {
       oxHealth = Math.min(100, 67 + ((doVal - 6.0) / 2.0) * 33);
     } else if (doVal >= 3.5) {
@@ -522,7 +517,7 @@ export function App() {
 
     // 2. Temperatura (°C): 25.0°C a 27.5°C conforto (100% azul); 27.5°C a 29.5°C aquecimento (amarelo); >= 29.5°C estresse agudo (vermelho)
     const tempVal = simulation.env.temperature;
-    let tempHealth = 100;
+    let tempHealth: number;
     if (tempVal <= 27.5) {
       tempHealth = 100;
     } else if (tempVal <= 29.5) {
@@ -535,7 +530,7 @@ export function App() {
 
     // 3. Estresse térmico (DHW): 0.0 a 0.2 °C-sem ideal (100% azul); 0.2 a 4.0 alerta (amarelo); >= 4.0 crítico (vermelho)
     const dhwVal = simulation.degreeHeatingWeeks;
-    let dhwHealth = 100;
+    let dhwHealth: number;
     if (dhwVal <= 0.2) {
       dhwHealth = 100;
     } else if (dhwVal <= 4.0) {
@@ -547,7 +542,7 @@ export function App() {
     const dhwTone: 'good' | 'watch' | 'critical' = dhwPercent >= 67 ? 'good' : dhwPercent >= 34 ? 'watch' : 'critical';
 
     // 4. pH da água: >= 8.10 ideal (100% azul); 7.90 a 8.10 alerta (amarelo); < 7.90 acidificação aguda (vermelho)
-    let phHealth = 100;
+    let phHealth: number;
     if (ph >= 8.10) {
       phHealth = 100;
     } else if (ph >= 7.90) {
@@ -560,7 +555,7 @@ export function App() {
 
     // 5. Aragonita (Ωarag): >= 3.5 ideal (100% azul); 2.5 a 3.5 moderado (amarelo); < 2.5 crítico (vermelho)
     const aragVal = carbonate.omegaAragonite;
-    let aragHealth = 100;
+    let aragHealth: number;
     if (aragVal >= 3.5) {
       aragHealth = 100;
     } else if (aragVal >= 2.5) {
@@ -937,7 +932,14 @@ export function App() {
                 <button
                   type="button"
                   className="btn-customize-metrics"
-                  onClick={() => setMetricsSelectorOpen(true)}
+                  onClick={() => {
+                    if (Number.isFinite(maxMetricsCount)) {
+                      setSelectedIndicatorIds((prev) =>
+                        prev.length > maxMetricsCount ? prev.slice(0, maxMetricsCount) : prev
+                      );
+                    }
+                    setMetricsSelectorOpen(true);
+                  }}
                   title="Editar métricas exibidas no visualizador"
                   aria-label="Editar métricas exibidas"
                 >
@@ -1081,9 +1083,9 @@ export function App() {
                     <h3 id="metrics-modal-title" className="limits-modal-title">Métricas no Visualizador</h3>
                     <span className="limits-modal-target">
                       {windowWidth <= 390
-                        ? 'Em telas compactas (≤ 390px), são exibidas até 2 métricas simultâneas'
+                        ? 'Em telas compactas (≤ 390px), máximo de 2 métricas (ao adicionar outra, a mais antiga é desmarcada)'
                         : windowWidth <= 680
-                          ? 'No celular, são exibidas até 3 métricas simultâneas'
+                          ? 'No celular, máximo de 3 métricas (ao adicionar uma 4ª, a mais antiga é desmarcada)'
                           : 'Selecione quais indicadores exibir no laboratório'}
                     </span>
                   </div>
@@ -1111,6 +1113,11 @@ export function App() {
                           const isChecked = e.target.checked;
                           setSelectedIndicatorIds((prev) => {
                             if (isChecked) {
+                              if (Number.isFinite(maxMetricsCount) && prev.length >= maxMetricsCount) {
+                                // FIFO: desmarca automaticamente a métrica mais antiga selecionada
+                                const kept = prev.slice(prev.length - (maxMetricsCount - 1));
+                                return [...kept, opt.id];
+                              }
                               return [...prev, opt.id];
                             }
                             if (prev.length <= 1) return prev; // Garante ao menos 1
@@ -1128,24 +1135,42 @@ export function App() {
               </div>
 
               <footer className="limits-modal-footer">
-                <button
-                  type="button"
-                  className="btn btn--quiet btn--compact"
-                  onClick={() => {
-                    setSelectedIndicatorIds(ALL_INDICATOR_OPTIONS.map((o) => o.id));
-                  }}
-                >
-                  Marcar todas
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--quiet btn--compact"
-                  onClick={() => {
-                    setSelectedIndicatorIds(['coral', 'fish', 'oxygen', 'temperature', 'ph']);
-                  }}
-                >
-                  Padrão (5)
-                </button>
+                {!Number.isFinite(maxMetricsCount) ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn--quiet btn--compact"
+                      onClick={() => {
+                        setSelectedIndicatorIds(ALL_INDICATOR_OPTIONS.map((o) => o.id));
+                      }}
+                    >
+                      Marcar todas
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--quiet btn--compact"
+                      onClick={() => {
+                        setSelectedIndicatorIds(['coral', 'fish', 'oxygen', 'temperature', 'ph']);
+                      }}
+                    >
+                      Padrão (5)
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn--quiet btn--compact"
+                    onClick={() => {
+                      setSelectedIndicatorIds(
+                        maxMetricsCount === 2
+                          ? ['coral', 'fish']
+                          : ['coral', 'fish', 'oxygen']
+                      );
+                    }}
+                  >
+                    Restaurar padrão ({maxMetricsCount})
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn--primary btn--compact"
