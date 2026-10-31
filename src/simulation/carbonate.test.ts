@@ -116,4 +116,51 @@ describe('módulo do sistema carbonato marinho e saturação de aragonita', () =
     expect(meta.variable).toContain('Sistema Carbonato');
     expect(meta.unit).toBe('adimensional (escala de saturação)');
   });
+
+  it('respeita a monotonicidade estrita em toda a faixa de pH (7.40 a 8.30)', () => {
+    const phValues = [7.40, 7.60, 7.80, 8.00, 8.20];
+    const systems = phValues.map((ph) => calculateCarbonateSystem(ph, 2350, 26.8, 35.0));
+
+    for (let i = 0; i < systems.length - 1; i += 1) {
+      const current = systems[i]!;
+      const next = systems[i + 1]!;
+      // Aumentar o pH deve aumentar estritamente a saturação de aragonita e diminuir pCO2
+      expect(next.omegaAragonite).toBeGreaterThan(current.omegaAragonite);
+      expect(next.omegaCalcite).toBeGreaterThan(current.omegaCalcite);
+      expect(next.pCO2Uatm).toBeLessThan(current.pCO2Uatm);
+      expect(next.carbonateIonUmolKg).toBeGreaterThan(current.carbonateIonUmolKg);
+    }
+  });
+
+  it('comporta-se estavelmente em extremos biogeoquímicos (pH 7.20 e pH 8.40; salinidade 10 e 38 PSU)', () => {
+    const extremeAcidic = calculateCarbonateSystem(7.20, 2350, 26.8, 35.0);
+    expect(extremeAcidic.omegaAragonite).toBeLessThan(1.0);
+    expect(extremeAcidic.calcificationStatus).toBe('corrosive');
+    expect(Number.isFinite(extremeAcidic.pCO2Uatm)).toBe(true);
+
+    const extremeBasic = calculateCarbonateSystem(8.40, 2350, 26.8, 35.0);
+    expect(extremeBasic.omegaAragonite).toBeGreaterThan(4.5);
+    expect(extremeBasic.calcificationStatus).toBe('optimum');
+
+    const lowSalinity = calculateCarbonateSystem(8.00, 2350 * (10 / 35), 26.8, 10.0);
+    expect(lowSalinity.omegaAragonite).toBeGreaterThan(0);
+    expect(Number.isFinite(lowSalinity.dissolvedInorganicCarbonUmolKg)).toBe(true);
+
+    const highSalinity = calculateCarbonateSystem(8.10, 2350 * (38 / 35), 26.8, 38.0);
+    expect(highSalinity.omegaAragonite).toBeGreaterThan(3.5);
+  });
+
+  it('convergência estrita da bisseção para impacto respiratório com incrementos sucessivos de DIC', () => {
+    const basePh = 8.15;
+    const r1 = calculateRespirationPhImpact(basePh, 2.0);
+    const r2 = calculateRespirationPhImpact(basePh, 10.0);
+    const r3 = calculateRespirationPhImpact(basePh, 30.0);
+
+    // Maior adição de CO2 respiratório causa maior queda de pH e aumento de DIC
+    expect(r1.effectivePh).toBeGreaterThan(r2.effectivePh);
+    expect(r2.effectivePh).toBeGreaterThan(r3.effectivePh);
+    expect(r3.carbonateSystem.dissolvedInorganicCarbonUmolKg).toBeGreaterThan(
+      r2.carbonateSystem.dissolvedInorganicCarbonUmolKg,
+    );
+  });
 });

@@ -114,4 +114,36 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
     expect(BTS_METEO_FALLBACK_SNAPSHOT[0].provenance.isCachedFallback).toBe(true);
     expect(BTS_METEO_FALLBACK_SNAPSHOT[0].provenance.fetchStatus).toBe('fallback_cached');
   });
+
+  it('padroniza as 5 origens de dados canônicas e rótulos de qualidade', async () => {
+    const { getOriginLabel, getQualityLabel } = await import('./types');
+    expect(getOriginLabel('in-situ')).toBe('Medição In-situ');
+    expect(getOriginLabel('satellite-derived')).toBe('Estimativa Satelital');
+    expect(getOriginLabel('external-model')).toBe('Modelo Oceânico Externo');
+    expect(getOriginLabel('kirimure-model')).toBe('Modelo Numérico Kirimurê');
+    expect(getOriginLabel('didactic-assumption')).toBe('Cenário Didático');
+
+    expect(getQualityLabel('valid')).toBe('Válido');
+    expect(getQualityLabel('questionable')).toContain('Suspeita');
+    expect(getQualityLabel('masked')).toContain('Mascarado');
+    expect(getQualityLabel('unavailable')).toBe('Indisponível');
+  });
+
+  it('respeita a restrição estrita: nenhum pixel de grade NOAA tem coordenadas expostas na UI', async () => {
+    // Importa o código-fonte como string via Vite ?raw para verificação estática
+    const sciencePanelModule = await import('../components/SciencePanel.tsx?raw');
+    const evidenceDrawerModule = await import('../components/EvidenceDrawer.tsx?raw');
+    const brazilMapModule = await import('../components/BrazilMapScreen.tsx?raw');
+
+    const sciencePanelCode = sciencePanelModule.default;
+    const evidenceDrawerCode = evidenceDrawerModule.default;
+    const brazilMapCode = brazilMapModule.default;
+
+    // Não deve conter interpolação de latitude/longitude de gridCell para NOAA na UI
+    expect(sciencePanelCode).not.toContain('Célula de Grade NOAA');
+    expect(sciencePanelCode).not.toMatch(/latestCrw\.gridCell(\?|\.)latitude/);
+    expect(evidenceDrawerCode).not.toMatch(/latestCrw\.gridCell(\?|\.)latitude/);
+    expect(brazilMapCode).not.toContain('gridCell');
+    expect(brazilMapCode).not.toContain('NOAA');
+  });
 });

@@ -696,17 +696,13 @@ export function EvidenceDrawer({
                       </p>
                       <p>
                         <strong>Data do produto:</strong> {formatShortUtc(oceanData.latestCrw.timestampUtc)} ·{' '}
-                        <strong>Célula efetiva:</strong>{' '}
-                        {oceanData.latestCrw.gridCell
-                          ? `${oceanData.latestCrw.gridCell.latitude.toFixed(3)}°, ${oceanData.latestCrw.gridCell.longitude.toFixed(3)}°`
-                          : '—'}{' '}
-                        ({oceanData.latestCrw.spatialResolution ?? '5 km'})
+                        <strong>Cobertura do produto:</strong> Grade regional de satélite ({oceanData.latestCrw.spatialResolution ?? '5 km'})
                       </p>
                       <p>
                         <strong>Variável de alerta mapeada:</strong>{' '}
-                        <code>{oceanData.latestCrw.bleachingAlertSourceVariable ?? 'CRW_BAA'}</code> (categoria ordinal 0–7 por pixel; não representa área em km²).
+                        <code>{oceanData.latestCrw.bleachingAlertSourceVariable ?? 'CRW_BAA'}</code> (categoria ordinal 0–7 por célula; não representa área em km²).
                         {oceanData.latestCrw.isVirtualStation && (
-                          <> Fonte complementar de terceiros da estação virtual regional <code>todos_os_santos</code>, próxima à entrada da baía.</>
+                          <> Fonte complementar da estação virtual regional <code>todos_os_santos</code> (província recifal da Bahia; não resolve canais estuarinos internos).</>
                         )}
                       </p>
                       <p className="method-caveat">

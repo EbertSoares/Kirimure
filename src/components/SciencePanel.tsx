@@ -1051,19 +1051,17 @@ export function SciencePanel({
                     <summary className="source-method-summary">Fonte, método e limitações ▾</summary>
                     <div className="source-method-content">
                       <p style={{ margin: 0 }}>
-                        <strong>Coordenadas Solicitadas:</strong> {sector.coordinates.latitude.toFixed(2)}°, {sector.coordinates.longitude.toFixed(2)}° ({sector.label})<br />
+                        <strong>Setor do Cenário:</strong> {sector.label}<br />
                         {oceanData.latestCrw.isVirtualStation ? (
                           <>
-                            <strong>Estação Virtual Regional NOAA CRW:</strong> {oceanData.latestCrw.virtualStationName ?? 'Todos os Santos, Brazil'} ({oceanData.latestCrw.gridCell?.latitude.toFixed(3)}°, {oceanData.latestCrw.gridCell?.longitude.toFixed(3)}°)<br />
+                            <strong>Referência Regional NOAA CRW:</strong> {oceanData.latestCrw.virtualStationName ?? 'Todos os Santos, Brazil'}<br />
                             <strong>SST Percentil 90 (HotSpot):</strong> {oceanData.latestCrw.sst90thPercentileDegC !== null && oceanData.latestCrw.sst90thPercentileDegC !== undefined ? `${oceanData.latestCrw.sst90thPercentileDegC.toFixed(2)} °C` : '—'}<br />
                             <strong>Faixa SST Observada (Mín–Máx):</strong> {oceanData.latestCrw.sstMinDegC !== null && oceanData.latestCrw.sstMaxDegC !== null && oceanData.latestCrw.sstMinDegC !== undefined && oceanData.latestCrw.sstMaxDegC !== undefined ? `${oceanData.latestCrw.sstMinDegC.toFixed(2)} °C a ${oceanData.latestCrw.sstMaxDegC.toFixed(2)} °C` : '—'}<br />
                           </>
                         ) : (
-                          oceanData.latestCrw.gridCell && (
-                            <>
-                              <strong>Célula de Grade NOAA:</strong> {oceanData.latestCrw.gridCell.latitude.toFixed(3)}°, {oceanData.latestCrw.gridCell.longitude.toFixed(3)}° ({oceanData.latestCrw.spatialResolution ?? '5 km'})<br />
-                            </>
-                          )
+                          <>
+                            <strong>Cobertura do Produto:</strong> Grade Satelital Regional ({oceanData.latestCrw.spatialResolution ?? '5 km'})<br />
+                          </>
                         )}
                         <strong>Dataset:</strong> <code>{oceanData.latestCrw.provenance.datasetId}</code> ({oceanData.latestCrw.provenance.distributor ?? 'ERDDAP'})<br />
                         <strong>Anomalia Oficial (CRW_SSTANOMALY):</strong> {oceanData.latestCrw.sstAnomalyDegC !== null ? `${oceanData.latestCrw.sstAnomalyDegC > 0 ? '+' : ''}${oceanData.latestCrw.sstAnomalyDegC.toFixed(2)} °C` : 'Ausente'}<br />
@@ -1083,9 +1081,9 @@ export function SciencePanel({
                       </p>
                       <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
                         <strong>Diferenciação Metodológica:</strong> {oceanData.latestCrw.isVirtualStation
-                          ? 'Esta estação virtual NOAA CRW representa uma referência regional da província recifal da Bahia (-13.375°, -38.375°), calculando HotSpot a partir do percentil 90 dos pixels do recife. Não constitui medição in situ local restrita ao canal interno.'
-                          : 'O HotSpot Térmico é uma grandeza biofísica oficial da NOAA correspondente à anomalia de temperatura acima da média máxima mensal (MMM) do pixel de satélite de 5 km.'}
-                        {' '}Já o <em>Snapshot de Contingência</em> é um registro arquivado local de eventos pretéritos (mar/2024), utilizado com integridade epistemológica quando o enlace de satélite estiver indisponível.
+                          ? 'Esta estação virtual NOAA CRW representa uma referência regional da província recifal da Bahia, calculando HotSpot a partir do percentil 90 dos pixels do recife. Não constitui medição in situ local restrita ao canal interno.'
+                          : 'O HotSpot Térmico é uma grandeza biofísica oficial da NOAA correspondente à anomalia de temperatura acima da média máxima mensal (MMM) na grade regional de satélite de 5 km.'}
+                        {' '}Já o <em>Snapshot de Contingência</em> é um registro arquivado local de eventos pretéritos (mar/2024), utilizado com integridade epistemológica quando o enlace de satélite estiver indisponível. Grade satelital regional: não resolve canais estuarinos internos da BTS.
                       </p>
                     </div>
                   </details>

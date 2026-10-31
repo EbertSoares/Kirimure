@@ -475,7 +475,7 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     critical: 24000,
     riskDirection: 'above',
     tooltip: 'Partículas plásticas menores que 5 mm.',
-    help: 'Medido na BTS (faixa) / Hipótese do Modelo (efeito): Concentração superficial em partículas/m³, alinhada aos levantamentos de Trindade et al. (2023) em estuários da BTS (média ~5.180 part./m³; máximo 32.784 part./m³ no Paraguaçu). Sem conversão artificial para massa em kg.',
+    help: 'Medido na BTS (faixa in-situ) / Hipótese do Modelo (efeito): Concentração superficial em partículas/m³, alinhada aos levantamentos empíricos de Trindade et al. (2023) em estuários da BTS (média ~5.180 part./m³; máximo 32.784 part./m³ no Paraguaçu). Sem conversão artificial para massa em kg. Na visualização 3D, as partículas utilizam escala visual ampliada para permitir percepção didática dos estudantes.',
     icon: 'bottle',
     scaleType: 'nonlinear',
     scaleBadge: 'Escala não linear',

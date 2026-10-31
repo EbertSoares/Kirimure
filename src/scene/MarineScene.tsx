@@ -76,7 +76,7 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `microplastics-${Date.now()}`,
       tone: 'microplastics',
-      label: 'Microplásticos',
+      label: 'Microplásticos (escala ampliada)',
       text: `Concentração ajustada para ${concentration.toLocaleString('pt-BR')} part./m³`,
     });
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateDeoxygenationRate,
+  calculateEquilibriumOxygen,
   calculateReaerationRate,
   calculateWeissOxygenSaturation,
   classifyDissolvedOxygen,
@@ -101,5 +102,84 @@ describe('módulo cinético de oxigênio dissolvido e DBO', () => {
     expect(meta.unit).toBe('mg O₂/L');
     expect(meta.epistemicClass).toBe('Produto de Modelo');
     expect(meta.recordId).toBe('do-bts-coupled-model');
+  });
+
+  it('respeita a monotonicidade: aumentar carga orgânica mantendo condições iguais nunca pode aumentar o oxigênio', () => {
+    const lowLoadEnv = { ...BASELINE, sewage: 5000 };
+    const medLoadEnv = { ...BASELINE, sewage: 20000 };
+    const highLoadEnv = { ...BASELINE, sewage: 80000 };
+
+    const eqLow = calculateEquilibriumOxygen(lowLoadEnv, 'frades');
+    const eqMed = calculateEquilibriumOxygen(medLoadEnv, 'frades');
+    const eqHigh = calculateEquilibriumOxygen(highLoadEnv, 'frades');
+
+    expect(eqLow).toBeGreaterThanOrEqual(eqMed);
+    expect(eqMed).toBeGreaterThanOrEqual(eqHigh);
+
+    // Na integração temporal para 5 dias a partir do mesmo estado inicial:
+    let doLow = 6.55;
+    let bodLow = 0;
+    let doHigh = 6.55;
+    let bodHigh = 0;
+
+    for (let day = 0; day < 5; day += 0.25) {
+      const stepLow = integrateOxygenKinetics(doLow, bodLow, lowLoadEnv, 'frades', 0.25);
+      const stepHigh = integrateOxygenKinetics(doHigh, bodHigh, highLoadEnv, 'frades', 0.25);
+      doLow = stepLow.nextDo;
+      bodLow = stepLow.nextBod;
+      doHigh = stepHigh.nextDo;
+      bodHigh = stepHigh.nextBod;
+    }
+
+    expect(doLow).toBeGreaterThan(doHigh);
+    expect(bodHigh).toBeGreaterThan(bodLow);
+  });
+
+  it('carga orgânica zero não cria demanda de oxigênio atribuível à carga (bodDeoxFlux = 0)', () => {
+    const zeroSewageEnv = { ...BASELINE, sewage: 0 };
+    const step = integrateOxygenKinetics(6.55, 0, zeroSewageEnv, 'frades', 0.1);
+    expect(step.bodDeoxFlux).toBe(0);
+    expect(step.nextBod).toBe(0);
+  });
+
+  it('duplicar massa de entrada em pulso duplica a concentração inicial de CBODu', () => {
+    const delta1 = convertBOD5ToPulseDeltaMgL(25000, 3.2e7);
+    const delta2 = convertBOD5ToPulseDeltaMgL(50000, 3.2e7);
+    expect(delta2).toBeCloseTo(delta1 * 2, 5);
+  });
+
+  it('estabilidade numérica: reduzir o timestep em 2x mantém a trajetória com alta concordância', () => {
+    const sewageEnv = { ...BASELINE, sewage: 30000 };
+
+    // Simulação com dt = 0.2 dias (10 passos = 2 dias)
+    let doCoarse = 6.55;
+    let bodCoarse = 0;
+    for (let i = 0; i < 10; i += 1) {
+      const step = integrateOxygenKinetics(doCoarse, bodCoarse, sewageEnv, 'frades', 0.2);
+      doCoarse = step.nextDo;
+      bodCoarse = step.nextBod;
+    }
+
+    // Simulação com dt = 0.1 dias (20 passos = 2 dias)
+    let doFine = 6.55;
+    let bodFine = 0;
+    for (let i = 0; i < 20; i += 1) {
+      const step = integrateOxygenKinetics(doFine, bodFine, sewageEnv, 'frades', 0.1);
+      doFine = step.nextDo;
+      bodFine = step.nextBod;
+    }
+
+    // Diferença relativa entre os passos numéricos deve ser inferior a 2%
+    expect(Math.abs(doCoarse - doFine) / doFine).toBeLessThan(0.02);
+    expect(Math.abs(bodCoarse - bodFine) / bodFine).toBeLessThan(0.02);
+  });
+
+  it('relação entre profundidade e taxa de reaeração ka: Paraguaçu (H=5m) vs Barra (H=25m)', () => {
+    const kaShallow = calculateReaerationRate(4.0, 5.0, 26.8);
+    const kaDeep = calculateReaerationRate(4.0, 25.0, 26.8);
+    // Em águas mais rasas, a área superficial por unidade de volume é maior, logo ka é estritamente maior
+    expect(kaShallow).toBeGreaterThan(kaDeep);
+    // O piso computacional de estabilidade é respeitado (ka >= 0.05 d^-1)
+    expect(kaDeep).toBeGreaterThanOrEqual(0.05);
   });
 });

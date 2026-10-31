@@ -1,5 +1,91 @@
 import type { EpistemologicalBadge } from '../simulation/types';
 
+/**
+ * 5 Categorias Epistemológicas Canônicas do Kirimurê:
+ * - in-situ: medição física direta no local (instrumento ou coleta em campo);
+ * - satellite-derived: estimativa geofísica inferida por radiometria orbital remota;
+ * - external-model: resultado de modelo hidrodinâmico ou biogeoquímico de grande escala;
+ * - kirimure-model: cálculo do motor numérico interno do Kirimurê;
+ * - didactic-assumption: premissa pedagógica ou cenário controlado para investigação causal.
+ */
+export type DataOrigin =
+  | 'in-situ'
+  | 'satellite-derived'
+  | 'external-model'
+  | 'kirimure-model'
+  | 'didactic-assumption';
+
+export type DataQuality =
+  | 'valid'
+  | 'questionable'
+  | 'masked'
+  | 'unavailable';
+
+export function getOriginLabel(origin: DataOrigin): string {
+  switch (origin) {
+    case 'in-situ':
+      return 'Medição In-situ';
+    case 'satellite-derived':
+      return 'Estimativa Satelital';
+    case 'external-model':
+      return 'Modelo Oceânico Externo';
+    case 'kirimure-model':
+      return 'Modelo Numérico Kirimurê';
+    case 'didactic-assumption':
+      return 'Cenário Didático';
+  }
+}
+
+export function getQualityLabel(quality: DataQuality): string {
+  switch (quality) {
+    case 'valid':
+      return 'Válido';
+    case 'questionable':
+      return 'Amostra sob Suspeita / Ruído';
+    case 'masked':
+      return 'Mascarado (Continente / Nuvens)';
+    case 'unavailable':
+      return 'Indisponível';
+  }
+}
+
+export interface CommonProvenance {
+  origin: DataOrigin;
+  provider: string;
+  product?: string;
+  dataset?: string;
+  version?: string;
+  retrievedAt?: string;
+  observedAt?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  depthMeters?: number;
+  resolution?: string;
+  quality: DataQuality;
+  flags?: string[];
+  caveat?: string;
+}
+
+export interface EnvironmentalValue {
+  variable: string;
+  value: number | null;
+  unit: string;
+  origin: DataOrigin;
+  provider: string;
+  product?: string;
+  dataset?: string;
+  version?: string;
+  observedAt?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  depthMeters?: number;
+  spatialResolution?: string;
+  temporalResolution?: string;
+  quality: DataQuality;
+  flags?: string[];
+  caveat?: string;
+}
+
 export interface DatasetProvenance {
   sourceName: string;
   sourceUrl: string;
@@ -9,6 +95,8 @@ export interface DatasetProvenance {
   validTimeEndUtc: string;
   retrievedAtUtc: string;
   epistemicClass: EpistemologicalBadge;
+  origin?: DataOrigin;
+  quality?: DataQuality;
   license: string;
   citation: string;
   queryUrl?: string;
@@ -24,6 +112,7 @@ export interface DatasetProvenance {
   responseTimeMs?: number;
   /** Modelo numérico efetivamente utilizado, quando informado pela fonte. */
   modelName?: string;
+  caveat?: string;
 }
 
 export interface ThermalForcingPoint {
