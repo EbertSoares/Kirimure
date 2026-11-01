@@ -150,6 +150,8 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
   const [errorMessage, setErrorMessage] = useState('');
   const [notices, setNotices] = useState<ActiveFactorNotice[]>([]);
   const [noticeVersion, setNoticeVersion] = useState(0);
+  const isResettingRef = useRef(false);
+  const lastResetTimeRef = useRef(0);
 
   stateRef.current = state;
 
@@ -157,11 +159,24 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
     runtimeRef.current?.updateState(state);
   }, [state]);
 
-  // Restaura imediatamente os peixes e a fauna e limpa avisos quando o usuário reinicia
+  // Restaura fauna e exibe notificação limpa de retorno ao estado inicial
   useEffect(() => {
     if (resetToken && resetToken > 0) {
+      isResettingRef.current = true;
+      lastResetTimeRef.current = Date.now();
       runtimeRef.current?.resetReefLife();
-      setNotices([]);
+      prevTargetsRef.current = { ...state.targets };
+
+      setNotices([
+        {
+          id: `reset-${Date.now()}`,
+          tone: 'recovery',
+          icon: 'reset',
+          label: 'Ambiente restaurado',
+          detail: 'Voltou ao estado inicial',
+        },
+      ]);
+      setNoticeVersion((v) => v + 1);
     }
   }, [resetToken]);
 
@@ -185,8 +200,20 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
 
   // Exibe notificação discreta e estabilizada (debounce de 260 ms) ao ajustar parâmetros
   useEffect(() => {
+    if (isResettingRef.current || Date.now() - lastResetTimeRef.current < 500) {
+      isResettingRef.current = false;
+      prevTargetsRef.current = { ...state.targets };
+      return undefined;
+    }
+
     const next = state.targets;
     const settleTimer = window.setTimeout(() => {
+      if (isResettingRef.current || Date.now() - lastResetTimeRef.current < 600) {
+        isResettingRef.current = false;
+        prevTargetsRef.current = { ...next };
+        return;
+      }
+
       const prev = prevTargetsRef.current;
       prevTargetsRef.current = { ...next };
 
