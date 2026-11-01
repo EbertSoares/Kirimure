@@ -8,7 +8,7 @@ import { Icon } from './components/Icons';
 import { IndicatorProgress } from './components/IndicatorProgress';
 import { RegionSelector } from './components/RegionSelector';
 import { useOceanData } from './hooks/useOceanData';
-import { saveSst } from './services/oceanStorage';
+import { getSavedSst, saveSst } from './services/oceanStorage';
 import { calculateRespirationPhImpact } from './simulation/carbonate';
 import {
   BASELINE,
@@ -82,10 +82,22 @@ const MarineScene = lazy(() =>
   })),
 );
 
-function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
+function getEffectiveBaselineTemperature(sectorId: BtsSectorId, liveSst?: number): number {
+  if (typeof liveSst === 'number' && Number.isFinite(liveSst)) {
+    return parseFloat(liveSst.toFixed(1));
+  }
+  const saved = getSavedSst(sectorId);
+  if (typeof saved === 'number' && Number.isFinite(saved)) {
+    return saved;
+  }
+  const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
+  return sector.baselineTemperature;
+}
+
+function createSectorBaselineState(sectorId: BtsSectorId, targetTemp?: number): SimulationState {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const base = createInitialState(sectorId);
-  const baselineTemp = sector.baselineTemperature;
+  const baselineTemp = targetTemp ?? getEffectiveBaselineTemperature(sectorId);
   const sectorEnv: Environment = {
     ...BASELINE,
     temperature: baselineTemp,
@@ -106,6 +118,7 @@ function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
       dissolvedOxygen: initialDo,
       saturationOxygen: initialDo,
     })),
+    initialConditionSource: getSavedSst(sectorId) !== null ? 'NOAA_CRW_LIVE' : base.initialConditionSource,
   };
 }
 
@@ -160,24 +173,23 @@ export function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const oceanData = useOceanData(simulation.sector, screen === 'simulation');
-
-  const sectorDef = useMemo(
-    () => BTS_SECTORS.find((s) => s.id === simulation.sector) ?? BTS_SECTORS[0],
-    [simulation.sector],
-  );
+  const oceanData = useOceanData(simulation.sector, true);
 
   const liveSst = useMemo(() => {
     const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
     return typeof sst === 'number' && Number.isFinite(sst) ? parseFloat(sst.toFixed(1)) : undefined;
   }, [oceanData.latestCrw]);
 
+  const effectiveBaselineTemp = useMemo(() => {
+    return getEffectiveBaselineTemperature(simulation.sector, liveSst);
+  }, [simulation.sector, liveSst]);
+
   const activeFactorIds = useMemo(
     () => FACTOR_ORDER.filter((id) => {
-      const refVal = id === 'temperature' ? sectorDef.baselineTemperature : BASELINE[id];
+      const refVal = id === 'temperature' ? effectiveBaselineTemp : BASELINE[id];
       return Math.abs(simulation.controls[id] - refVal) > 1e-6;
     }),
-    [simulation.controls, sectorDef.baselineTemperature],
+    [simulation.controls, effectiveBaselineTemp],
   );
 
   // Laço temporal determinístico a 10 Hz (velocidade aplicada uma única vez em tickSimulation)
@@ -364,8 +376,9 @@ export function App() {
 
   const handleResetSingleFactor = useCallback((id: ItemId) => {
     const curr = simulationRef.current;
-    const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
-    const defaultVal = id === 'temperature' ? sector.baselineTemperature : BASELINE[id];
+    const defaultVal = id === 'temperature'
+      ? getEffectiveBaselineTemperature(curr.sector, liveSst)
+      : BASELINE[id];
 
     setUndoStack((prev) => [
       ...prev.slice(-24),
@@ -380,7 +393,7 @@ export function App() {
         targets: nextTargets,
       };
     });
-  }, []);
+  }, [liveSst]);
 
   const handleUndo = useCallback(() => {
     const stack = undoStackRef.current;
@@ -402,8 +415,11 @@ export function App() {
     setFocusedFactor(null);
     setCriticalDays(null);
     setResetToken((t) => t + 1);
-    setSimulation((curr) => createSectorBaselineState(curr.sector));
-  }, []);
+    setSimulation((curr) => {
+      const baseline = getEffectiveBaselineTemperature(curr.sector, liveSst);
+      return createSectorBaselineState(curr.sector, baseline);
+    });
+  }, [liveSst]);
 
   const handleChangeSector = useCallback((nextSector: BtsSectorId) => {
     pendingUndoBaseRef.current = null;
@@ -411,7 +427,8 @@ export function App() {
     setFocusedFactor(null);
     setCriticalDays(null);
     setResetToken((t) => t + 1);
-    setSimulation(createSectorBaselineState(nextSector));
+    const baseline = getEffectiveBaselineTemperature(nextSector);
+    setSimulation(createSectorBaselineState(nextSector, baseline));
   }, []);
 
   const handleSewageModeChange = useCallback((mode: 'continuous' | 'pulse') => {
@@ -442,7 +459,30 @@ export function App() {
     if (typeof sst !== 'number' || !Number.isFinite(sst)) return;
     const rounded = parseFloat(sst.toFixed(1));
     saveSst(simulation.sector, rounded);
-  }, [oceanData.latestCrw, simulation.sector]);
+
+    // Se estiver na tela do mapa (antes de entrar na cena 3D), atualiza
+    // a simulação silenciosamente para que abra já com o dado ao vivo pronto
+    if (screen === 'map') {
+      setSimulation((curr) => {
+        const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
+        const doSat = calculateWeissOxygenSaturation(rounded, sector.baselineSalinity);
+        return {
+          ...curr,
+          controls: { ...curr.controls, temperature: rounded },
+          env: { ...curr.env, temperature: rounded },
+          targets: { ...curr.targets, temperature: rounded },
+          dissolvedOxygen: doSat,
+          initialConditionSource: 'NOAA_CRW_LIVE',
+          history: curr.history.map((pt) => ({
+            ...pt,
+            temperature: rounded,
+            dissolvedOxygen: doSat,
+            saturationOxygen: doSat,
+          })),
+        };
+      });
+    }
+  }, [oceanData.latestCrw, simulation.sector, screen]);
 
   const handleToggleIntervention = useCallback((id: InterventionId) => {
     setSimulation((current) => {
@@ -724,12 +764,37 @@ export function App() {
       setTransitionDark(true);
     }, 40);
 
-    // Aos 1200ms, a tela já está escura: troca imperceptivelmente para a simulação 3D
+    // Aos 1200ms, a tela já está completamente escura (transição invisível ao usuário):
+    // Aplica a temperatura ao vivo antes de montar a cena 3D, garantindo que o usuário
+    // nunca veja qualquer salto ou transição de 26,8 °C para o dado da API em cena.
     window.setTimeout(() => {
+      const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
+      const effectiveTemp = getEffectiveBaselineTemperature(simulation.sector, sst);
+      saveSst(simulation.sector, effectiveTemp);
+
+      setSimulation((curr) => {
+        const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
+        const doSat = calculateWeissOxygenSaturation(effectiveTemp, sector.baselineSalinity);
+        return {
+          ...curr,
+          controls: { ...curr.controls, temperature: effectiveTemp },
+          env: { ...curr.env, temperature: effectiveTemp },
+          targets: { ...curr.targets, temperature: effectiveTemp },
+          dissolvedOxygen: doSat,
+          initialConditionSource: 'NOAA_CRW_LIVE',
+          history: curr.history.map((pt) => ({
+            ...pt,
+            temperature: effectiveTemp,
+            dissolvedOxygen: doSat,
+            saturationOxygen: doSat,
+          })),
+        };
+      });
+
       setScreen('simulation');
       setMapZooming(false);
 
-      // Com a cena 3D pronta: dissipa o véu suavemente em fade-out
+      // Com a cena 3D pronta na temperatura do satélite: dissipa o véu suavemente em fade-out
       window.setTimeout(() => {
         setTransitionDark(false);
       }, 240);
@@ -1033,7 +1098,7 @@ export function App() {
           onToggleIntervention={handleToggleIntervention}
           onOpenInterventionLimits={handleOpenInterventionLimits}
           timelineMilestones={timelineMilestones}
-          referenceTemperature={liveSst}
+          referenceTemperature={effectiveBaselineTemp}
         />
 
         <EvidenceDrawer

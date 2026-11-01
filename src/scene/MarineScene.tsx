@@ -16,9 +16,8 @@ interface ActiveFactorNotice {
   id: string;
   tone: 'oil' | 'sewage' | 'microplastics' | 'temperature' | 'ph' | 'turbidity' | 'fishing' | 'recovery';
   icon: IconName;
-  tag: string;
   label: string;
-  text: string;
+  detail: string;
   leaving?: boolean;
 }
 
@@ -60,9 +59,8 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
       id: `oil-${Date.now()}`,
       tone: 'oil',
       icon: 'drop',
-      tag: 'ÓLEO',
-      label: 'Óleo / Petróleo',
-      text: `Barco derramou ${formatMass(launchedKg)} de óleo na superfície`,
+      label: 'Óleo',
+      detail: `${formatMass(launchedKg)} na superfície`,
     });
   }
 
@@ -72,9 +70,8 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
       id: `sewage-${Date.now()}`,
       tone: 'sewage',
       icon: 'sewage',
-      tag: 'ESGOTO',
-      label: 'Esgoto Orgânico',
-      text: `Descarga de ${formatMass(launchedKg)} de esgoto orgânico (DBO)`,
+      label: 'Esgoto',
+      detail: `Descarga de ${formatMass(launchedKg)} (DBO)`,
     });
   }
 
@@ -84,9 +81,8 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
       id: `microplastics-${Date.now()}`,
       tone: 'microplastics',
       icon: 'bottle',
-      tag: 'PLÁSTICOS',
       label: 'Microplásticos',
-      text: `Concentração ajustada para ${concentration.toLocaleString('pt-BR')} part./m³`,
+      detail: `${concentration.toLocaleString('pt-BR')} part./m³`,
     });
   }
 
@@ -95,9 +91,8 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
       id: `turbidity-${Date.now()}`,
       tone: 'turbidity',
       icon: 'sediment',
-      tag: 'TURBIDEZ',
-      label: 'Sedimentos',
-      text: `Sedimentos em suspensão: índice em ${Math.round(next.turbidity)}%`,
+      label: 'Turbidez',
+      detail: `Sedimentos em ${Math.round(next.turbidity)}%`,
     });
   }
 
@@ -106,9 +101,8 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
       id: `fishing-${Date.now()}`,
       tone: 'fishing',
       icon: 'hook',
-      tag: 'PESCA',
-      label: 'Pesca Recifal',
-      text: `Pressão pesqueira ajustada para ${Math.round(next.fishing)}%`,
+      label: 'Pesca',
+      detail: `Pressão em ${Math.round(next.fishing)}%`,
     });
   }
 
@@ -117,39 +111,30 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
       id: `recovery-${Date.now()}`,
       tone: 'recovery',
       icon: 'shield',
-      tag: 'MANEJO',
       label: 'Conservação',
-      text: `Proteção e manejo ecológico em ${Math.round(next.recovery)}%`,
+      detail: `Manejo em ${Math.round(next.recovery)}%`,
     });
   }
 
-  if (Math.abs(next.temperature - prev.temperature) > 1e-6 && isFactorActive('temperature', next.temperature)) {
+  if (Math.abs(next.temperature - prev.temperature) > 0.05) {
     const tempStr = next.temperature.toFixed(1).replace('.0', '').replace('.', ',');
-    const warming = next.temperature > BASELINE.temperature;
     notices.push({
       id: `temperature-${Date.now()}`,
       tone: 'temperature',
       icon: 'temperature',
-      tag: 'TEMPERATURA',
       label: 'Temperatura',
-      text: warming
-        ? `Anomalia térmica: água aquecida a ${tempStr}°C`
-        : `Água resfriada para ${tempStr}°C`,
+      detail: `Água ajustada para ${tempStr} °C`,
     });
   }
 
   if (Math.abs(next.ph - prev.ph) > 1e-6 && isFactorActive('ph', next.ph)) {
     const phStr = next.ph.toFixed(2).replace('.', ',');
-    const acidic = next.ph < BASELINE.ph;
     notices.push({
       id: `ph-${Date.now()}`,
       tone: 'ph',
       icon: 'flask',
-      tag: 'pH',
-      label: 'Acidez da Água',
-      text: acidic
-        ? `Acidificação costeira: pH reduzido para ${phStr}`
-        : `Alcalinidade elevada: pH em ${phStr}`,
+      label: 'pH',
+      detail: `Água ajustada para ${phStr}`,
     });
   }
 
@@ -297,22 +282,16 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
         </div>
       )}
       {status === 'ready' && notices.length > 0 && (
-        <div className="factor-notices" aria-live="polite" aria-label="Avisos de mudanças aplicadas">
+        <div className="factor-notices" aria-live="polite" aria-label="Avisos de alterações">
           {notices.map((notice) => (
             <div
               key={notice.id}
               className={`factor-notice-pill tone-${notice.tone} ${notice.leaving ? 'leaving' : ''}`}
             >
-              <span className="factor-notice-icon-box" aria-hidden="true">
-                <Icon name={notice.icon} className="factor-notice-svg" />
-              </span>
-              <div className="factor-notice-body">
-                <div className="factor-notice-header">
-                  <span className="factor-notice-tag">{notice.tag}</span>
-                  <span className="factor-notice-live-dot" aria-hidden="true" />
-                </div>
-                <strong className="factor-notice-text">{notice.text}</strong>
-              </div>
+              <Icon name={notice.icon} className="factor-notice-svg" />
+              <span className="factor-notice-label">{notice.label}</span>
+              <span className="factor-notice-dot" aria-hidden="true">·</span>
+              <span className="factor-notice-detail">{notice.detail}</span>
             </div>
           ))}
         </div>
