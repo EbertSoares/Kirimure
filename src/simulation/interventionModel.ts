@@ -6,7 +6,14 @@ import {
   type InterventionDefinition,
   type InterventionId,
 } from './interventions';
-import type { BtsSectorDefinition, BtsSectorId, Environment, ItemId, SimulationState } from './types';
+import type {
+  BtsSectorDefinition,
+  BtsSectorId,
+  CoralRestorationState,
+  Environment,
+  ItemId,
+  SimulationState,
+} from './types';
 
 export function isInterventionActive(
   interventions: readonly ActiveIntervention[] | undefined,
@@ -56,7 +63,7 @@ export function computeEffectiveTargets(
     effective.turbidity = rawTargets.turbidity * inputReductionFactor;
   }
 
-  // Ações conceituais (coralRestoration, co2Mitigation) não alteram variáveis numéricas
+  // Ações globais/climáticas (co2Mitigation) não alteram diretamente forçantes locais no MVP
   return effective;
 }
 
@@ -168,6 +175,175 @@ export function computeEffectiveFishingPressure(
   }
   // Redução de até 75% da mortalidade pesqueira dentro da área protegida
   return rawFishing * (1 - 0.75 * mpaIntensity);
+}
+
+/**
+ * Modela a adequação ambiental e a resposta biofísica de fragmentos de corais
+ * introduzidos em programas de restauração e transplante.
+ */
+export function calculateCoralEnvironmentalSuitability(
+  temperature: number,
+  dhw: number,
+  dissolvedOxygen: number,
+  ph: number,
+  turbidity: number,
+  oilKg: number,
+  _baselineTemperature: number,
+): {
+  suitability: number;
+  reasons: string[];
+} {
+  const reasons: string[] = [];
+
+  // Oxigênio dissolvido: ideal >= 5.0 mg/L, estresse < 4.0, letal < 2.5
+  let doScore = 1;
+  if (dissolvedOxygen < 5.0) {
+    doScore = Math.max(0, Math.min(1, (dissolvedOxygen - 2.5) / 2.5));
+    if (doScore < 0.6) {
+      reasons.push(dissolvedOxygen < 3.5 ? 'hipóxia severa' : 'baixo oxigênio dissolvido');
+    }
+  }
+
+  // Estresse térmico: letal com DHW elevado ou temperatura muito acima do limiar de branqueamento
+  let tempScore = 1;
+  if (dhw > 0 || temperature > 28.5) {
+    const dhwPenalty = Math.max(0, 1 - dhw / 6);
+    const sstPenalty = Math.max(0, 1 - Math.max(0, temperature - 28.5) / 2.5);
+    tempScore = Math.max(0, Math.min(1, dhwPenalty * sstPenalty));
+    if (tempScore < 0.6) {
+      reasons.push(dhw >= 4 ? 'onda de calor / branqueamento' : 'água excessivamente quente');
+    }
+  }
+
+  // Acidificação (pH): ideal >= 8.05; estresse < 7.9
+  let phScore = 1;
+  if (ph < 8.0) {
+    phScore = Math.max(0, Math.min(1, (ph - 7.5) / 0.5));
+    if (phScore < 0.6) {
+      reasons.push('acidificação desfavorável à calcificação');
+    }
+  }
+
+  // Turbidez (sedimentação e perda de luz fotossintética): ideal <= 8%, estresse > 15%, letal > 40%
+  let turbScore = 1;
+  if (turbidity > 8) {
+    turbScore = Math.max(0, Math.min(1, 1 - (turbidity - 8) / 32));
+    if (turbScore < 0.6) {
+      reasons.push('sedimentação excessiva / turbidez');
+    }
+  }
+
+  // Óleo: toxicidade aguda e recobrimento por hidrocarbonetos
+  let oilScore = 1;
+  if (oilKg > 2) {
+    oilScore = Math.max(0, Math.min(1, 1 - oilKg / 30));
+    if (oilScore < 0.6) {
+      reasons.push('contaminação por óleo');
+    }
+  }
+
+  const suitability = Math.max(0, Math.min(1, doScore * tempScore * phScore * turbScore * oilScore));
+
+  return { suitability, reasons };
+}
+
+/**
+ * Modela o estabelecimento e a sobrevivência de colônias de corais transplantadas.
+ *
+ * Princípios científicos e ecológicos:
+ * 1. Não adiciona bônus arbitrário à saúde do recife nativo (`health.coral`).
+ * 2. Transplantes são organismos vivos vulneráveis: sua sobrevivência depende
+ *    da adequação ambiental (OD >= 5 mg/L, SST abaixo do limiar de branqueamento,
+ *    DHW baixo, pH favorável, água límpida e ausência de óleo).
+ * 3. Se as condições ambientais forem desfavoráveis (hipóxia, onda de calor, óleo ou turbidez),
+ *    a sobrevivência cai drasticamente e as colônias transplantadas morrem.
+ * 4. Sob condições favoráveis, as colônias sobrevivem e gradualmente se estabelecem no substrato,
+ *    incrementando a cobertura coralina restaurada.
+ */
+export function stepCoralRestoration(
+  currentRestoration: CoralRestorationState | undefined,
+  interventions: readonly ActiveIntervention[] | undefined,
+  env: Environment,
+  dhw: number,
+  dissolvedOxygen: number,
+  sector: BtsSectorDefinition,
+  dtDays: number,
+): CoralRestorationState {
+  const intensity = getInterventionIntensity(interventions, 'coralRestoration');
+  const isActive = intensity > 0;
+
+  const prev = currentRestoration ?? {
+    introducedColonies: 0,
+    establishedColonies: 0,
+    survivingColonies: 0,
+    transplantSurvivalRate: 0,
+    restoredCoverPercent: 0,
+    environmentalSuitability: 1,
+  };
+
+  if (!isActive) {
+    if (prev.introducedColonies <= 0) {
+      return prev;
+    }
+  }
+
+  const { suitability } = calculateCoralEnvironmentalSuitability(
+    env.temperature,
+    dhw,
+    dissolvedOxygen,
+    env.ph,
+    env.turbidity,
+    env.oil,
+    sector.baselineTemperature,
+  );
+
+  // Capacidade de transplante proporcional à intensidade: até 1200 colônias
+  const targetColonies = Math.round(1200 * intensity);
+
+  // Taxa de introdução de novos fragmentos
+  let introduced = prev.introducedColonies;
+  if (isActive && introduced < targetColonies) {
+    const introductionRate = 60 * dtDays;
+    introduced = Math.min(targetColonies, introduced + introductionRate);
+  }
+
+  // Inicialização ou adição de novas colônias
+  let surviving = prev.survivingColonies;
+  if (introduced > 0 && surviving < introduced && prev.survivingColonies === 0) {
+    surviving = introduced;
+  } else if (introduced > prev.introducedColonies) {
+    surviving += (introduced - prev.introducedColonies);
+  }
+
+  // Aplicação da taxa de mortalidade dependente do ambiente
+  const baseMortalityRate = 0.002; // mortalidade basal natural (~0.2% por dia)
+  const stressMortalityRate = 0.15 * Math.pow(1 - suitability, 2);
+  const totalMortalityRate = baseMortalityRate + stressMortalityRate;
+
+  surviving = Math.max(0, surviving * Math.exp(-totalMortalityRate * dtDays));
+  surviving = Math.min(introduced, surviving);
+
+  // Estabelecimento no substrato calcário
+  let established = prev.establishedColonies;
+  if (suitability >= 0.6) {
+    const establishmentRate = 0.03 * suitability * dtDays;
+    const potentialEstablished = Math.min(surviving, established + (surviving - established) * establishmentRate);
+    established = Math.max(0, potentialEstablished);
+  } else {
+    established = Math.min(surviving, established * Math.exp(-stressMortalityRate * dtDays));
+  }
+
+  const transplantSurvivalRate = introduced > 0 ? (surviving / introduced) * 100 : 0;
+  const restoredCoverPercent = Math.min(18, established * 0.0125);
+
+  return {
+    introducedColonies: Math.round(introduced),
+    establishedColonies: Math.round(established),
+    survivingColonies: Math.round(surviving),
+    transplantSurvivalRate: Number(transplantSurvivalRate.toFixed(1)),
+    restoredCoverPercent: Number(restoredCoverPercent.toFixed(1)),
+    environmentalSuitability: Number(suitability.toFixed(2)),
+  };
 }
 
 /**

@@ -67,7 +67,7 @@ O motor gráfico tridimensional em tempo real utiliza Babylon.js 9 (`WebGL` / `W
 * **Interface:** React 19.
 * **Engine Gráfica 3D:** Babylon.js 9 (`@babylonjs/core`, `@babylonjs/loaders`).
 * **Qualidade de Código & Linting:** ESLint 10 (Flat Config com `@eslint/js`, `typescript-eslint` e `eslint-plugin-react-hooks`).
-* **Testes Automatizados:** Vitest (133 testes cobrindo todo o modelo científico, adaptadores e componentes).
+* **Testes Automatizados:** Vitest (138 testes cobrindo todo o modelo científico, adaptadores e componentes).
 * **Build & Bundler:** Vite 8 com tree-shaking para produção.
 
 ---
@@ -93,7 +93,7 @@ npm install
 | `npm run build` | Validação de tipos (`tsc --noEmit`) e compilação para produção em `dist/` |
 | `npm run lint` | Executa o linter ESLint em todo o código-fonte `src` |
 | `npm run lint:fix` | Corrige automaticamente problemas de formatação e lint |
-| `npm run test:run` | Executa a suíte de 133 testes automatizados via Vitest |
+| `npm run test:run` | Executa a suíte de 138 testes automatizados via Vitest |
 | `npm run preview` | Pré-visualização local dos artefatos compilados de produção |
 
 ---

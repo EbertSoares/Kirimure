@@ -16,6 +16,7 @@ import {
   FACTOR_ORDER,
 } from './simulation/config';
 import { type ActiveIntervention, type InterventionId } from './simulation/interventions';
+import { getInterventionIntensity } from './simulation/interventionModel';
 import { calculateWeissOxygenSaturation, convertBOD5ToPulseDeltaMgL } from './simulation/oxygen';
 import {
   buildDefaultImpactMilestones,
@@ -445,7 +446,9 @@ export function App() {
     setFocusedFactor('sewage');
     setSimulation((curr) => {
       const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
-      const deltaBod = convertBOD5ToPulseDeltaMgL(massKg, sector.mixingVolumeM3);
+      const sewageIntensity = getInterventionIntensity(curr.activeInterventions, 'wastewaterTreatment');
+      const treatedMassKg = sewageIntensity > 0 ? massKg * (1 - 0.75 * sewageIntensity) : massKg;
+      const deltaBod = convertBOD5ToPulseDeltaMgL(treatedMassKg, sector.mixingVolumeM3);
       return {
         ...curr,
         biochemicalOxygenDemand: (curr.biochemicalOxygenDemand ?? 0) + deltaBod,

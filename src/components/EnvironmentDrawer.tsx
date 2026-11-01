@@ -144,6 +144,7 @@ interface FactorRowProps {
   sewageMode: 'continuous' | 'pulse';
   focused: boolean;
   referenceTemperature?: number;
+  isSewageTreated?: boolean;
   onAdjustFactor: (id: ItemId, value: number) => void;
   onCommitFactor: (id: ItemId) => void;
   onResetSingleFactor: (id: ItemId) => void;
@@ -159,6 +160,7 @@ const FactorRow = memo(function FactorRow({
   sewageMode,
   focused,
   referenceTemperature,
+  isSewageTreated,
   onAdjustFactor,
   onCommitFactor,
   onResetSingleFactor,
@@ -297,7 +299,10 @@ const FactorRow = memo(function FactorRow({
           onClick={() => onTriggerSewagePulse(controlVal)}
         >
           <Icon name="drop" />
-          <span>Lançar pulso de {displayedTarget.value} {displayedTarget.unit}</span>
+          <span>
+            Lançar pulso de {displayedTarget.value} {displayedTarget.unit}
+            {isSewageTreated ? ' (ETE ativa: 75% retido)' : ''}
+          </span>
         </button>
       )}
 
@@ -463,6 +468,7 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
                       sewageMode={sewageMode}
                       focused={focusedFactor === id}
                       referenceTemperature={referenceTemperature}
+                      isSewageTreated={isInterventionActive(simulation.activeInterventions, 'wastewaterTreatment')}
                       onAdjustFactor={onAdjustFactor}
                       onCommitFactor={onCommitFactor}
                       onResetSingleFactor={onResetSingleFactor}
@@ -558,6 +564,24 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
                         <span className="recovery-oil-skimmed">
                           {' '}· ({Math.round(simulation.recoveredOilKg!).toLocaleString('pt-BR')} kg recolhidos)
                         </span>
+                      )}
+                      {item.id === 'coralRestoration' && active && simulation.restoration && (
+                        <div className="recovery-restoration-metrics">
+                          <div>
+                            Colônias vivas: <strong>{simulation.restoration.survivingColonies.toLocaleString('pt-BR')}</strong> / {simulation.restoration.introducedColonies.toLocaleString('pt-BR')} ({simulation.restoration.transplantSurvivalRate.toFixed(0)}% sobrevivência)
+                          </div>
+                          <div>
+                            Adequação do habitat: <strong>{(simulation.restoration.environmentalSuitability * 100).toFixed(0)}%</strong>
+                            {simulation.restoration.environmentalSuitability < 0.4 && (
+                              <span className="recovery-restoration-alert"> ⚠️ Condição hostil: transplantes em declínio</span>
+                            )}
+                          </div>
+                          {simulation.restoration.restoredCoverPercent > 0 && (
+                            <div>
+                              Cobertura restabelecida: <strong>+{simulation.restoration.restoredCoverPercent.toFixed(1)}%</strong>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

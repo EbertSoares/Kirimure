@@ -52,7 +52,7 @@ $$X(t + \Delta t) = X(t) + \left( X_{\text{alvo}} - X(t) \right) \cdot \left( 1 
 
 | Grupo | Variável ($i$) | $\tau_i$ (dias) | Nível de Evidência | Papel no Modelo |
 | :--- | :--- | :--- | :--- | :--- |
-| **Água** | Temperatura | `7` | Parâmetro Didático | Inércia térmica da camada de mistura costeira |
+| **Água** | Temperatura | `2,5` | Parâmetro Didático | Inércia térmica da camada de mistura costeira |
 | **Água** | pH | `12` | Parâmetro Didático | Inércia do tamponamento químico de carbonatos |
 | **Água** | Turbidez | `4` | Parâmetro Didático | Suspensão e decantação gradual de partículas |
 | **Poluição** | Esgoto ($\text{DBO}_5$) | `4` | Parâmetro Didático | Estabelecimento da pluma orgânica no compartimento |
@@ -182,16 +182,29 @@ Nos corais, aplica-se ainda um termo de sinergia térmico-poluente ($S_{\text{si
 $$S_{\text{coral}} = \text{clamp}\left( S_{\text{base}} \cdot \left[ 1 + 0,50 \cdot \min\left(P_{\text{térmico}}, \max_{j \in \text{poluentes}} W_j P_j\right) \right],\ 0,\ 1 \right)$$
 
 ### 8.2. Pesos e Sensibilidades (Parâmetros Didáticos / Hipóteses do Modelo)
-- **Pesos nos corais ($W_{\text{coral}}$):** óleo `0,75`, turbidez `0,60`, esgoto `0,55`, pesca `0,30`, microplásticos `0,14`.
+- **Pesos nos corais ($W_{\text{coral}}$):** óleo `0,75`, turbidez `0,60`, esgoto `0,55`, pesca `0,30`, microplásticos `0,14` (`collapseDays = 75 d`).
 - **Pesos de base na ictiofauna ($W_{\text{peixe}}$):** pesca `0,85`, óleo `0,55`, esgoto `0,40` (acoplado à hipóxia), microplásticos `0,35`, turbidez `0,35`.
 - **Multiplicadores por grupo funcional de peixes:**
-  - *Peixe-cirurgião (`Acanthurus`, `collapseDays = 62 d`):* calor `1,20`, turbidez `1,30`, acidez `1,10`, pesca `0,70`.
-  - *Sargentinho (`Abudefduf saxatilis`, `collapseDays = 78 d`):* microplásticos `1,25`, esgoto/hipóxia `1,25`, óleo `1,10`, calor `0,85`.
-  - *Peixe-papagaio (`Scarus / Sparisoma`, `collapseDays = 48 d`):* pesca `1,60`, acidez `1,20`, calor `1,05`, esgoto `1,05`.
+  - *Peixe-cirurgião (`Acanthurus`, `collapseDays = 36 d`):* calor `1,20`, turbidez `1,30`, acidez `1,10`, pesca `0,70`.
+  - *Sargentinho (`Abudefduf saxatilis`, `collapseDays = 48 d`):* microplásticos `1,25`, esgoto/hipóxia `1,25`, óleo `1,10`, calor `0,85`.
+  - *Peixe-papagaio (`Scarus / Sparisoma`, `collapseDays = 28 d`):* pesca `1,60`, acidez `1,20`, calor `1,05`, esgoto `1,05`.
 
 ### 8.3. Tempo Estimado até o Limiar Crítico do Modelo (`estimateCriticalDays`)
 A função `estimateCriticalDays()` projeta em quantos dias simulados o índice agregado cruzaria o patamar interno $\le 33/100$, mantidas constantes as condições atuais.
 > **Rótulo obrigatório na interface e relatórios:** *"Tempo estimado até o limiar crítico do modelo ($\le 33/100$)"*. Trata-se de uma convenção didática interna de bancada, **não** de uma previsão demográfica de colapso ou extinção biológica na Baía de Todos-os-Santos.
+
+### 8.4. Desacoplamento da Recuperação Legada e Modelo Causal de Restauração Coralina
+- **Desacoplamento do controle universal:** A função de atualização da saúde biológica (`updateHealth`) foi rigorosamente desacoplada do controle genérico `recovery`. A regeneração natural só ocorre se as pressões ambientais calculadas caírem abaixo do limiar biológico de estresse ($\text{estresse} < 0,10$). A saúde do recife nativo não recebe mais bônus numéricos arbitrários de sliders.
+- **Intervenções de Mitigação Causais:** As intervenções atuam estritamente sobre fluxos físicos e estoques:
+  - *Tratamento de esgoto (ETE):* Reduz até 75% da DBO contínua e pulsada;
+  - *Interceptação de microplásticos:* Retém até 65% na drenagem superficial;
+  - *Controle de erosão:* Retém até 60% de sedimentos suspensos a montante;
+  - *Contenção e skimming:* Recolhe filme superficial de óleo acessível, sem remover frações já dissolvidas ou sedimentadas.
+- **Restauração Coralina Mecanística (`coralRestoration`):** A intervenção de restauração de corais simula o transplante e fixação de fragmentos em substrato degradado condicionado à adequação ambiental ($S_{\text{env}} \in [0, 1]$).
+  - Parâmetros biofísicos determinantes: oxigênio dissolvido ($\ge 5,0\text{ mg/L}$), temperatura e DHW (abaixo do limiar de branqueamento), pH ($\ge 8,0$), turbidez ($\le 8\%$) e óleo superficial ($\le 2\text{ kg}$).
+  - Sob condições favoráveis, as colônias sobrevivem ($> 80\%$) e fixam-se gradualmente, expandindo a cobertura restaurada.
+  - Sob condições hostis (água quente, hipóxia ou óleo), as colônias transplantadas sofrem mortalidade e a sobrevivência cai para próximo de zero, demonstrando pedagogicamente que a restauração física é ineficaz sem o prévio controle dos estressores ambientais.
+  - Zero pontos artificiais são adicionados a `health.coral`.
 
 ---
 
@@ -239,7 +252,7 @@ Consultado em [`src/services/openMeteo.ts`](src/services/openMeteo.ts) (`marine-
 | Partição do óleo em 4 reservatórios internos | Filme, disperso, HPA, sedimento | **Hipótese do Modelo** | Formulação mecanística simplificada tipo caixa (inspirada em ADIOS), sem calibração local. |
 | $\text{MMM}_{\text{didática}}$ do modelo térmico local | `28,0 °C` (limiar `29,0 °C`) | **Parâmetro Didático** | Convenção fixa inspirada em Leão et al. (2008); separada do DHW satelital oficial da NOAA. |
 | Constantes de relaxamento $\tau_i$ | `2 a 20 dias` | **Parâmetro Didático** | Ordenação relativa de velocidades de resposta para exploração em sala. |
-| Pesos `pollutantWeights`, `collapseDays` e limiar $\le 33$ | `48 a 78 dias` | **Parâmetro Didático** | Escala interna para comparação causal entre cenários; não prevê extinção real em campo. |
+| Pesos `pollutantWeights`, `collapseDays` e limiar $\le 33$ | `28 a 75 dias` | **Parâmetro Didático** | Escala interna de resiliência por espécie (papagaio 28 d, cirurgião 36 d, sargentinho 48 d, corais 75 d). |
 
 ---
 

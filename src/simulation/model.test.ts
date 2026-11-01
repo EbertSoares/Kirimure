@@ -313,16 +313,28 @@ describe('modelo de simulação', () => {
     expect(after.elapsedDays).toBeCloseTo(10);
   });
 
-  it('faz a recuperação ambiental reduzir o dano', () => {
+  it('não permite que recovery legada reduza dano magicamente sob poluição não mitigada', () => {
     const polluted = { ...createInitialState(), paused: false };
     polluted.targets.oil = PARAMETERS.receivedLoads.oil.maximumKg * 0.8;
-    const protectedReef = {
+    const legacyProtectedReef = {
       ...polluted,
       targets: { ...polluted.targets, recovery: 100 },
     };
     const bare = run(polluted, 45);
-    const guarded = run(protectedReef, 45);
-    expect(guarded.health.coral).toBeGreaterThan(bare.health.coral);
+    const guarded = run(legacyProtectedReef, 45);
+    // Sem atenuação física real do estressor, a saúde cai de forma equivalente
+    expect(guarded.health.coral).toBeCloseTo(bare.health.coral, 1);
+  });
+
+  it('permite regeneração biológica natural quando o estresse ambiental cai abaixo do limiar', () => {
+    const initial = { ...createInitialState(), paused: false };
+    // Reduz saúde inicial para simular histórico prévio de perturbação
+    initial.health.coral = 60;
+    initial.species['blue-tang'] = 60;
+    // Sob condições de base da baía (estresse < 0.1), o recife regenera naturalmente
+    const recovered = run(initial, 30);
+    expect(recovered.health.coral).toBeGreaterThan(60);
+    expect(recovered.species['blue-tang']).toBeGreaterThan(60);
   });
 
   it('registra o histórico ao longo do tempo', () => {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { BTS_SECTORS } from './config';
 import {
+  calculateCoralEnvironmentalSuitability,
   computeEffectiveFishingPressure,
   computeEffectiveTargets,
   getRecommendedInterventions,
   isInterventionActive,
+  stepCoralRestoration,
   stepEnvironmentalStocks,
   stepOilContainmentSkimming,
 } from './interventionModel';
@@ -110,8 +113,74 @@ describe('Ações de Recuperação e Modelo Científico de Intervenção', () =>
     const modeled = INTERVENTIONS.filter((i) => i.modeled);
     const conceptual = INTERVENTIONS.filter((i) => !i.modeled);
 
-    expect(modeled).toHaveLength(5);
-    expect(conceptual).toHaveLength(2); // coralRestoration e co2Mitigation
+    expect(modeled).toHaveLength(6);
+    expect(conceptual).toHaveLength(1); // apenas co2Mitigation permanece de escala climática global
+  });
+
+  it('condiciona a sobrevivência e fixação de corais restaurados à qualidade da água sem bônus artificial', () => {
+    const cleanState = createInitialState('frades');
+    cleanState.paused = false;
+    cleanState.activeInterventions = [
+      { id: 'coralRestoration', startedAtDay: 0, intensity: 1, status: 'active' },
+    ];
+
+    // Simula sob água limpa
+    let goodSim = cleanState;
+    for (let i = 0; i < 200; i++) {
+      goodSim = tickSimulation(goodSim, 0.1);
+    }
+
+    expect(goodSim.restoration).toBeDefined();
+    expect(goodSim.restoration?.introducedColonies).toBeGreaterThan(0);
+    expect(goodSim.restoration?.survivingColonies).toBeGreaterThan(0);
+    expect(goodSim.restoration?.transplantSurvivalRate).toBeGreaterThan(80);
+    expect(goodSim.restoration?.environmentalSuitability).toBeGreaterThan(0.8);
+    // Não deve conceder pontos artificiais acima de 100 ao recife nativo
+    expect(goodSim.health.coral).toBeLessThanOrEqual(100);
+
+    // Agora simula o mesmo programa de transplante sob estresse severo (água a 31 °C com 5.000 kg de óleo)
+    const hostileState = createInitialState('frades');
+    hostileState.paused = false;
+    hostileState.controls.temperature = 31;
+    hostileState.targets.temperature = 31;
+    hostileState.env.temperature = 31;
+    hostileState.controls.oil = 5000;
+    hostileState.targets.oil = 5000;
+    hostileState.env.oil = 5000;
+    hostileState.activeInterventions = [
+      { id: 'coralRestoration', startedAtDay: 0, intensity: 1, status: 'active' },
+    ];
+
+    let badSim = hostileState;
+    for (let i = 0; i < 300; i++) {
+      badSim = tickSimulation(badSim, 0.1);
+    }
+
+    expect(badSim.restoration?.environmentalSuitability).toBeLessThan(0.3);
+    // Sob condições tóxicas/quentes, os transplantes sofrem mortalidade e sobrevivência despenca
+    expect(badSim.restoration?.transplantSurvivalRate).toBeLessThan(50);
+  });
+
+  it('calcula adequação ambiental e passo isolado de restauração coralina', () => {
+    const suitabilityGood = calculateCoralEnvironmentalSuitability(26.8, 0, 6.5, 8.15, 2, 0, 26.8);
+    expect(suitabilityGood.suitability).toBeGreaterThan(0.9);
+    expect(suitabilityGood.reasons).toHaveLength(0);
+
+    const suitabilityBad = calculateCoralEnvironmentalSuitability(31.5, 6, 2.0, 7.5, 50, 100, 26.8);
+    expect(suitabilityBad.suitability).toBe(0);
+    expect(suitabilityBad.reasons.length).toBeGreaterThanOrEqual(3);
+
+    const baseState = createInitialState('frades');
+    const stepped = stepCoralRestoration(
+      undefined,
+      [{ id: 'coralRestoration', startedAtDay: 0, intensity: 1, status: 'active' }],
+      { ...baseState.env, oil: 100 },
+      0,
+      2.0,
+      BTS_SECTORS[0],
+      1.0,
+    );
+    expect(stepped.environmentalSuitability).toBe(0);
   });
 
   it('projeta linha do tempo de marcos ecológicos (estimateImpactTimeline) de forma determinística', () => {

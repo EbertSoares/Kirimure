@@ -161,6 +161,15 @@ export interface ThermalDoseDay {
   degreeDays: number;
 }
 
+export interface CoralRestorationState {
+  introducedColonies: number;
+  establishedColonies: number;
+  survivingColonies: number;
+  transplantSurvivalRate: number; // 0..100%
+  restoredCoverPercent: number;   // 0..100%
+  environmentalSuitability: number; // 0..1 (fator de adequação biofísica para fixação e sobrevivência)
+}
+
 export interface SimulationState {
   /** Controles brutos configurados pelo usuário na bancada experimental. */
   controls: Environment;
@@ -205,6 +214,8 @@ export interface SimulationState {
   recoveredOilKg?: number;
   /** Idade acumulada da mancha de óleo atual em dias simulados para intemperismo físico. */
   oilSpillAgeDays?: number;
+  /** Indicadores de fixação e sobrevivência de transplantes de corais quando ativos. */
+  restoration?: CoralRestorationState;
 }
 
 export interface EducationalMessage {

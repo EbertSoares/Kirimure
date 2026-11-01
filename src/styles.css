@@ -2706,6 +2706,32 @@ summary:focus-visible {
   font-weight: 500;
 }
 
+.recovery-restoration-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin-top: 5px;
+  padding: 6px 8px;
+  background: var(--surface-1);
+  border-radius: 6px;
+  border-left: 2px solid var(--accent);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.recovery-restoration-metrics strong {
+  color: var(--text-primary);
+}
+
+.recovery-restoration-alert {
+  color: #ff5252;
+  font-weight: 550;
+  display: inline-block;
+  margin-left: 4px;
+}
+
 .timeline-preview-strip {
   display: flex;
   flex-direction: column;

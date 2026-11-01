@@ -14,6 +14,7 @@ import {
   computeEffectiveFishingPressure,
   computeEffectiveTargets,
   isInterventionActive,
+  stepCoralRestoration,
   stepEnvironmentalStocks,
   stepOilContainmentSkimming,
 } from './interventionModel';
@@ -364,17 +365,15 @@ export function calculateTrophicBalance(
   return clamp((herbivores * 0.65 + grazeable * 0.35) / 100) * 100;
 }
 
-function updateHealth(current: number, stress: number, collapseDays: number, dtDays: number, protection: number) {
+function updateHealth(current: number, stress: number, collapseDays: number, dtDays: number) {
   const maxDamagePerDay = 100 / collapseDays;
   // Sob estresse agudo severo (> 0.5), acelera o dano metabólico devido ao colapso respiratório e cardíaco
   const acuteStressFactor = 1 + 0.85 * Math.max(0, stress - 0.5);
-  const damage = maxDamagePerDay * stress * acuteStressFactor * (1 - protection * PARAMETERS.recovery.damageReduction);
-  const threshold = PARAMETERS.recoveryThreshold + protection * PARAMETERS.recovery.thresholdBoost;
+  const damage = maxDamagePerDay * stress * acuteStressFactor;
+  const threshold = PARAMETERS.recoveryThreshold;
   const recovery =
     stress < threshold
-      ? (maxDamagePerDay / PARAMETERS.recoveryFactor)
-        * (1 + protection * PARAMETERS.recovery.speedBoost)
-        * (1 - stress)
+      ? (maxDamagePerDay / PARAMETERS.recoveryFactor) * (1 - stress)
       : 0;
 
   return clamp(current - damage * dtDays + recovery * dtDays, 0, 100);
@@ -403,6 +402,14 @@ export function createInitialState(sectorId: BtsSectorId = 'frades'): Simulation
     activeInterventions: [],
     recoveredOilKg: 0,
     oilSpillAgeDays: 0,
+    restoration: {
+      introducedColonies: 0,
+      establishedColonies: 0,
+      survivingColonies: 0,
+      transplantSurvivalRate: 0,
+      restoredCoverPercent: 0,
+      environmentalSuitability: 1,
+    },
     history: [
       {
         day: 0,
@@ -581,8 +588,6 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
     state.activeInterventions,
   );
 
-  // Proteção do ecossistema: responde a alívio real e suporta compatibilidade legada caso recovery > 0
-  const protection = Math.max(0, Math.min(1, (state.env.recovery ?? 0) / 100));
   const exposure = PRESSURE_IDS.reduce(
     (result, id) => {
       result[id] += stress.pressures[id] * dtDays;
@@ -592,7 +597,7 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
   );
 
   const health: Health = {
-    coral: updateHealth(state.health.coral, stress.coral, PARAMETERS.collapseDays.coral, dtDays, protection),
+    coral: updateHealth(state.health.coral, stress.coral, PARAMETERS.collapseDays.coral, dtDays),
     fish: 0,
   };
 
@@ -603,7 +608,6 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
         stress.species[item.id],
         item.collapseDays,
         dtDays,
-        protection,
       );
       return result;
     },
@@ -613,6 +617,16 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
   health.fish = FISH_SPECIES.reduce((total, item) => total + species[item.id], 0) / FISH_SPECIES.length;
   const overall = (health.coral + health.fish) / 2;
   const everDegraded = state.everDegraded || overall < 75;
+
+  const restoration = stepCoralRestoration(
+    state.restoration,
+    state.activeInterventions,
+    env,
+    thermal.degreeHeatingWeeks,
+    oxygen,
+    sector,
+    dtDays,
+  );
 
   return {
     ...state,
@@ -630,6 +644,7 @@ function singleTickStep(state: SimulationState, dtDays: number): SimulationState
     respiratoryDicUmolKg: nextRespiratoryDic,
     recoveredOilKg: nextRecoveredOilKg,
     oilSpillAgeDays: currentSpillAge,
+    restoration,
     elapsedDays: state.elapsedDays + dtDays,
   };
 }
