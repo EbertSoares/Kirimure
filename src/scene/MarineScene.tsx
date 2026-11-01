@@ -149,6 +149,7 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
   const [status, setStatus] = useState<SceneStatus>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [notices, setNotices] = useState<ActiveFactorNotice[]>([]);
+  const [noticeVersion, setNoticeVersion] = useState(0);
 
   stateRef.current = state;
 
@@ -156,26 +157,35 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
     runtimeRef.current?.updateState(state);
   }, [state]);
 
-  // Restaura imediatamente os peixes e a fauna quando o usuário clica em Reiniciar
+  // Restaura imediatamente os peixes e a fauna e limpa avisos quando o usuário reinicia
   useEffect(() => {
     if (resetToken && resetToken > 0) {
       runtimeRef.current?.resetReefLife();
+      setNotices([]);
     }
   }, [resetToken]);
 
-  // Exibe notificação discreta e estabilizada (debounce de 380 ms) ao ajustar parâmetros
+  // Auto-dismissal garantido: qualquer badge na tela desaparece automaticamente em ~2,7 segundos
+  useEffect(() => {
+    if (noticeVersion === 0) return undefined;
+
+    const fadeTimer = window.setTimeout(() => {
+      setNotices((current) => current.map((item) => ({ ...item, leaving: true })));
+    }, 2400);
+
+    const removeTimer = window.setTimeout(() => {
+      setNotices([]);
+    }, 2700);
+
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, [noticeVersion]);
+
+  // Exibe notificação discreta e estabilizada (debounce de 260 ms) ao ajustar parâmetros
   useEffect(() => {
     const next = state.targets;
-    const anyActive = (Object.keys(BASELINE) as Array<keyof Environment>)
-      .some((key) => isFactorActive(key, next[key]));
-    if (!anyActive) {
-      prevTargetsRef.current = { ...next };
-      setNotices([]);
-      return undefined;
-    }
-
-    let fadeTimer = 0;
-    let removeTimer = 0;
     const settleTimer = window.setTimeout(() => {
       const prev = prevTargetsRef.current;
       prevTargetsRef.current = { ...next };
@@ -188,23 +198,11 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
         const kept = current.filter((item) => !tonesAdded.has(item.tone));
         return [...kept, ...added];
       });
-
-      const addedIds = new Set(added.map((item) => item.id));
-      fadeTimer = window.setTimeout(() => {
-        setNotices((current) => current.map((item) => (
-          addedIds.has(item.id) ? { ...item, leaving: true } : item
-        )));
-      }, 3000);
-
-      removeTimer = window.setTimeout(() => {
-        setNotices((current) => current.filter((item) => !addedIds.has(item.id)));
-      }, 3500);
-    }, 380);
+      setNoticeVersion((v) => v + 1);
+    }, 260);
 
     return () => {
       window.clearTimeout(settleTimer);
-      if (fadeTimer) window.clearTimeout(fadeTimer);
-      if (removeTimer) window.clearTimeout(removeTimer);
     };
   }, [
     state.targets.temperature,

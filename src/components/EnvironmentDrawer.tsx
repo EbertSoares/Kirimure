@@ -166,7 +166,8 @@ const FactorRow = memo(function FactorRow({
   onTriggerSewagePulse,
 }: FactorRowProps) {
   const item = ITEM_DEFINITIONS[id];
-  const active = isFactorActive(id, controlVal);
+  const refVal = id === 'temperature' ? referenceTemperature : undefined;
+  const active = isFactorActive(id, controlVal, refVal);
   const scaleOptions = item.scaleOptions;
 
   const displayedTarget = formatParameterValue(id, controlVal, sewageMode);
@@ -421,7 +422,8 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
         {CONTROL_GROUPS.map((group) => {
           const isExpanded = expandedGroups[group.id];
           const activeCount = group.items.filter((id) => {
-            return isFactorActive(id, controls[id]);
+            const refVal = id === 'temperature' ? referenceTemperature : undefined;
+            return isFactorActive(id, controls[id], refVal);
           }).length;
 
           return (
