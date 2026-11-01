@@ -280,6 +280,31 @@ describe('modelo de simulação', () => {
     expect(after.health.coral).toBeLessThan(20);
   });
 
+  it('inicia pausada aguardando modificação do usuário e com tempo decorrido zerado', () => {
+    const state = createInitialState();
+    expect(state.paused).toBe(true);
+    expect(state.elapsedDays).toBe(0);
+  });
+
+  it('induz estresse térmico acelerado nos peixes acima de 29.5 °C e declínio sensível em ~30 dias a 31 °C', () => {
+    const warmStress = calculateStress({ ...BASELINE, temperature: 30.5 });
+    expect(warmStress.fish).toBeGreaterThan(0.5);
+
+    let state: SimulationState = {
+      ...createInitialState(),
+      paused: false,
+      speed: 1,
+      controls: { ...BASELINE, temperature: 31.0 },
+      targets: { ...BASELINE, temperature: 31.0 },
+    };
+
+    state = run(state, 35);
+    // Em 35 dias sob temperatura máxima (31 °C), a fauna de peixes já sofre declínio expressivo
+    expect(state.health.fish).toBeLessThan(45);
+    // Espécies mais vulneráveis (papagaio) colapsam mais rápido que generalistas rústicos (sargentinho)
+    expect(state.species.parrotfish).toBeLessThan(state.species['sergeant-major']);
+  });
+
   it('acumula exposição conforme intensidade e duração', () => {
     const state = { ...createInitialState(), paused: false };
     state.targets.oil = PARAMETERS.receivedLoads.oil.maximumKg;

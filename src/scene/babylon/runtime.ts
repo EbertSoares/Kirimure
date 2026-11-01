@@ -275,6 +275,9 @@ interface FishSwimmer {
   tailTurn: number;
   currentDepth: number;
   deathStage: FishDeathStage;
+  hypoxiaThreshold: number;
+  deathDelay: number;
+  deathDelayRemaining: number;
   currentScreenX: number;
   currentScreenY: number;
   currentDir: 1 | -1;
@@ -330,6 +333,9 @@ interface RiggedFish3D {
   depthZ: number;
   seabedScreenY: number;
   deathStage: FishDeathStage;
+  hypoxiaThreshold: number;
+  deathDelay: number;
+  deathDelayRemaining: number;
   deadElapsed: number;
   stageElapsed: number;
   verticalVelocity: number;
@@ -2342,7 +2348,26 @@ function createAllFishes(scene: Scene, schools: FishSchool3D[]): FishSwimmer[] {
     const surfaceScreenY = 0.305 + (index % 5) * 0.008;
 
     const isHardy = index % 3 === 0;
-    const threshold = isHardy ? 10 : 20 + ((index * 23) % 65);
+    let threshold: number;
+    let hypoxiaThreshold: number;
+    let deathDelay: number;
+
+    if (spec.species === 'parrotfish') {
+      // Peixe-papagaio (Scarus/Sparisoma): herbívoro ativo, alta demanda respiratória e vulnerável a distúrbios
+      threshold = 28 + hash2D(index * 13, 7) * 36;
+      hypoxiaThreshold = 2.1 + hash2D(index * 19, 11) * 0.5;
+      deathDelay = 0.4 + hash2D(index * 23, 17) * 3.2;
+    } else if (spec.species === 'blue-tang') {
+      // Cirurgião-patela (Acanthurus): sensibilidade moderada, vulnerável a estresse térmico inicial
+      threshold = 18 + hash2D(index * 17, 13) * 36;
+      hypoxiaThreshold = 1.7 + hash2D(index * 29, 23) * 0.5;
+      deathDelay = 0.8 + hash2D(index * 31, 29) * 4.2;
+    } else {
+      // Sargentinho (Abudefduf saxatilis): pomacentrídeo generalista rústico e muito tolerante
+      threshold = 8 + hash2D(index * 23, 19) * 30;
+      hypoxiaThreshold = 1.1 + hash2D(index * 37, 31) * 0.5;
+      deathDelay = 1.5 + hash2D(index * 41, 37) * 5.5;
+    }
 
     return {
       id: index,
@@ -2356,6 +2381,9 @@ function createAllFishes(scene: Scene, schools: FishSchool3D[]): FishSwimmer[] {
       width,
       species: spec.species,
       threshold,
+      hypoxiaThreshold,
+      deathDelay,
+      deathDelayRemaining: deathDelay,
       isHardy,
       individualScale,
       baseTint,
@@ -2559,7 +2587,9 @@ async function loadRiggedPaleBleakFishes(
         : (initDir === 1 ? 0 : Math.PI);
 
       const isHardy = i % 3 === 0;
-      const threshold = isHardy ? 12 : 22 + ((i * 21) % 65);
+      const threshold = 14 + hash2D((100 + i) * 17, 33) * 38;
+      const hypoxiaThreshold = 1.3 + hash2D((100 + i) * 23, 41) * 0.6;
+      const deathDelay = 1.0 + hash2D((100 + i) * 31, 47) * 4.5;
 
       items.push({
         id: 100 + i,
@@ -2571,6 +2601,9 @@ async function loadRiggedPaleBleakFishes(
         materials: [mat],
         animGroup,
         threshold,
+        hypoxiaThreshold,
+        deathDelay,
+        deathDelayRemaining: deathDelay,
         individualScale: 0.92 + (i % 4) * 0.08,
         baseTint: new Color3(0.92, 0.97, 1.0),
         formationOffsetU: offsetU,
@@ -3269,7 +3302,7 @@ export class BabylonOceanRuntime {
           runtime.riggedFishes3D = riggedFishes;
           runtime.sharks3D = sharks;
           runtime.needsRender = true;
-          if (runtime.state.paused) {
+          if (runtime.state.paused && runtime.state.elapsedDays > 0) {
             for (const fish of riggedFishes) {
               fish.animGroup?.pause();
             }
@@ -3290,9 +3323,10 @@ export class BabylonOceanRuntime {
     this.needsRender = true;
 
     if (state.paused !== wasPaused) {
-      this.scene.animationsEnabled = !state.paused;
+      const freeze = state.paused && state.elapsedDays > 0;
+      this.scene.animationsEnabled = !freeze;
       for (const fish of this.riggedFishes3D) {
-        if (state.paused) {
+        if (freeze) {
           fish.animGroup?.pause();
         } else if (fish.deathStage === 'alive') {
           fish.animGroup?.play(true);
@@ -3321,6 +3355,7 @@ export class BabylonOceanRuntime {
       fish.deadElapsed = 0;
       fish.stageElapsed = 0;
       fish.verticalVelocity = 0;
+      fish.deathDelayRemaining = fish.deathDelay;
       fish.scatterOffsetU = 0;
       fish.scatterOffsetV = 0;
       fish.scatterVelU = 0;
@@ -3358,6 +3393,7 @@ export class BabylonOceanRuntime {
       fish.deadElapsed = 0;
       fish.stageElapsed = 0;
       fish.verticalVelocity = 0;
+      fish.deathDelayRemaining = fish.deathDelay;
       fish.scatterOffsetU = 0;
       fish.scatterOffsetV = 0;
       fish.scatterVelU = 0;
@@ -3479,8 +3515,9 @@ export class BabylonOceanRuntime {
   private render() {
     if (this.disposed) return;
 
-    if (this.state.paused) {
-      // Congelamento total da cena (Freeze-frame):
+    const isFreezeFrame = this.state.paused && this.state.elapsedDays > 0;
+    if (isFreezeFrame) {
+      // Congelamento total da cena (Freeze-frame no botão pausar durante experimento):
       // Pausa todas as animações esqueléticas e de cena do Babylon para congelar no instante exato
       if (this.scene.animationsEnabled) {
         this.scene.animationsEnabled = false;
@@ -3579,9 +3616,7 @@ export class BabylonOceanRuntime {
 
   private updateFishes(dt: number) {
     const overallFishHealth = this.state.health.fish;
-    const dissolvedOxygen = this.state.dissolvedOxygen ?? 7.12;
-    // Anóxia severa (< 2.0 mg/L) ou colapso da fauna (<= 1.5%) é letal para TODOS os peixes (sem exceção de indivíduo resistente)
-    const isAnoxicOrLethal = dissolvedOxygen < 2.0 || overallFishHealth <= 1.5;
+    const dissolvedOxygen = this.state.dissolvedOxygen ?? 6.55;
 
     const deepWaterTint = mixColor(
       new Color3(0.16, 0.46, 0.68),
@@ -3604,7 +3639,18 @@ export class BabylonOceanRuntime {
       };
       updateFishState(appearance, health);
 
-      const isDead = isAnoxicOrLethal || (health <= fish.threshold || appearance.dead.alpha > 0.65);
+      // Critério individualizado: hipóxia crítica do espécime ou colapso da saúde individual
+      // com timer de agonia escalonado para evitar morte simultânea sincronizada
+      const isLethalCondition = dissolvedOxygen < fish.hypoxiaThreshold || health <= fish.threshold || overallFishHealth <= 1.0;
+      if (isLethalCondition) {
+        if (fish.deathDelayRemaining > 0) {
+          fish.deathDelayRemaining -= dt;
+        }
+      } else {
+        fish.deathDelayRemaining = Math.min(fish.deathDelay, fish.deathDelayRemaining + dt * 2.0);
+      }
+
+      const isDead = isLethalCondition && fish.deathDelayRemaining <= 0;
 
       if (!isDead) {
         if (fish.deathStage !== 'alive') {
@@ -3612,6 +3658,7 @@ export class BabylonOceanRuntime {
           fish.deadElapsed = 0;
           fish.stageElapsed = 0;
           fish.verticalVelocity = 0;
+          fish.deathDelayRemaining = fish.deathDelay;
           fish.scatterOffsetU = 0;
           fish.scatterOffsetV = 0;
           fish.scatterVelU = 0;
@@ -3800,7 +3847,7 @@ export class BabylonOceanRuntime {
           // Recolonização biológica: peixes só podem migrar/repovoar se o ambiente for sustentável
           // (oxigênio >= 3.5 mg/L, saúde da fauna > 15% e sem anóxia)
           const repopulateCooldown = 5.0 + (fish.id % 5) * 1.5;
-          const waterViable = dissolvedOxygen >= 3.5 && overallFishHealth > 15 && !isAnoxicOrLethal;
+          const waterViable = dissolvedOxygen >= 3.5 && overallFishHealth > 15;
           const waterAcceptable = waterViable && health > Math.max(15, fish.threshold);
           if (fish.stageElapsed >= repopulateCooldown && waterAcceptable) {
             fish.deathStage = 'alive';
@@ -3901,8 +3948,7 @@ export class BabylonOceanRuntime {
    */
   private updateRiggedFishes3D(dt: number) {
     const overallHealth = this.state.health.fish;
-    const dissolvedOxygen = this.state.dissolvedOxygen ?? 7.12;
-    const isAnoxicOrLethal = dissolvedOxygen < 2.0 || overallHealth <= 1.5;
+    const dissolvedOxygen = this.state.dissolvedOxygen ?? 6.55;
 
     const deepWaterEmissive = mixColor(
       new Color3(0.08, 0.26, 0.42),
@@ -3913,7 +3959,17 @@ export class BabylonOceanRuntime {
     const sharkScaring = Boolean(activeShark && activeShark.isScaring && activeShark.deathStage === 'alive');
 
     for (const fish of this.riggedFishes3D) {
-      const isDead = isAnoxicOrLethal || (overallHealth <= fish.threshold);
+      // Critério individualizado com timer de agonia para evitar morte sincronizada
+      const isLethalCondition = dissolvedOxygen < fish.hypoxiaThreshold || overallHealth <= fish.threshold || overallHealth <= 1.0;
+      if (isLethalCondition) {
+        if (fish.deathDelayRemaining > 0) {
+          fish.deathDelayRemaining -= dt;
+        }
+      } else {
+        fish.deathDelayRemaining = Math.min(fish.deathDelay, fish.deathDelayRemaining + dt * 2.0);
+      }
+
+      const isDead = isLethalCondition && fish.deathDelayRemaining <= 0;
 
       if (!isDead) {
         if (fish.deathStage !== 'alive') {
@@ -3921,6 +3977,7 @@ export class BabylonOceanRuntime {
           fish.deadElapsed = 0;
           fish.stageElapsed = 0;
           fish.verticalVelocity = 0;
+          fish.deathDelayRemaining = fish.deathDelay;
           fish.scatterOffsetU = 0;
           fish.scatterOffsetV = 0;
           fish.scatterVelU = 0;
@@ -4167,7 +4224,7 @@ export class BabylonOceanRuntime {
         } else if (fish.deathStage === 'repopulating') {
           fadeAlpha = 0;
           const repopulateCooldown = 5.5 + (fish.id % 4) * 1.5;
-          const waterViable = dissolvedOxygen >= 3.5 && overallHealth > 15 && !isAnoxicOrLethal;
+          const waterViable = dissolvedOxygen >= 3.5 && overallHealth > 15;
           const waterAcceptable = waterViable && overallHealth > Math.max(15, fish.threshold);
           if (fish.stageElapsed >= repopulateCooldown && waterAcceptable) {
             fish.deathStage = 'alive';

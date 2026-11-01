@@ -8,7 +8,7 @@ import {
   PRESSURE_IDS,
   type MassLoadId,
 } from './config';
-import { calculateCarbonateSystem, calculateRespirationPhImpact } from './carbonate';
+import { calculateRespirationPhImpact } from './carbonate';
 import { calculateOilFateBudget, evaluateOilEcotoxicity } from './contaminants';
 import {
   computeEffectiveFishingPressure,
@@ -366,7 +366,9 @@ export function calculateTrophicBalance(
 
 function updateHealth(current: number, stress: number, collapseDays: number, dtDays: number, protection: number) {
   const maxDamagePerDay = 100 / collapseDays;
-  const damage = maxDamagePerDay * stress * (1 - protection * PARAMETERS.recovery.damageReduction);
+  // Sob estresse agudo severo (> 0.5), acelera o dano metabólico devido ao colapso respiratório e cardíaco
+  const acuteStressFactor = 1 + 0.85 * Math.max(0, stress - 0.5);
+  const damage = maxDamagePerDay * stress * acuteStressFactor * (1 - protection * PARAMETERS.recovery.damageReduction);
   const threshold = PARAMETERS.recoveryThreshold + protection * PARAMETERS.recovery.thresholdBoost;
   const recovery =
     stress < threshold
@@ -396,7 +398,7 @@ export function createInitialState(sectorId: BtsSectorId = 'frades'): Simulation
     overall: 100,
     elapsedDays: 0,
     speed: 1,
-    paused: false,
+    paused: true,
     everDegraded: false,
     activeInterventions: [],
     recoveredOilKg: 0,

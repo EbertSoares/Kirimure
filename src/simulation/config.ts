@@ -1,6 +1,5 @@
 import type {
   BtsSectorDefinition,
-  BtsSectorId,
   ControlCategoryId,
   Environment,
   EvidenceLevel,
@@ -139,7 +138,7 @@ export const PARAMETERS = {
    */
   daysPerRealSecond: 0.5,
   tauDays: {
-    temperature: 7,
+    temperature: 2.5,
     ph: 12,
     microplastics: 5,
     oil: 3,
@@ -157,8 +156,8 @@ export const PARAMETERS = {
     bleachingThreshold: 29,
     severeDhw: 8,
     extremeDhw: 20,
-    fishStart: 30,
-    fishMax: 31,
+    fishStart: 29.5,
+    fishMax: 30.8,
   },
   oxygen: {
     // Saturação físico-química de Weiss (1970) em água marinha tropical da BTS (26,8 °C, 35 PSU: 6,55 mg/L)
@@ -241,7 +240,7 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
     label: 'Peixe-cirurgião (Acanthurus)',
     role: 'herbívoro de macroalgas rasas',
     note: 'Acanthurus chirurgus / A. coeruleus: herbívoro residente dos recifes da BTS. Sensível a anomalias térmicas e hipóxia; é o primeiro a mostrar sinais de estresse sob calor.',
-    collapseDays: 62,
+    collapseDays: 36,
     sensitivity: {
       thermal: 1.2,
       acidification: 1.1,
@@ -257,7 +256,7 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
     label: 'Sargentinho (Abudefduf saxatilis)',
     role: 'onívoro generalista recifal',
     note: 'Abudefduf saxatilis: extremamente abundante nos recifes da BTS. Tolera variações térmicas moderadas, mas confunde microplásticos com plâncton e sofre com a turbidez de efluentes.',
-    collapseDays: 78,
+    collapseDays: 48,
     sensitivity: {
       thermal: 0.85,
       acidification: 1,
@@ -273,7 +272,7 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
     label: 'Peixe-papagaio (Scarus / Sparisoma)',
     role: 'herbívoro raspador e bio-erosor',
     note: 'Scarus trispinosus / Sparisoma amplum: espécies brasileiras essenciais para conter algas e gerar areia. Altamente vulneráveis à sobrepesca e ao declínio de corais.',
-    collapseDays: 48,
+    collapseDays: 28,
     sensitivity: {
       thermal: 1.05,
       acidification: 1.2,

@@ -99,6 +99,8 @@ function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
     env: { ...sectorEnv },
     targets: { ...sectorEnv },
     dissolvedOxygen: initialDo,
+    paused: true,
+    elapsedDays: 0,
     history: base.history.map((pt) => ({
       ...pt,
       temperature: effectiveTemp,
@@ -323,10 +325,12 @@ export function App() {
           }
           const nextControls: Environment = { ...current.controls, [pending.id]: pending.value };
           const nextTargets = buildTargets(nextControls, current.sector, current.sewageDischargeMode);
+          const shouldStart = current.paused && current.elapsedDays === 0;
           return {
             ...current,
             controls: nextControls,
             targets: nextTargets,
+            paused: shouldStart ? false : current.paused,
           };
         });
       });
@@ -344,10 +348,12 @@ export function App() {
       setSimulation((current) => {
         const nextControls: Environment = { ...current.controls, [pending.id]: pending.value };
         const nextTargets = buildTargets(nextControls, current.sector, current.sewageDischargeMode);
+        const shouldStart = current.paused && current.elapsedDays === 0;
         return {
           ...current,
           controls: nextControls,
           targets: nextTargets,
+          paused: shouldStart ? false : current.paused,
         };
       });
     }
@@ -465,9 +471,11 @@ export function App() {
       const nextList: ActiveIntervention[] = exists
         ? activeList.filter((act) => act.id !== id)
         : [...activeList, { id, startedAtDay: current.elapsedDays, intensity: 1, status: 'active' }];
+      const shouldStart = current.paused && current.elapsedDays === 0;
       return {
         ...current,
         activeInterventions: nextList,
+        paused: shouldStart ? false : current.paused,
       };
     });
   }, []);
