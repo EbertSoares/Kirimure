@@ -47,19 +47,60 @@ const INITIAL_STATUS: DataSourceStatus = {
   isFallback: false,
 };
 
+interface SectorOceanCache {
+  crwData: ThermalForcingPoint[];
+  meteoData: MarineMeteoPoint[];
+  noaaStatus: DataSourceStatus;
+  meteoStatus: DataSourceStatus;
+  lastUpdated: Date;
+  fetchedAtMs: number;
+}
+
+const sectorOceanCache = new Map<BtsSectorId, SectorOceanCache>();
+/** TTL do cache em memória: 15 minutos (dados de satélite NOAA são diários e previsões meteo horárias) */
+const OCEAN_CACHE_TTL_MS = 15 * 60 * 1000;
+
 export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): OceanDataState {
+  const cachedInitial = sectorOceanCache.get(sectorId);
+  const isInitialFresh = Boolean(cachedInitial && Date.now() - cachedInitial.fetchedAtMs < OCEAN_CACHE_TTL_MS);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [noaaStatus, setNoaaStatus] = useState<DataSourceStatus>(INITIAL_STATUS);
-  const [meteoStatus, setMeteoStatus] = useState<DataSourceStatus>(INITIAL_STATUS);
+  const [noaaStatus, setNoaaStatus] = useState<DataSourceStatus>(() => (
+    isInitialFresh && cachedInitial ? cachedInitial.noaaStatus : INITIAL_STATUS
+  ));
+  const [meteoStatus, setMeteoStatus] = useState<DataSourceStatus>(() => (
+    isInitialFresh && cachedInitial ? cachedInitial.meteoStatus : INITIAL_STATUS
+  ));
 
-  const [crwData, setCrwData] = useState<ThermalForcingPoint[]>([]);
-  const [meteoData, setMeteoData] = useState<MarineMeteoPoint[]>([]);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [crwData, setCrwData] = useState<ThermalForcingPoint[]>(() => (
+    isInitialFresh && cachedInitial ? cachedInitial.crwData : []
+  ));
+  const [meteoData, setMeteoData] = useState<MarineMeteoPoint[]>(() => (
+    isInitialFresh && cachedInitial ? cachedInitial.meteoData : []
+  ));
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(() => (
+    isInitialFresh && cachedInitial ? cachedInitial.lastUpdated : null
+  ));
 
   const activeSectorRef = useRef(sectorId);
   activeSectorRef.current = sectorId;
+
+  const updateSectorCache = useCallback((
+    sector: BtsSectorId,
+    updates: Partial<SectorOceanCache>,
+  ) => {
+    const existing = sectorOceanCache.get(sector);
+    sectorOceanCache.set(sector, {
+      crwData: updates.crwData ?? existing?.crwData ?? [],
+      meteoData: updates.meteoData ?? existing?.meteoData ?? [],
+      noaaStatus: updates.noaaStatus ?? existing?.noaaStatus ?? INITIAL_STATUS,
+      meteoStatus: updates.meteoStatus ?? existing?.meteoStatus ?? INITIAL_STATUS,
+      lastUpdated: updates.lastUpdated ?? existing?.lastUpdated ?? new Date(),
+      fetchedAtMs: Date.now(),
+    });
+  }, []);
 
   const refreshNoaa = useCallback(async () => {
     if (!enabled) return;
@@ -72,45 +113,48 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
       if (activeSectorRef.current !== requestSector) return;
 
       const isFallback = points.length > 0 && Boolean(points[0]?.provenance.isCachedFallback);
-      setCrwData(points);
-      setNoaaStatus({
+      const nextStatus: DataSourceStatus = {
         state: isFallback ? 'fallback' : 'success',
         lastAttemptUtc: nowUtc,
         lastSuccessUtc: isFallback ? null : nowUtc,
         error: null,
         isFallback,
-      });
-      setLastUpdated(new Date());
+      };
+      setCrwData(points);
+      setNoaaStatus(nextStatus);
+      const now = new Date();
+      setLastUpdated(now);
+      updateSectorCache(requestSector, { crwData: points, noaaStatus: nextStatus, lastUpdated: now });
     } catch (err) {
       if (activeSectorRef.current !== requestSector) return;
       const remoteErr = err instanceof RemoteDataError ? err : undefined;
       setCrwData([]);
 
-      if (remoteErr?.kind === 'no_coverage') {
-        setNoaaStatus({
-          state: 'no_coverage',
-          lastAttemptUtc: nowUtc,
-          lastSuccessUtc: null,
-          error: remoteErr.message,
-          errorKind: 'no_coverage',
-          isFallback: false,
-        });
-      } else {
-        setNoaaStatus({
-          state: 'error',
-          lastAttemptUtc: nowUtc,
-          lastSuccessUtc: null,
-          error: err instanceof Error ? err.message : 'Falha na consulta remota ao NOAA CRW',
-          errorKind: remoteErr?.kind ?? 'network',
-          errorStatus: remoteErr?.status,
-          errorUrl: remoteErr?.url,
-          errorElapsedMs: remoteErr?.elapsedMs,
-          serverMessage: remoteErr?.serverMessage,
-          isFallback: false,
-        });
-      }
+      const nextStatus: DataSourceStatus = remoteErr?.kind === 'no_coverage'
+        ? {
+            state: 'no_coverage',
+            lastAttemptUtc: nowUtc,
+            lastSuccessUtc: null,
+            error: remoteErr.message,
+            errorKind: 'no_coverage',
+            isFallback: false,
+          }
+        : {
+            state: 'error',
+            lastAttemptUtc: nowUtc,
+            lastSuccessUtc: null,
+            error: err instanceof Error ? err.message : 'Falha na consulta remota ao NOAA CRW',
+            errorKind: remoteErr?.kind ?? 'network',
+            errorStatus: remoteErr?.status,
+            errorUrl: remoteErr?.url,
+            errorElapsedMs: remoteErr?.elapsedMs,
+            serverMessage: remoteErr?.serverMessage,
+            isFallback: false,
+          };
+      setNoaaStatus(nextStatus);
+      updateSectorCache(requestSector, { crwData: [], noaaStatus: nextStatus });
     }
-  }, [enabled]);
+  }, [enabled, updateSectorCache]);
 
   const refreshMeteo = useCallback(async () => {
     if (!enabled) return;
@@ -123,20 +167,23 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
       if (activeSectorRef.current !== requestSector) return;
 
       const isFallback = points.length > 0 && Boolean(points[0]?.provenance.isCachedFallback);
-      setMeteoData(points);
-      setMeteoStatus({
+      const nextStatus: DataSourceStatus = {
         state: isFallback ? 'fallback' : 'success',
         lastAttemptUtc: nowUtc,
         lastSuccessUtc: isFallback ? null : nowUtc,
         error: null,
         isFallback,
-      });
-      setLastUpdated(new Date());
+      };
+      setMeteoData(points);
+      setMeteoStatus(nextStatus);
+      const now = new Date();
+      setLastUpdated(now);
+      updateSectorCache(requestSector, { meteoData: points, meteoStatus: nextStatus, lastUpdated: now });
     } catch (err) {
       if (activeSectorRef.current !== requestSector) return;
       const remoteErr = err instanceof RemoteDataError ? err : undefined;
       setMeteoData([]);
-      setMeteoStatus({
+      const nextStatus: DataSourceStatus = {
         state: 'error',
         lastAttemptUtc: nowUtc,
         lastSuccessUtc: null,
@@ -147,9 +194,11 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
         errorElapsedMs: remoteErr?.elapsedMs,
         serverMessage: remoteErr?.serverMessage,
         isFallback: false,
-      });
+      };
+      setMeteoStatus(nextStatus);
+      updateSectorCache(requestSector, { meteoData: [], meteoStatus: nextStatus });
     }
-  }, [enabled]);
+  }, [enabled, updateSectorCache]);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
@@ -189,8 +238,22 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
+
+    // Se já houver dados válidos em cache para o setor consultado dentro do TTL, reaproveita
+    // imediatamente sem disparar novas chamadas de rede redundantes a cada troca de tela
+    const cached = sectorOceanCache.get(sectorId);
+    if (cached && Date.now() - cached.fetchedAtMs < OCEAN_CACHE_TTL_MS) {
+      setCrwData(cached.crwData);
+      setMeteoData(cached.meteoData);
+      setNoaaStatus(cached.noaaStatus);
+      setMeteoStatus(cached.meteoStatus);
+      setLastUpdated(cached.lastUpdated);
+      return;
+    }
+
     refresh();
-  }, [refresh, sectorId]);
+  }, [enabled, sectorId, refresh]);
 
   const latestCrw = crwData.length > 0 ? crwData[crwData.length - 1] : null;
   const latestMeteo = meteoData.length > 0 ? findClosestHourlyPoint(meteoData) : null;

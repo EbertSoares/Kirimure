@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon, type IconName } from '../components/Icons';
 import { BASELINE, ITEM_DEFINITIONS, PARAMETERS, type MassLoadId } from '../simulation/config';
 import { isFactorActive } from '../simulation/model';
 import type { Environment, SimulationState } from '../simulation/types';
@@ -14,6 +15,8 @@ type SceneStatus = 'loading' | 'ready' | 'error';
 interface ActiveFactorNotice {
   id: string;
   tone: 'oil' | 'sewage' | 'microplastics' | 'temperature' | 'ph' | 'turbidity' | 'fishing' | 'recovery';
+  icon: IconName;
+  tag: string;
   label: string;
   text: string;
   leaving?: boolean;
@@ -56,7 +59,9 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `oil-${Date.now()}`,
       tone: 'oil',
-      label: 'Óleo',
+      icon: 'drop',
+      tag: 'ÓLEO',
+      label: 'Óleo / Petróleo',
       text: `Barco derramou ${formatMass(launchedKg)} de óleo na superfície`,
     });
   }
@@ -66,7 +71,9 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `sewage-${Date.now()}`,
       tone: 'sewage',
-      label: 'Esgoto',
+      icon: 'sewage',
+      tag: 'ESGOTO',
+      label: 'Esgoto Orgânico',
       text: `Descarga de ${formatMass(launchedKg)} de esgoto orgânico (DBO)`,
     });
   }
@@ -76,7 +83,9 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `microplastics-${Date.now()}`,
       tone: 'microplastics',
-      label: 'Microplásticos (escala ampliada)',
+      icon: 'bottle',
+      tag: 'PLÁSTICOS',
+      label: 'Microplásticos',
       text: `Concentração ajustada para ${concentration.toLocaleString('pt-BR')} part./m³`,
     });
   }
@@ -85,7 +94,9 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `turbidity-${Date.now()}`,
       tone: 'turbidity',
-      label: 'Turbidez',
+      icon: 'sediment',
+      tag: 'TURBIDEZ',
+      label: 'Sedimentos',
       text: `Sedimentos em suspensão: índice em ${Math.round(next.turbidity)}%`,
     });
   }
@@ -94,7 +105,9 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `fishing-${Date.now()}`,
       tone: 'fishing',
-      label: 'Pesca',
+      icon: 'hook',
+      tag: 'PESCA',
+      label: 'Pesca Recifal',
       text: `Pressão pesqueira ajustada para ${Math.round(next.fishing)}%`,
     });
   }
@@ -103,7 +116,9 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `recovery-${Date.now()}`,
       tone: 'recovery',
-      label: 'Recuperação',
+      icon: 'shield',
+      tag: 'MANEJO',
+      label: 'Conservação',
       text: `Proteção e manejo ecológico em ${Math.round(next.recovery)}%`,
     });
   }
@@ -114,6 +129,8 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `temperature-${Date.now()}`,
       tone: 'temperature',
+      icon: 'temperature',
+      tag: 'TEMPERATURA',
       label: 'Temperatura',
       text: warming
         ? `Anomalia térmica: água aquecida a ${tempStr}°C`
@@ -127,7 +144,9 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     notices.push({
       id: `ph-${Date.now()}`,
       tone: 'ph',
-      label: 'pH',
+      icon: 'flask',
+      tag: 'pH',
+      label: 'Acidez da Água',
       text: acidic
         ? `Acidificação costeira: pH reduzido para ${phStr}`
         : `Alcalinidade elevada: pH em ${phStr}`,
@@ -284,9 +303,16 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
               key={notice.id}
               className={`factor-notice-pill tone-${notice.tone} ${notice.leaving ? 'leaving' : ''}`}
             >
-              <i className="factor-notice-dot" aria-hidden="true" />
-              <small>{notice.label}</small>
-              <strong>{notice.text}</strong>
+              <span className="factor-notice-icon-box" aria-hidden="true">
+                <Icon name={notice.icon} className="factor-notice-svg" />
+              </span>
+              <div className="factor-notice-body">
+                <div className="factor-notice-header">
+                  <span className="factor-notice-tag">{notice.tag}</span>
+                  <span className="factor-notice-live-dot" aria-hidden="true" />
+                </div>
+                <strong className="factor-notice-text">{notice.text}</strong>
+              </div>
             </div>
           ))}
         </div>

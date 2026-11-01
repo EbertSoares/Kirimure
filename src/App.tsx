@@ -8,7 +8,7 @@ import { Icon } from './components/Icons';
 import { IndicatorProgress } from './components/IndicatorProgress';
 import { RegionSelector } from './components/RegionSelector';
 import { useOceanData } from './hooks/useOceanData';
-import { getSavedSst, saveSst } from './services/oceanStorage';
+import { saveSst } from './services/oceanStorage';
 import { calculateRespirationPhImpact } from './simulation/carbonate';
 import {
   BASELINE,
@@ -85,13 +85,12 @@ const MarineScene = lazy(() =>
 function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const base = createInitialState(sectorId);
-  const savedSst = getSavedSst(sectorId);
-  const effectiveTemp = savedSst ?? sector.baselineTemperature;
+  const baselineTemp = sector.baselineTemperature;
   const sectorEnv: Environment = {
     ...BASELINE,
-    temperature: effectiveTemp,
+    temperature: baselineTemp,
   };
-  const initialDo = calculateWeissOxygenSaturation(effectiveTemp, sector.baselineSalinity);
+  const initialDo = calculateWeissOxygenSaturation(baselineTemp, sector.baselineSalinity);
   return {
     ...base,
     sector: sectorId,
@@ -103,7 +102,7 @@ function createSectorBaselineState(sectorId: BtsSectorId): SimulationState {
     elapsedDays: 0,
     history: base.history.map((pt) => ({
       ...pt,
-      temperature: effectiveTemp,
+      temperature: baselineTemp,
       dissolvedOxygen: initialDo,
       saturationOxygen: initialDo,
     })),
@@ -168,24 +167,17 @@ export function App() {
     [simulation.sector],
   );
 
-  const apiTemperatureRef = useMemo(() => {
+  const liveSst = useMemo(() => {
     const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
-    if (typeof sst === 'number' && Number.isFinite(sst)) {
-      return parseFloat(sst.toFixed(1));
-    }
-    const saved = getSavedSst(simulation.sector);
-    if (typeof saved === 'number' && Number.isFinite(saved)) {
-      return saved;
-    }
-    return sectorDef.baselineTemperature;
-  }, [oceanData.latestCrw, simulation.sector, sectorDef.baselineTemperature]);
+    return typeof sst === 'number' && Number.isFinite(sst) ? parseFloat(sst.toFixed(1)) : undefined;
+  }, [oceanData.latestCrw]);
 
   const activeFactorIds = useMemo(
     () => FACTOR_ORDER.filter((id) => {
-      const refVal = id === 'temperature' ? apiTemperatureRef : BASELINE[id];
+      const refVal = id === 'temperature' ? sectorDef.baselineTemperature : BASELINE[id];
       return Math.abs(simulation.controls[id] - refVal) > 1e-6;
     }),
-    [simulation.controls, apiTemperatureRef],
+    [simulation.controls, sectorDef.baselineTemperature],
   );
 
   // Laço temporal determinístico a 10 Hz (velocidade aplicada uma única vez em tickSimulation)
@@ -372,7 +364,8 @@ export function App() {
 
   const handleResetSingleFactor = useCallback((id: ItemId) => {
     const curr = simulationRef.current;
-    const defaultVal = id === 'temperature' ? apiTemperatureRef : BASELINE[id];
+    const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
+    const defaultVal = id === 'temperature' ? sector.baselineTemperature : BASELINE[id];
 
     setUndoStack((prev) => [
       ...prev.slice(-24),
@@ -387,7 +380,7 @@ export function App() {
         targets: nextTargets,
       };
     });
-  }, [apiTemperatureRef]);
+  }, []);
 
   const handleUndo = useCallback(() => {
     const stack = undoStackRef.current;
@@ -449,19 +442,6 @@ export function App() {
     if (typeof sst !== 'number' || !Number.isFinite(sst)) return;
     const rounded = parseFloat(sst.toFixed(1));
     saveSst(simulation.sector, rounded);
-
-    setSimulation((curr) => {
-      if (Math.abs(curr.controls.temperature - rounded) < 0.05 && Math.abs(curr.env.temperature - rounded) < 0.05) {
-        return curr;
-      }
-      return {
-        ...curr,
-        controls: { ...curr.controls, temperature: rounded },
-        env: { ...curr.env, temperature: rounded },
-        targets: { ...curr.targets, temperature: rounded },
-        initialConditionSource: 'NOAA_CRW_LIVE',
-      };
-    });
   }, [oceanData.latestCrw, simulation.sector]);
 
   const handleToggleIntervention = useCallback((id: InterventionId) => {
@@ -1053,7 +1033,7 @@ export function App() {
           onToggleIntervention={handleToggleIntervention}
           onOpenInterventionLimits={handleOpenInterventionLimits}
           timelineMilestones={timelineMilestones}
-          referenceTemperature={apiTemperatureRef}
+          referenceTemperature={liveSst}
         />
 
         <EvidenceDrawer

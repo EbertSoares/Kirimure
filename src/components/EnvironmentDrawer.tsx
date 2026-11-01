@@ -166,8 +166,7 @@ const FactorRow = memo(function FactorRow({
   onTriggerSewagePulse,
 }: FactorRowProps) {
   const item = ITEM_DEFINITIONS[id];
-  const baselineVal = id === 'temperature' && referenceTemperature !== undefined ? referenceTemperature : undefined;
-  const active = isFactorActive(id, controlVal, baselineVal);
+  const active = isFactorActive(id, controlVal);
   const scaleOptions = item.scaleOptions;
 
   const displayedTarget = formatParameterValue(id, controlVal, sewageMode);
@@ -301,6 +300,23 @@ const FactorRow = memo(function FactorRow({
         </button>
       )}
 
+      {id === 'temperature' && referenceTemperature !== undefined && Math.abs(controlVal - referenceTemperature) > 0.05 && (
+        <div className="param-live-helper">
+          <button
+            type="button"
+            className="btn btn--quiet btn-apply-live-sst"
+            onClick={() => {
+              onAdjustFactor('temperature', referenceTemperature);
+              onCommitFactor('temperature');
+            }}
+            title="Ajustar slider para a temperatura medida pelo satélite NOAA CRW"
+          >
+            <Icon name="web" />
+            <span>Usar satélite NOAA ao vivo: <strong>{referenceTemperature.toFixed(1).replace('.', ',')} °C</strong></span>
+          </button>
+        </div>
+      )}
+
       <div className={`param-preview-note ${isTransitioning ? 'is-visible' : 'is-empty'}`} aria-live="polite">
         <span className="param-preview-text">
           Na água agora: <strong>{displayedCurrent.value} {displayedCurrent.unit}</strong>
@@ -422,8 +438,7 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
         {CONTROL_GROUPS.map((group) => {
           const isExpanded = expandedGroups[group.id];
           const activeCount = group.items.filter((id) => {
-            const baseRef = id === 'temperature' && referenceTemperature !== undefined ? referenceTemperature : undefined;
-            return isFactorActive(id, controls[id], baseRef);
+            return isFactorActive(id, controls[id]);
           }).length;
 
           return (
