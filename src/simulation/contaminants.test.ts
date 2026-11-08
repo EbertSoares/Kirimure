@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BTS_MICROPLASTICS_SURVEY,
+  BTS_MICROPLASTICS_STUDY,
   calculateOilFateBudget,
   evaluateOilEcotoxicity,
   getMicroplasticsSurveyMetadata,
@@ -46,13 +46,11 @@ describe('módulo de contaminantes: destino de óleo e microplásticos', () => {
     expect(severe.polypRetractionRisk).toBe('critico');
   });
 
-  it('preserva dados observacionais reais de microplásticos da BTS em itens/m³ sem conversão em kg', () => {
-    expect(BTS_MICROPLASTICS_SURVEY).toHaveLength(4);
-    const paraguacu = BTS_MICROPLASTICS_SURVEY.find((p) => p.riverName === 'Rio Paraguaçu');
-    expect(paraguacu).toBeDefined();
-    expect(paraguacu?.badge).toBe('Dado Local BTS');
-    expect(paraguacu?.maxCountPerM3).toBe(32784);
-    expect(paraguacu?.particleSizeFractionUnder300Um).toBeGreaterThan(90);
+  it('preserva somente resultados rastreáveis do estudo de microplásticos, em itens/m³', () => {
+    expect(BTS_MICROPLASTICS_STUDY.sampledEstuarineEnvironments).toBe(10);
+    expect(BTS_MICROPLASTICS_STUDY.approximateMaximumCountPerM3).toBe(33000);
+    expect(BTS_MICROPLASTICS_STUDY.predominantParticleSizeUnderUm).toBe(150);
+    expect(BTS_MICROPLASTICS_STUDY.badge).toBe('Dado Local BTS');
 
     const meta = getMicroplasticsSurveyMetadata();
     expect(meta.unit).toBe('itens/m³ de água superficial');

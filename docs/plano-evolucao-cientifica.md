@@ -27,7 +27,7 @@ Toda variável, card, gráfico ou mensagem do sistema passa a carregar um dos ci
 ```
 
 1. **`[Dado Local BTS]`**: Medições físicas, químicas ou biológicas realizadas em campanhas de campo na Baía de Todos-os-Santos com desenho amostral publicado.  
-   *Exemplo:* Aporte estuarino de 5.176–32.784 itens/m³ de microplásticos (*Trindade et al., 2023*); tempo de descarga central de 38 a 62 dias (*Cirano & Lessa, 2007*).
+   *Exemplo:* abundância estuarina de até aproximadamente 33.000 itens/m³ de microplásticos (*Trindade et al., 2023*); tempo de descarga da BTS de 38 dias no inverno, com aumento de 60% no verão (*Cirano & Lessa, 2007*).
 2. **`[Produto de Modelo]`**: Dados derivados de sensoriamento remoto por satélite, reanálise climática ou modelos numéricos oceânicos (ex.: Copernicus Marine Service, SST multissensor NOAA CoralTemp 5km, batimetria CHM/Marinha). Carregam resolução e incerteza de produto.
 3. **`[Padrão Operacional]`**: Convenções e índices oficiais de monitoramento ambiental internacional.  
    *Exemplo:* Definição de HotSpot ($SST - MMM$), acúmulo de DHW em 84 dias para $HS \ge 1{,}0\text{ °C}$ (*NOAA Coral Reef Watch*); escala de saturação de aragonita.
@@ -58,9 +58,9 @@ Nenhum valor numérico flutua desacompanhado na interface científica. Todo indi
 | **$\tau$ Central (Frades/Itaparica)** | $38\text{ a }62$ | dias | Cirano & Lessa (2007) | `[Dado Local BTS]` | Média | Faixa sazonal de renovação hidrodinâmica (inverno–verão). |
 | **$\tau$ Estuarino (Paraguaçu)** | $\approx 75$ | dias | Estimativa provisória | `[Cenário Didático]` | Baixa | Provisório para fins pedagógicos de alta retenção; não validado in situ. |
 | **$\tau$ Oceânico (Barra)** | $\approx 8\text{–}12$ | dias | Estimativa provisória | `[Cenário Didático]` | Baixa | Provisório para fins pedagógicos de alta dispersão; não validado in situ. |
-| **Microplásticos** | $5.176\text{–}32.784$ | itens/$\text{m}^3$ | Trindade et al. (2023) | `[Dado Local BTS]` | Alta | Exibido no contexto estuarino; não convertido para massa. |
+| **Microplásticos** | até $\approx 33.000$ | itens/$\text{m}^3$ | Trindade et al. (2023) | `[Dado Local BTS]` | Alta para o teto aproximado publicado | Exibido no contexto estuarino; valores intermediários do controle são didáticos e não são convertidos para massa. |
 | **Toxicidade Óleo (tPAH50)** | $10\text{ e }27$ | $\mu\text{g/L}$ | May et al. (2020) | `[Dado de Laboratório]` | Alta | Endpoints subletais (regeneração e retração de pólipos em 96h); não é dose letal. |
-| **OD de Saturação ($OD_{\text{sat}}$)** | $7{,}1$ | $\text{mg O}_2/\text{L}$ | Físico-química (27 °C, 35 PSU) | `[Produto de Modelo]` | Alta | Saturação de equilíbrio ar-mar tropical. |
+| **OD de Saturação ($OD_{\text{sat}}$)** | $6{,}55$ | $\text{mg O}_2/\text{L}$ | Equação de Weiss (26,8 °C, 35 PSU) | `[Produto de Modelo]` | Alta para a equação; condições locais são cenário | Saturação de equilíbrio ar-mar tropical. |
 | **Índice de Estabilidade** | $0\text{ a }100$ | % | Algoritmo do motor Kirimurê | `[Regra do Modelo]` | N/A (didático) | Mede a perda de resiliência interna do cenário; não é mortalidade real de campo. |
 
 ---
@@ -86,9 +86,9 @@ Onde:
 * **$\tau$:** Tempo de retenção hidráulica do compartimento ($\text{dias}$).
 * **$k_a(W, T)$:** Taxa de reaeração superficial, dependente do vento $W$ e profundidade $H$:
   $$k_a \approx \frac{0{,}728 \cdot W^{0{,}5} - 0{,}317 \cdot W + 0{,}0372 \cdot W^2}{H} \cdot 1{,}024^{T - 20} \quad (\text{dia}^{-1})$$
-  *(No cenário didático padrão com vento de $4\text{ m/s}$ e profundidade média de $5\text{ m}$, $k_a \approx 0{,}35\text{ dia}^{-1}$).*
+  *(No cenário didático com vento de $4\text{ m/s}$, temperatura de $26{,}8\text{ °C}$ e profundidade de $5\text{ m}$, a própria equação fornece $k_a \approx 0{,}18\text{ dia}^{-1}$).*
 * **$OD_{\text{sat}}(T, S)$:** Concentração de saturação segundo a fórmula de Weiss (1970):
-  $$OD_{\text{sat}}(26{,}8\text{ °C}, 35\text{ PSU}) \approx 7{,}12\text{ mg/L}$$
+  $$OD_{\text{sat}}(26{,}8\text{ °C}, 35\text{ PSU}) \approx 6{,}55\text{ mg/L}$$
 * **$P - R$ (Balanço Fotossíntese/Respiração):**
   * Durante o dia com águas claras: $P > R$ (pequeno aporte líquido de $\approx +0{,}3\text{ a }+0{,}6\text{ mg/L/dia}$).
   * Sob alta turbidez ou películas de óleo: $P \to 0$, tornando o saldo puramente respiratório ($R \approx 0{,}4\text{ mg/L/dia}$).

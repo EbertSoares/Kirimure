@@ -92,7 +92,7 @@ Os oito controles ambientais dividem-se em três categorias funcionais:
 | **Água** | Turbidez | `0` | `0 a 100` | Linear (`1`) | `% índice` | `35%` / `70%` | Índice relativo de atenuação luminosa e sedimentação |
 | **Poluição** | Esgoto ($\text{DBO}_5$) | `0` | `0 a 100.000` | Logarítmica discreta | `kg DBO₅/dia` (contínuo) ou `kg DBO₅` (pulso) | `2.000` / `20.000` | Matéria orgânica biodegradável oxidável |
 | **Poluição** | Óleo / Petróleo | `0` | `0 a 100.000` | Logarítmica discreta | `kg` | `1.000` / `20.000 kg` | Toxicidade subletal de HPAs: $\text{EC}_{50} = 10\text{–}27\ \mu\text{g/L tPAH}_{50}$ (May et al., 2020) |
-| **Poluição** | Microplásticos | `0` | `0 a 35.000` | Não linear discreta | `part./m³` | `5.180` / `24.000 part./m³` | Estuários da BTS: média `5.180` e máx. `32.784 part./m³` (Trindade et al., 2023) |
+| **Poluição** | Microplásticos | `0` | `0 a 33.000` | Não linear discreta | `part./m³` | `5.000` / `24.000 part./m³` | Âncoras intermediárias didáticas; máximo publicado de aproximadamente `33.000 part./m³` (Trindade et al., 2023) |
 | **Ecossistema** | Pressão Pesqueira | `0` | `0 a 100` | Linear (`1`) | `% índice` | `35%` / `70%` | Esforço relativo sobre ictiofauna, com maior peso sobre raspadores |
 | **Ecossistema** | Recuperação Ecológica | `0` | `0 a 100` | Linear (`1`) | `% índice` | — | Proteção costeira, áreas marinhas protegidas e restauração |
 
@@ -100,7 +100,7 @@ Os oito controles ambientais dividem-se em três categorias funcionais:
 - **Cargas de Massa (`óleo` e `esgoto`, em kg ou kg/dia):**
   `[0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]`
 - **Concentração de Microplásticos (`part./m³`):**
-  `[0, 100, 250, 500, 1000, 2500, 5180, 10000, 15000, 24000, 32784, 35000]`
+  `[0, 100, 250, 500, 1000, 2500, 5000, 10000, 15000, 24000, 33000]`
   *(Preserva estritamente a unidade empírica de concentração superficial em partículas por metro cúbico reportada por Trindade et al., 2023, eliminando conversões arbitrárias entre massa e número de partículas).*
 
 ---
@@ -224,7 +224,7 @@ A função `estimateCriticalDays()` projeta em quantos dias simulados o índice 
 Implementada em [`src/services/noaaCrw.ts`](src/services/noaaCrw.ts) com orçamento total de `16 s` e timeout individual de `6 s`:
 1. **Fonte Primária — PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu/erddap`, dataset `dhw_5km`):** redistribuição oficial da grade de 5 km do NOAA Coral Reef Watch com suporte CORS direto no navegador, consultando o pixel oceânico exato de Frades (`-12.875°, -38.525°`) ou Barra (`-13.025°, -38.525°`).
 2. **Fonte Secundária — NOAA CoastWatch ERDDAP / PFEG (`coastwatch.pfeg.noaa.gov/erddap`, dataset `NOAA_DHW`):** servidor ERDDAP oficial de contingência para os mesmos pixels de 5 km.
-3. **Fonte Terciária (Contingência Regional Recente) — Coral Watch Virtual Station API (`api.coral.tsr.lol`):** serviço externo de terceiros que espelha a estação virtual regional `todos_os_santos` (`-13.375°, -38.375°`, plataforma externa adjacente à entrada da BTS). Utilizado apenas caso os dois servidores ERDDAP falhem na consulta recente, com aviso explícito de que representa referência regional offshore.
+3. **Adaptador não operacional no navegador — Coral Watch Virtual Station API (`api.coral.tsr.lol`):** o serviço externo espelha a estação regional `todos_os_santos`, mas não autoriza CORS. Por isso, não integra o failover web atual; só deve ser reativado atrás de um proxy próprio, com cache, monitoramento e atribuição explícita da referência offshore.
 4. **Contingência Offline Sob Demanda — Snapshots Históricos de 2024 (`noaaCrwSnapshots.ts`):** séries calibradas do evento de aquecimento marinho de mar/abr de 2024. **Nunca** substituem silenciosamente uma consulta com erro; só são carregadas por ação explícita do usuário e exibem o estado `Histórico / Contingência (2024)`.
 
 > **Setor Estuarino do Paraguaçu:** por ser um canal estuarino estreito mascarado como continente na grade satelital de 5 km da NOAA, o adaptador retorna imediatamente o estado `Sem cobertura (no_coverage)` sem emitir requisições espúrias nem atribuir dados de mar aberto ao manguezal interno.
@@ -242,7 +242,7 @@ Consultado em [`src/services/openMeteo.ts`](src/services/openMeteo.ts) (`marine-
 
 | Parâmetro / Conjunto | Valor no Sistema | Nível de Evidência | Fonte / Justificativa e Limites |
 | :--- | :--- | :--- | :--- |
-| Faixa de microplásticos estuarinos na BTS | `5.180` (média) a `32.784 part./m³` (máx.) | **Medido** | Amostragem superficial em 10 estuários da BTS (Trindade et al., 2023). |
+| Teto aproximado de microplásticos estuarinos na BTS | até `~33.000 part./m³` | **Medido** | Três campanhas em 10 ambientes estuarinos da BTS (Trindade et al., 2023); valores intermediários do controle são didáticos. |
 | Solubilidade de saturação de $\text{O}_2$ | `6,55 mg/L` (`26,8 °C`, `35 PSU`) | **Publicado** | Equação termodinâmica de Weiss (1970). |
 | Tempo de descarga da Baía Central (Frades) | `38 a 62 dias` | **Publicado** | Hidrodinâmica sazonal da BTS (Cirano & Lessa, 2007). |
 | Constantes do sistema carbonato ($K_1, K_2, K'_{sp}$) | $\Omega_{\text{arag}} \approx 3,66$ na base | **Publicado** | Lueker et al. (2000), Dickson (1990) e Mucci (1983). |
@@ -273,8 +273,8 @@ A cena 3D em Babylon.js (`src/scene/babylon/runtime.ts`) obedece ao princípio d
 4. **DICKSON, A. G.; SABINE, C. L.; CHRISTIAN, J. R.** *Guide to Best Practices for Ocean CO₂ Measurements*. PICES Special Publication 3, 2007.
 5. **LEÃO, Z. M. A. N.; KIKUCHI, R. K. P.; OLIVEIRA, M. D. M.** Branqueamento de corais nos recifes da Bahia e sua relação com anomalias térmicas. *Revista Brasileira de Geofísica*, v. 26, n. 4, p. 507–516, 2008.
 6. **LUEKER, T. J.; DICKSON, A. G.; KEELING, C. D.** Ocean $p\text{CO}_2$ calculated from dissolved inorganic carbon, alkalinity, and equations for $K_1$ and $K_2$. *Marine Chemistry*, v. 70, p. 105–119, 2000.
-7. **MAY, L. A. et al.** Sublethal cellular and physiological effects of petroleum hydrocarbons on tropical reef-building corals. *Aquatic Toxicology*, v. 226, 105454, 2020.
+7. **MAY, L. A. et al.** Effect of Louisiana sweet crude oil on a Pacific coral, *Pocillopora damicornis*. *Aquatic Toxicology*, v. 222, 105454, 2020.
 8. **MUCCI, A.** The solubility of calcite and aragonite in seawater at various salinities, temperatures, and one atmosphere total pressure. *American Journal of Science*, v. 283, n. 7, p. 780–799, 1983.
 9. **NOAA Coral Reef Watch.** *Version 3.1 Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring Products*. National Oceanic and Atmospheric Administration.
-10. **TRINDADE, R. F. et al.** Microplastics in estuaries of Todos os Santos Bay, Bahia, Brazil. *Environmental Pollution*, v. 323, 121224, 2023.
+10. **TRINDADE, R. F. et al.** Microplastics in surface waters of tropical estuaries around a densely populated Brazilian bay. *Environmental Pollution*, v. 323, 121224, 2023.
 11. **WEISS, R. F.** The solubility of nitrogen, oxygen and argon in water and seawater. *Deep Sea Research*, v. 17, n. 4, p. 721–735, 1970.

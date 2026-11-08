@@ -45,9 +45,9 @@ describe('modelo de simulação', () => {
 
     expect(ITEM_DEFINITIONS.microplastics.unit).toBe('part./m³');
     expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toEqual(MICROPLASTICS_OPTIONS_PARTICLES_M3);
-    expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toContain(5180);
-    expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toContain(32784);
-    expect(normalizedMicroplasticsConcentration(5180)).toBeCloseTo(5180 / 35000, 4);
+    expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toContain(5000);
+    expect(ITEM_DEFINITIONS.microplastics.scaleOptions).toContain(33000);
+    expect(normalizedMicroplasticsConcentration(5000)).toBeCloseTo(5000 / 33000, 4);
   });
 
   it('inicia no estado saudável', () => {

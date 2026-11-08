@@ -2,12 +2,25 @@ import { BTS_SECTORS } from '../simulation/config';
 import type { BtsSectorId } from '../simulation/types';
 import { RemoteDataError, fetchTextWithTimeout, finiteOrNull, withRetry } from './http';
 import {
-  BTS_METEO_FALLBACK_SNAPSHOT,
-  BTS_METEO_FRADES_FALLBACK_SNAPSHOT,
   BTS_METEO_SECTOR_FALLBACKS,
   OPEN_METEO_PROVENANCE_BASE,
 } from './openMeteoSnapshots';
 import type { MarineMeteoPoint } from './types';
+
+interface OpenMeteoMarineResponse {
+  latitude?: number;
+  longitude?: number;
+  model?: string;
+  hourly_units?: Record<string, string>;
+  hourly?: {
+    time?: string[];
+    wave_height?: unknown[];
+    sea_surface_temperature?: unknown[];
+    ocean_current_velocity?: unknown[];
+    ocean_current_direction?: unknown[];
+    sea_level_height_msl?: unknown[];
+  };
+}
 
 export {
   BTS_METEO_FALLBACK_SNAPSHOT,
@@ -23,7 +36,8 @@ export {
  * - Frades / Baía Central: Lat -12.85°, Lon -38.55°
  * - Paraguaçu / Fundo da Baía: Lat -12.75°, Lon -38.85°
  *
- * Resolução do modelo oceânico global: ~5 a 8 km (dados hidrodinâmicos modelados).
+ * Resolução variável por campo no conjunto Best Match: correntes, maré e SST
+ * tipicamente em ~8 km; ondas podem vir de grades globais de 9 a 25 km.
  * Nota de proveniência: campos contextuais de maré/onda; não substituem hidrodinâmica fina local
  * para transporte advectivo em canais estuarinos estreitos.
  */
@@ -117,10 +131,10 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
     1,
   );
 
-  let data: any;
+  let data: OpenMeteoMarineResponse;
   try {
-    data = JSON.parse(response.text);
-  } catch (err) {
+    data = JSON.parse(response.text) as OpenMeteoMarineResponse;
+  } catch {
     throw new RemoteDataError('parse', `${source}: resposta JSON inválida ou truncada.`, {
       url: url.toString(),
       elapsedMs: response.elapsedMs,
@@ -150,7 +164,9 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
   const retrievedAt = new Date().toISOString();
   const validStart = normalizeUtcTimestamp(hourly.time[0] ?? retrievedAt);
   const validEnd = normalizeUtcTimestamp(hourly.time[hourly.time.length - 1] ?? retrievedAt);
-  const modelName = typeof data?.model === 'string' ? data.model : 'Previsão marinha do Open-Meteo (Best Match)';
+  const modelName = typeof data.model === 'string'
+    ? data.model
+    : 'Open-Meteo Best Match (provedor selecionado por variável)';
 
   const points: MarineMeteoPoint[] = [];
   const len = Math.min(hourly.time.length, 24);
@@ -183,7 +199,7 @@ export async function fetchBtsMarineMeteo(sectorId: BtsSectorId = 'barra'): Prom
       },
       gridCell,
       requestedCoordinates: coords,
-      spatialResolution: '8 km (Copernicus / ECMWF)',
+      spatialResolution: 'Variável por campo (Best Match: ~8–25 km)',
       provenance: {
         ...OPEN_METEO_PROVENANCE_BASE,
         validTimeStartUtc: validStart,

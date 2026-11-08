@@ -10,7 +10,7 @@ import {
   PRESSURE_LABELS,
 } from '../simulation/config';
 import { calculateRespirationPhImpact } from '../simulation/carbonate';
-import { BTS_MICROPLASTICS_SURVEY, calculateOilFateBudget, evaluateOilEcotoxicity } from '../simulation/contaminants';
+import { BTS_MICROPLASTICS_STUDY, calculateOilFateBudget, evaluateOilEcotoxicity } from '../simulation/contaminants';
 import {
   INTERVENTIONS,
   type InterventionId,
@@ -706,7 +706,7 @@ export function EvidenceDrawer({
                         )}
                       </p>
                       <p className="method-caveat">
-                        <strong>Ordem operacional de failover:</strong> 1º PacIOOS ERDDAP (<code>dhw_5km</code>) → 2º NOAA CoastWatch ERDDAP PFEG (<code>NOAA_DHW</code>) → 3º Estação Virtual Regional (<code>todos_os_santos</code>) → Contingência histórica manual (mar–abr/2024).
+                        <strong>Ordem operacional de failover:</strong> 1º PacIOOS ERDDAP (<code>dhw_5km</code>) → 2º NOAA CoastWatch ERDDAP PFEG (<code>NOAA_DHW</code>) → contingência histórica manual (mar–abr/2024). A estação virtual de terceiros exige proxy próprio porque não autoriza CORS no navegador.
                       </p>
                     </div>
                   </details>
@@ -832,15 +832,14 @@ export function EvidenceDrawer({
               </div>
 
               <details className="method-details">
-                <summary>Dados empíricos de microplásticos nos estuários da Baía de Todos-os-Santos (Trindade et al., 2023)</summary>
+                <summary>Dados empíricos verificáveis de microplásticos na Baía de Todos-os-Santos (Trindade et al., 2023)</summary>
                 <div className="method-details-body">
                   <ul className="survey-list">
-                    {BTS_MICROPLASTICS_SURVEY.map((pt) => (
-                      <li key={pt.estuaryName}>
-                        <strong>{pt.riverName}:</strong> média {pt.meanCountPerM3.toLocaleString('pt-BR')} part./m³ (faixa {pt.minCountPerM3.toLocaleString('pt-BR')}–{pt.maxCountPerM3.toLocaleString('pt-BR')} part./m³; {pt.particleSizeFractionUnder300Um}% &lt; 300 µm).
-                      </li>
-                    ))}
+                    <li><strong>Amostragem:</strong> {BTS_MICROPLASTICS_STUDY.campaigns} campanhas em {BTS_MICROPLASTICS_STUDY.sampledEstuarineEnvironments} ambientes estuarinos.</li>
+                    <li><strong>Abundância máxima publicada:</strong> até aproximadamente {BTS_MICROPLASTICS_STUDY.approximateMaximumCountPerM3.toLocaleString('pt-BR')} itens/m³.</li>
+                    <li><strong>Tamanho predominante:</strong> abaixo de {BTS_MICROPLASTICS_STUDY.predominantParticleSizeUnderUm} µm.</li>
                   </ul>
+                  <p className="method-caveat">Médias e faixas exatas por rio não são exibidas sem a tabela ou suplemento rastreável do artigo.</p>
                 </div>
               </details>
             </article>
@@ -866,7 +865,7 @@ export function EvidenceDrawer({
                     >
                       <div className="param-evidence-top">
                         <div className="evidence-title-with-icon">
-                          <Icon name={item.icon as any} className="param-icon-svg" />
+                          <Icon name={item.icon} className="param-icon-svg" />
                           <strong>{item.title}</strong>
                         </div>
                         <div className="evidence-badges-row">

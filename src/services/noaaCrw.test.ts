@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BTS_CRW_BARRA_FALLBACK_SNAPSHOT,
   BTS_CRW_FALLBACK_SNAPSHOT,
-  CRW_DISTRIBUTORS,
   fetchBtsThermalForcing,
   getBtsCrwHistoricalSnapshot,
   getDefaultCrwWindow,

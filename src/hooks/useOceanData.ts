@@ -61,31 +61,36 @@ const sectorOceanCache = new Map<BtsSectorId, SectorOceanCache>();
 const OCEAN_CACHE_TTL_MS = 15 * 60 * 1000;
 
 export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): OceanDataState {
-  const cachedInitial = sectorOceanCache.get(sectorId);
-  const isInitialFresh = Boolean(cachedInitial && Date.now() - cachedInitial.fetchedAtMs < OCEAN_CACHE_TTL_MS);
+  const [cachedInitial] = useState<SectorOceanCache | undefined>(() => {
+    const cached = sectorOceanCache.get(sectorId);
+    return cached && Date.now() - cached.fetchedAtMs < OCEAN_CACHE_TTL_MS ? cached : undefined;
+  });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [noaaStatus, setNoaaStatus] = useState<DataSourceStatus>(() => (
-    isInitialFresh && cachedInitial ? cachedInitial.noaaStatus : INITIAL_STATUS
+    cachedInitial ? cachedInitial.noaaStatus : INITIAL_STATUS
   ));
   const [meteoStatus, setMeteoStatus] = useState<DataSourceStatus>(() => (
-    isInitialFresh && cachedInitial ? cachedInitial.meteoStatus : INITIAL_STATUS
+    cachedInitial ? cachedInitial.meteoStatus : INITIAL_STATUS
   ));
 
   const [crwData, setCrwData] = useState<ThermalForcingPoint[]>(() => (
-    isInitialFresh && cachedInitial ? cachedInitial.crwData : []
+    cachedInitial ? cachedInitial.crwData : []
   ));
   const [meteoData, setMeteoData] = useState<MarineMeteoPoint[]>(() => (
-    isInitialFresh && cachedInitial ? cachedInitial.meteoData : []
+    cachedInitial ? cachedInitial.meteoData : []
   ));
   const [lastUpdated, setLastUpdated] = useState<Date | null>(() => (
-    isInitialFresh && cachedInitial ? cachedInitial.lastUpdated : null
+    cachedInitial ? cachedInitial.lastUpdated : null
   ));
 
   const activeSectorRef = useRef(sectorId);
-  activeSectorRef.current = sectorId;
+
+  useEffect(() => {
+    activeSectorRef.current = sectorId;
+  }, [sectorId]);
 
   const updateSectorCache = useCallback((
     sector: BtsSectorId,
@@ -244,15 +249,20 @@ export function useOceanData(sectorId: BtsSectorId = 'frades', enabled = true): 
     // imediatamente sem disparar novas chamadas de rede redundantes a cada troca de tela
     const cached = sectorOceanCache.get(sectorId);
     if (cached && Date.now() - cached.fetchedAtMs < OCEAN_CACHE_TTL_MS) {
-      setCrwData(cached.crwData);
-      setMeteoData(cached.meteoData);
-      setNoaaStatus(cached.noaaStatus);
-      setMeteoStatus(cached.meteoStatus);
-      setLastUpdated(cached.lastUpdated);
-      return;
+      const timer = window.setTimeout(() => {
+        setCrwData(cached.crwData);
+        setMeteoData(cached.meteoData);
+        setNoaaStatus(cached.noaaStatus);
+        setMeteoStatus(cached.meteoStatus);
+        setLastUpdated(cached.lastUpdated);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
 
-    refresh();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [enabled, sectorId, refresh]);
 
   const latestCrw = crwData.length > 0 ? crwData[crwData.length - 1] : null;

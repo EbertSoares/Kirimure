@@ -8,7 +8,6 @@ import {
 import {
   BTS_METEO_FALLBACK_SNAPSHOT,
   fetchBtsMarineMeteo,
-  getBtsMeteoHistoricalSnapshot,
   getMeteoCoordinates,
 } from './openMeteo';
 

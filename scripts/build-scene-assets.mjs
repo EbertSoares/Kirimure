@@ -13,7 +13,7 @@
  * muda de tamanho ou de data.
  */
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -132,6 +132,17 @@ function main() {
         modifiedAt: new Date(st.mtimeMs).toISOString(),
       };
     });
+
+  // Evita que todo `npm run build` suje o worktree apenas por trocar o timestamp.
+  // O manifesto só é regravado quando a lista ou a integridade dos derivados muda.
+  if (existsSync(MANIFEST_PATH)) {
+    try {
+      const current = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
+      if (JSON.stringify(current.assets) === JSON.stringify(manifest)) return;
+    } catch {
+      // Manifesto inválido: regrava abaixo com a estrutura canônica.
+    }
+  }
 
   writeFileSync(MANIFEST_PATH, JSON.stringify({ generatedAt: new Date().toISOString(), assets: manifest }, null, 2), 'utf8');
 }

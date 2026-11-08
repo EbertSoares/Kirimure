@@ -1,10 +1,7 @@
 import { BTS_SECTORS } from '../simulation/config';
 import type { BtsSectorId } from '../simulation/types';
 import { RemoteDataError, fetchTextWithTimeout, withRetry } from './http';
-import { fetchCoralWatchCurrent } from './coralWatchApi';
 import {
-  BTS_CRW_BARRA_FALLBACK_SNAPSHOT,
-  BTS_CRW_FALLBACK_SNAPSHOT,
   BTS_CRW_SECTOR_FALLBACKS,
   NOAA_CRW_PROVENANCE_BASE,
 } from './noaaCrwSnapshots';
@@ -22,7 +19,8 @@ export {
  * Arquitetura multi-fonte com orçamento global de tempo e failover ordenado:
  * 1. PacIOOS ERDDAP (https://pae-paha.pacioos.hawaii.edu) - espelho oficial do dataset `dhw_5km` da NOAA com CORS liberado e pixel costeiro local
  * 2. NOAA CoastWatch ERDDAP PFEG (https://coastwatch.pfeg.noaa.gov) - dataset `NOAA_DHW` (distribuidor ERDDAP de contingência)
- * 3. Coral Watch Virtual Station API (https://api.coral.tsr.lol) - estação regional offshore 'todos_os_santos' (referência regional / contingência)
+ * O adaptador de estação virtual de terceiros não participa do failover no navegador,
+ * pois a origem não autoriza CORS. Ele só poderá ser reativado por um proxy próprio.
  *
  * Variáveis principais:
  * - CRW_SST: temperatura da superfície do mar (°C)
@@ -128,9 +126,9 @@ function parseNumber(raw: string | undefined): number | null {
  * - 2: Aviso (Warning)
  * - 3: Alerta Nível 1
  * - 4: Alerta Nível 2
- * - 5: Alerta Nível 3 (Mortalidade Extrema)
- * - 6: Alerta Nível 4 (Catastrófico)
- * - 7: Alerta Nível 5 (Colapso Estrutural)
+ * - 5: Alerta Nível 3
+ * - 6: Alerta Nível 4
+ * - 7: Alerta Nível 5
  * Valores de preenchimento (_FillValue = 251 na NOAA/PacIOOS) ou inválidos tornam-se null.
  */
 export function parseAlertLevel(raw: string | undefined): number | null {
@@ -339,7 +337,6 @@ async function querySingleDistributor(
  * Ordem no navegador:
  * 1. PacIOOS ERDDAP (distribuição oficial NOAA CRW 5km com CORS '*' e pixel local exato)
  * 2. NOAA CoastWatch ERDDAP PFEG (distribuidor ERDDAP de contingência)
- * 3. Coral Watch Virtual Station API (estação regional offshore 'todos_os_santos', contingência para indicador recente)
  */
 async function queryWithFailover(
   sectorId: BtsSectorId,
@@ -374,31 +371,6 @@ async function queryWithFailover(
           ? err
           : new RemoteDataError('parse', err instanceof Error ? err.message : String(err), { source: distributor.label }),
       );
-    }
-  }
-
-  // 2. Coral Watch Virtual Station API como contingência para dados recentes se os servidores ERDDAP falharem
-  if (!window) {
-    const elapsed = Date.now() - startTime;
-    const remaining = totalBudgetMs - elapsed;
-    if (remaining > 1000) {
-      try {
-        const cwPoints = await fetchCoralWatchCurrent(sectorId, Math.min(CRW_ATTEMPT_TIMEOUT_MS, remaining));
-        if (cwPoints.length > 0) {
-          return cwPoints;
-        }
-      } catch (err) {
-        if (err instanceof RemoteDataError && err.kind === 'no_coverage') {
-          throw err;
-        }
-        failures.push(
-          err instanceof RemoteDataError
-            ? err
-            : new RemoteDataError('network', err instanceof Error ? err.message : String(err), {
-                source: 'Coral Watch API',
-              }),
-        );
-      }
     }
   }
 

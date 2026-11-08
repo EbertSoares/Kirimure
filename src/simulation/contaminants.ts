@@ -30,69 +30,21 @@ export interface OilFateBudget {
   massBalanceResidualKg: number;
 }
 
-export interface MicroplasticSurveyPoint {
-  estuaryName: string;
-  riverName: string;
-  meanCountPerM3: number;
-  maxCountPerM3: number;
-  minCountPerM3: number;
-  particleSizeFractionUnder300Um: number; // percentual (ex: 94%)
-  badge: EpistemologicalBadge;
-  citation: string;
-}
-
 /**
- * Dados empíricos publicados de microplásticos nos estuários da BTS
- * (Trindade et al., 2023; Environmental Pollution, v. 323, 121224).
- * Apresenta uma seleção representativa de 4 dos 10 ambientes estuarinos investigados no estudo.
+ * Resumo limitado aos resultados reproduzíveis no artigo e no registro PubMed.
+ * Médias, faixas e percentuais exatos por rio foram removidos porque o projeto
+ * não mantém a tabela ou o suplemento necessários para auditá-los.
  */
-export const BTS_MICROPLASTICS_SURVEY: readonly MicroplasticSurveyPoint[] = [
-  {
-    estuaryName: 'Estuário do Rio Paraguaçu',
-    riverName: 'Rio Paraguaçu',
-    meanCountPerM3: 6840,
-    maxCountPerM3: 32784,
-    minCountPerM3: 1240,
-    particleSizeFractionUnder300Um: 94.2,
-    badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023, v. 323) / UFRB',
-  },
-  {
-    estuaryName: 'Estuário do Rio Jaguaripe',
-    riverName: 'Rio Jaguaripe',
-    meanCountPerM3: 4920,
-    maxCountPerM3: 18560,
-    minCountPerM3: 850,
-    particleSizeFractionUnder300Um: 93.8,
-    badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023, v. 323) / UFRB',
-  },
-  {
-    estuaryName: 'Estuário do Rio Subaé',
-    riverName: 'Rio Subaé',
-    meanCountPerM3: 5310,
-    maxCountPerM3: 24110,
-    minCountPerM3: 980,
-    particleSizeFractionUnder300Um: 95.1,
-    badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023, v. 323) / UFRB',
-  },
-  {
-    estuaryName: 'Estuário do Rio São Paulo',
-    riverName: 'Rio São Paulo',
-    meanCountPerM3: 3635,
-    maxCountPerM3: 14200,
-    minCountPerM3: 637,
-    particleSizeFractionUnder300Um: 92.6,
-    badge: 'Dado Local BTS',
-    citation: 'Trindade et al. (2023, v. 323) / UFRB',
-  },
-] as const;
-
-/** Média aritmética das médias dos 4 estuários selecionados (itens/m³). */
-export const BTS_MICROPLASTICS_SELECTION_MEAN_COUNT_PER_M3 = 5176;
-/** Média estuarina global reportada em Trindade et al. (2023) nos 10 ambientes (itens/m³). */
-export const BTS_MICROPLASTICS_STUDY_GLOBAL_MEAN_COUNT_PER_M3 = 5180;
+export const BTS_MICROPLASTICS_STUDY = {
+  sampledEstuarineEnvironments: 10,
+  campaigns: 3,
+  approximateMaximumCountPerM3: 33000,
+  predominantParticleSizeUnderUm: 150,
+  estimatedAnnualRiverInputItems: 3.88e12,
+  badge: 'Dado Local BTS' as EpistemologicalBadge,
+  citation: 'Trindade et al. (2023), Environmental Pollution 323, 121224',
+  doi: '10.1016/j.envpol.2023.121224',
+} as const;
 
 /**
  * Calcula a partição e destino do derramamento de óleo em 4 reservatórios
@@ -246,14 +198,14 @@ export function getMicroplasticsSurveyMetadata(): ScientificMetadata {
     recordId: 'bts-estuarine-microplastics-trindade-2023',
     variable: 'Abundância de Microplásticos em Estuários da BTS',
     symbol: 'MP',
-    value: '5.176 a 32.784',
+    value: 'até ~33.000',
     unit: 'itens/m³ de água superficial',
     quantityKind: 'concentration',
     epistemicClass: 'Dado Local BTS',
     source: 'Trindade et al. (2023, v. 323, 121224) / Environmental Pollution / UFRB',
     sourceUrl: 'doi:10.1016/j.envpol.2023.121224',
-    method: 'Arrasto superficial com rede de plâncton (malhas 64 µm e 300 µm); ~94% dos itens < 300 µm',
-    uncertainty: 'Aporte fluvial anual estimado em 3,88 trilhões de partículas (média global do estudo: ~5.180 itens/m³)',
-    notes: 'Amostragem empírica in situ representando seleção de 4 dos 10 ambientes estuarinos da BTS. Valores preservados estritamente em itens/m³ (sem conversão genérica para massa em kg).',
+    method: 'Três campanhas em 10 ambientes estuarinos; microplásticos de 50–5.000 µm, com predominância abaixo de 150 µm',
+    uncertainty: 'O resumo publicado informa máximo aproximado de 33.000 itens/m³ e aporte anual estimado de 3,88 trilhões de itens pelos três maiores rios.',
+    notes: 'Valores detalhados por rio não são exibidos sem a tabela ou suplemento rastreável. A unidade original em itens/m³ é preservada, sem conversão genérica para massa.',
   };
 }

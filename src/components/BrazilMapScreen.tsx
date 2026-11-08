@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { BrandLogo } from './BrandLogo';
 import { BRAZIL_STATES, BRAZIL_VIEWBOX } from './brazilStates.data';
 
@@ -35,6 +35,7 @@ const LABEL_ADJUSTMENTS: Record<string, { dx?: number; dy?: number; size?: numbe
 
 export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning = false }: BrazilMapScreenProps) {
   const [unavailable, setUnavailable] = useState<{ name: string; at: number } | null>(null);
+  const toastIdRef = useRef(0);
 
   useEffect(() => {
     if (!unavailable) return;
@@ -48,7 +49,8 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
       onSelectBahia();
       return;
     }
-    setUnavailable({ name, at: Date.now() });
+    toastIdRef.current += 1;
+    setUnavailable({ name, at: toastIdRef.current });
   };
 
   const handleKeyDown = (event: KeyboardEvent<SVGGElement>, code: string, name: string) => {
@@ -71,7 +73,7 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
           <svg
             viewBox={`0 0 ${BRAZIL_VIEWBOX.width} ${BRAZIL_VIEWBOX.height}`}
             className="brazil-map-svg"
-            role="img"
+            role="group"
             aria-label="Mapa do Brasil com a sigla de cada estado e a faixa costeira da Amazônia Azul destacada"
           >
             <g className="state-layer">
@@ -83,15 +85,11 @@ export function BrazilMapScreen({ onSelectBahia, isZooming = false, isReturning 
                   <g
                     key={state.code}
                     className={`state ${tone}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={
-                      available
-                        ? `${state.name}, cenário disponível. Abrir a simulação`
-                        : `${state.name}, cenário ainda não disponível`
-                    }
+                    role={available ? 'button' : undefined}
+                    tabIndex={available ? 0 : undefined}
+                    aria-label={available ? `${state.name}, cenário disponível. Abrir a simulação` : undefined}
                     onClick={() => activate(state.code, state.name)}
-                    onKeyDown={(event) => handleKeyDown(event, state.code, state.name)}
+                    onKeyDown={available ? (event) => handleKeyDown(event, state.code, state.name) : undefined}
                   >
                     <path className="state-shape" d={state.path} fillRule="evenodd" clipRule="evenodd">
                       <title>

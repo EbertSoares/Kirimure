@@ -62,7 +62,6 @@ export function RegionSelector({
         className={`region-trigger ${open ? 'is-open' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Baía de Todos-os-Santos, ${selectedSector.label}. Escolher região`}
         title="Escolher região"
         onClick={() => onOpenChange(!open)}
       >

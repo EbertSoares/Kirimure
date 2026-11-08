@@ -65,16 +65,16 @@ Cada fonte local é classificada estritamente segundo os 5 estágios de maturida
 - **Status do Pipeline:**
   - [x] **Encontrado**: Artigo indexado no SciELO.
   - [x] **Acessado**: Texto integral e tabelas analisados.
-  - [x] **Extraído**: Geometria, tempos de renovação e volumes de mistura extraídos.
+  - [x] **Extraído**: Área, profundidade média, condições hidrográficas e tempo de descarga sazonal da BTS.
   - [x] **Validado**: Referência clássica revisada por pares da oceanografia física da BTS.
   - [x] **Licença/Autorização**: Artigo de acesso aberto (CC-BY).
 - **Parâmetros Extraídos e Utilizados no Modelo de Caixa:**
   - Área total da baía: $\approx 1.223\text{ km}^2$.
   - Profundidade média batimétrica: $9,8\text{ m}$.
-  - Volume de mistura dos setores do Kirimurê:
-    - **Ilha dos Frades / Recifes Centrais:** $V = 3,2 \times 10^7\text{ m}^3$, profundidade representativa $H = 8,0\text{ m}$, renovação $\tau = 25\text{ dias}$.
-    - **Estuário do Paraguaçu:** $V = 1,5 \times 10^7\text{ m}^3$, profundidade representativa $H = 5,0\text{ m}$, renovação $\tau = 12\text{ dias}$.
-    - **Canal da Barra / Oceânico:** $V = 1,0 \times 10^8\text{ m}^3$, profundidade representativa $H = 25,0\text{ m}$, renovação $\tau = 45\text{ dias}$.
+  - Parametrização vigente do modelo de caixas (hipóteses didáticas, não valores extraídos diretamente do artigo):
+    - **Ilha dos Frades / Recifes Centrais:** $V = 3,2 \times 10^7\text{ m}^3$, profundidade representativa $H = 8,0\text{ m}$, $\tau = 38\text{ dias}$ (borda inferior do tempo publicado para a BTS; faixa sazonal $38$–$62$ dias).
+    - **Estuário do Paraguaçu:** $V = 1,5 \times 10^7\text{ m}^3$, profundidade representativa $H = 5,0\text{ m}$, $\tau = 75\text{ dias}$ (hipótese de alta retenção).
+    - **Canal da Barra / Oceânico:** $V = 1,0 \times 10^8\text{ m}^3$, profundidade representativa $H = 25,0\text{ m}$, $\tau = 9\text{ dias}$ (hipótese de rápida troca oceânica).
   - Variação sazonal de salinidade: de $\approx 32,3\text{ PSU}$ (período chuvoso com alta descarga fluvial) até $> 36,0\text{ PSU}$ (período seco / verão com penetração oceânica).
 - **Diretriz de Uso no Kirimurê:**
   - Utilizado como **base morfométrica e hidrodinâmica de referência do modelo de caixa**, com limitação explícita de representar condições médias históricas e não medições meteorológicas instantâneas do dia atual.
@@ -90,7 +90,8 @@ Cada fonte local é classificada estritamente segundo os 5 estágios de maturida
   - [x] **Validado**: Metodologia com redes de plâncton de malhas $64\text{ }\mu\text{m}$ e $300\text{ }\mu\text{m}$ validada.
   - [x] **Licença/Autorização**: Uso educacional devidamente citado e atribuído à publicação.
 - **Parâmetros Utilizados:**
-  - Preservados estritamente na unidade empírica de medição: $\text{itens/m}^3$ de água superficial (faixa de $5.176$ a $32.784\text{ itens/m}^3$).
+  - Preservados estritamente na unidade empírica de medição: $\text{itens/m}^3$ de água superficial (até aproximadamente $33.000\text{ itens/m}^3$ no resumo publicado).
+  - Médias e faixas exatas por rio não são apresentadas no produto sem a tabela ou suplemento rastreável do artigo.
   - Nenhuma conversão artificial para massa em kg é efetuada no Kirimurê, respeitando a ausência de amostragem gravimétrica contínua.
 
 ---

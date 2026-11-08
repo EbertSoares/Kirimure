@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon, type IconName } from '../components/Icons';
-import { BASELINE, ITEM_DEFINITIONS, PARAMETERS, type MassLoadId } from '../simulation/config';
+import { ITEM_DEFINITIONS, PARAMETERS, type MassLoadId } from '../simulation/config';
 import { isFactorActive } from '../simulation/model';
 import type { Environment, SimulationState } from '../simulation/types';
 import { BabylonOceanRuntime } from './babylon/runtime';
@@ -153,9 +153,8 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
   const isResettingRef = useRef(false);
   const lastResetTimeRef = useRef(0);
 
-  stateRef.current = state;
-
   useEffect(() => {
+    stateRef.current = state;
     runtimeRef.current?.updateState(state);
   }, [state]);
 
@@ -165,19 +164,24 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
       isResettingRef.current = true;
       lastResetTimeRef.current = Date.now();
       runtimeRef.current?.resetReefLife();
-      prevTargetsRef.current = { ...state.targets };
+      prevTargetsRef.current = { ...stateRef.current.targets };
 
-      setNotices([
-        {
-          id: `reset-${Date.now()}`,
-          tone: 'recovery',
-          icon: 'reset',
-          label: 'Ambiente restaurado',
-          detail: 'Voltou ao estado inicial',
-        },
-      ]);
-      setNoticeVersion((v) => v + 1);
+      const noticeId = `reset-${Date.now()}`;
+      const timer = window.setTimeout(() => {
+        setNotices([
+          {
+            id: noticeId,
+            tone: 'recovery',
+            icon: 'reset',
+            label: 'Ambiente restaurado',
+            detail: 'Voltou ao estado inicial',
+          },
+        ]);
+        setNoticeVersion((v) => v + 1);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
+    return undefined;
   }, [resetToken]);
 
   // Auto-dismissal garantido: qualquer badge na tela desaparece automaticamente em ~2,7 segundos
@@ -207,6 +211,7 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
     }
 
     const next = state.targets;
+    const controls = state.controls;
     const settleTimer = window.setTimeout(() => {
       if (isResettingRef.current || Date.now() - lastResetTimeRef.current < 600) {
         isResettingRef.current = false;
@@ -217,7 +222,7 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
       const prev = prevTargetsRef.current;
       prevTargetsRef.current = { ...next };
 
-      const added = buildChangedFactorNotices(prev, next, state.controls);
+      const added = buildChangedFactorNotices(prev, next, controls);
       if (added.length === 0) return;
 
       setNotices((current) => {
@@ -231,16 +236,7 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
     return () => {
       window.clearTimeout(settleTimer);
     };
-  }, [
-    state.targets.temperature,
-    state.targets.ph,
-    state.targets.turbidity,
-    state.targets.microplastics,
-    state.targets.oil,
-    state.targets.sewage,
-    state.targets.fishing,
-    state.targets.recovery,
-  ]);
+  }, [state.controls, state.targets]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

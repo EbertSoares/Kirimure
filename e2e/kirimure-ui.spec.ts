@@ -85,7 +85,6 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     await tempSlider.dispatchEvent('change');
     await expect(telemetry).toContainText('Temperatura');
     await expect(telemetry).toContainText('°C');
-    await expect(telemetry).toContainText('Estresse térmico');
 
     // Expande Poluição e Recuperação para testar a rolagem real com roda do mouse
     await envDrawer.getByRole('button', { name: /Poluição/i }).click();
@@ -135,11 +134,9 @@ test.describe('Kirimurê — Refinamento UI/UX Graphite & Sage', () => {
     const mapReturnBtn = topbar.locator('.map-return-btn');
     await expect(mapReturnBtn).toBeVisible();
     await mapReturnBtn.click();
-    const mapScreen = page.locator('.map-screen');
     await expect(mapScreen).toBeVisible();
 
     await expect(mapScreen.locator('.map-legend')).toContainText('Amazônia Azul');
-    const bahiaState = mapScreen.locator('.state.available').first();
     await expect(bahiaState).toBeVisible();
     await bahiaState.click();
 

@@ -7,9 +7,9 @@ import { TrophicPyramid } from './TrophicPyramid';
 import { NicheToleranceCurve } from './NicheToleranceCurve';
 import { IndicatorContextCard, type IndicatorDetailId } from './IndicatorModal';
 import { BTS_SECTORS, FISH_SPECIES, PRESSURE_LABELS } from '../simulation/config';
-import { calculateAlgae, calculateFishPressures, calculateTrophicBalance, effectivePh } from '../simulation/model';
+import { calculateAlgae, calculateFishPressures, calculateTrophicBalance } from '../simulation/model';
 import { calculateRespirationPhImpact } from '../simulation/carbonate';
-import { calculateOilFateBudget, evaluateOilEcotoxicity, BTS_MICROPLASTICS_SURVEY } from '../simulation/contaminants';
+import { calculateOilFateBudget, evaluateOilEcotoxicity, BTS_MICROPLASTICS_STUDY } from '../simulation/contaminants';
 import { evaluateChallenge, type ChallengeProgress } from '../simulation/challenges';
 import { getMessageById } from '../simulation/messages';
 import { MISSION_01_OXYGEN } from '../simulation/missions';
@@ -153,14 +153,6 @@ export function SciencePanel({
   const oilBudget = spilledOilMassKg > 0 ? calculateOilFateBudget(spilledOilMassKg, state.sector, state.elapsedDays) : null;
   const oilEcotox = oilBudget ? evaluateOilEcotoxicity(oilBudget.dissolvedPahConcentrationUgL) : null;
   const isIntro = message.id === 'intro';
-  const messageStatus = message.tone === 'alert'
-    ? 'Atenção'
-    : message.tone === 'positive'
-      ? 'Recuperação'
-      : 'Ponto de partida';
-
-  const currentPh = effectivePh(state.env, state.biochemicalOxygenDemand, state.sector, state.respiratoryDicUmolKg);
-
   return (
     <aside className="science-panel" aria-label="Painel científico">
       <nav className="panel-tabs" role="tablist" aria-label="Navegação das seções científicas">
@@ -984,20 +976,20 @@ export function SciencePanel({
                         const baaDisplay = !isValidBaa
                           ? 'Sem dado / Indisponível'
                           : baa === 7
-                            ? 'Alerta 5 (Colapso Estrutural)'
+                            ? 'Alerta Nível 5'
                             : baa === 6
-                              ? 'Alerta 4 (Catastrófico)'
+                              ? 'Alerta Nível 4'
                               : baa === 5
-                                ? 'Alerta 3 (Mortalidade Extrema)'
+                                ? 'Alerta Nível 3'
                                 : baa === 4
-                                  ? 'Alerta 2 (Severo)'
+                                  ? 'Alerta Nível 2'
                                   : baa === 3
-                                    ? 'Alerta 1 (Risco)'
+                                    ? 'Alerta Nível 1'
                                     : baa === 2
                                       ? 'Aviso (Warning)'
                                       : baa === 1
                                         ? 'Vigilância (Watch)'
-                                        : 'Sem Alerta (Nível 0)';
+                                        : 'Sem estresse térmico (Nível 0)';
                         const baaTone = !isValidBaa
                           ? ''
                           : baa >= 3
@@ -1479,7 +1471,7 @@ export function SciencePanel({
             <article className="progressive-card">
               <div className="progressive-card-head">
                 <div>
-                  <span className="epistemological-badge" style={{ fontSize: '11px' }}>Dado Empírico Local (Seleção de Campo)</span>
+                  <span className="epistemological-badge" style={{ fontSize: '11px' }}>Dado Empírico Local</span>
                   <h3 style={{ marginTop: '4px' }}>5. Microplásticos nos Estuários da BTS</h3>
                 </div>
                 <div>
@@ -1491,8 +1483,8 @@ export function SciencePanel({
 
               <div className="progressive-metric-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
                 <div className="progressive-metric-box">
-                  <span className="metric-label">Média Amostral (4 Estuários Selecionados)</span>
-                  <strong className="metric-value">5.176 itens/m³</strong>
+                  <span className="metric-label">Abundância Máxima Publicada</span>
+                  <strong className="metric-value">~{BTS_MICROPLASTICS_STUDY.approximateMaximumCountPerM3.toLocaleString('pt-BR')} itens/m³</strong>
                 </div>
                 <div className="progressive-metric-box">
                   <span className="metric-label">Aporte Fluvial Anual Estimado</span>
@@ -1504,14 +1496,12 @@ export function SciencePanel({
                 <summary className="source-method-summary">Detalhamento por estuário, metodologia e artigo ▾</summary>
                 <div className="source-method-content">
                   <ul style={{ margin: 0, paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {BTS_MICROPLASTICS_SURVEY.map((pt) => (
-                      <li key={pt.estuaryName}>
-                        <strong>{pt.riverName}:</strong> {pt.meanCountPerM3.toLocaleString('pt-BR')} itens/m³ (méd.) · Faixa: {pt.minCountPerM3.toLocaleString('pt-BR')} a {pt.maxCountPerM3.toLocaleString('pt-BR')} itens/m³ · {pt.particleSizeFractionUnder300Um}% &lt; 300 µm
-                      </li>
-                    ))}
+                    <li><strong>Amostragem:</strong> {BTS_MICROPLASTICS_STUDY.campaigns} campanhas em {BTS_MICROPLASTICS_STUDY.sampledEstuarineEnvironments} ambientes estuarinos.</li>
+                    <li><strong>Tamanho:</strong> 50–5.000 µm, com predominância abaixo de {BTS_MICROPLASTICS_STUDY.predominantParticleSizeUnderUm} µm.</li>
+                    <li><strong>Aporte anual estimado:</strong> {(BTS_MICROPLASTICS_STUDY.estimatedAnnualRiverInputItems / 1e12).toLocaleString('pt-BR')} trilhões de itens pelos três maiores rios.</li>
                   </ul>
                   <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
-                    Metodologia: Amostragem in situ em seleção representativa de 4 dos 10 ambientes estuarinos investigados por Trindade et al. (2023, Environmental Pollution v. 323, 121224; média global reportada no estudo de ~5.180 itens/m³). Valores preservados estritamente em itens/m³ para fidelidade às observações de campo, sem conversão fictícia para quilogramas.
+                    Metodologia: amostragem in situ em 10 ambientes estuarinos investigados por Trindade et al. (2023, Environmental Pollution v. 323, 121224). Médias e faixas exatas por rio não são exibidas sem a tabela ou suplemento rastreável. A unidade itens/m³ é preservada sem conversão fictícia para quilogramas.
                   </p>
                 </div>
               </details>

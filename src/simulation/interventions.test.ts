@@ -50,7 +50,7 @@ describe('Ações de Recuperação e Modelo Científico de Intervenção', () =>
 
     // Depuração do estoque na água: decai gradualmente por troca de maré/sedimentação, sem salto instantâneo
     const currentStocks = { ...rawTargets };
-    const sectorDef = { id: 'frades' as const, dischargeDays: 38 } as any;
+    const sectorDef = BTS_SECTORS.find((sector) => sector.id === 'frades') ?? BTS_SECTORS[0];
     const stepped = stepEnvironmentalStocks(currentStocks, effective, activeInterventions, sectorDef, 0.5); // 0.5 dia
 
     expect(stepped.sewage).toBeLessThan(rawTargets.sewage);

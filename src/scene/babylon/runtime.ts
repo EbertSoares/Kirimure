@@ -1,25 +1,22 @@
-import {
-  type AnimationGroup,
-  Color3,
-  Color4,
-  Constants,
-  DirectionalLight,
-  DynamicTexture,
-  FreeCamera,
-  HemisphericLight,
-  ImageProcessingConfiguration,
-  LoadAssetContainerAsync,
-  Mesh,
-  MeshBuilder,
-  PBRMaterial,
-  Scene,
-  StandardMaterial,
-  Texture,
-  TransformNode,
-  Vector3,
-  VertexBuffer,
-  VertexData,
-} from '@babylonjs/core';
+import type { AnimationGroup } from '@babylonjs/core/Animations/animationGroup';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
+import { Constants } from '@babylonjs/core/Engines/constants';
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
+import { LoadAssetContainerAsync } from '@babylonjs/core/Loading/sceneLoader';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/loaders/glTF';
 import {
   effectivePh,
@@ -40,7 +37,7 @@ import { detectSceneQualityProfile, type SceneQualityProfile } from './quality';
  * A cena aquática utiliza uma arquitetura visual híbrida e estratificada:
  *
  * 1. Camada 1 — Cenário de Fundo (Backdrop 2.5D):
- *    Plano perspectivo com a textura ocean-backdrop.png e cáusticas de areia.
+ *    Plano perspectivo com a textura ocean-backdrop.jpg e cáusticas de areia.
  *
  * 2. Camada 2 — Ictiofauna Bentônica 2.5D (Planos Deformáveis Subdivididos):
  *    Espécies recifais emblemáticas da BTS (Acanthurus chirurgus, Scarus trispinosus,
@@ -606,7 +603,7 @@ function createBackdrop(scene: Scene, camera: FreeCamera): { mesh: Mesh; materia
   plane.isPickable = false;
   plane.applyFog = false;
 
-  const texture = new Texture('/textures/ocean-backdrop.png', scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  const texture = new Texture('/textures/ocean-backdrop.jpg', scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
   texture.wrapU = Texture.CLAMP_ADDRESSMODE;
   texture.wrapV = Texture.CLAMP_ADDRESSMODE;
   texture.uRotationCenter = 0;
@@ -798,7 +795,7 @@ function createCoralBleachingLayer(
     cCtx.putImageData(coralFrame, 0, 0);
     coralTex.update(true);
   };
-  img.src = '/textures/ocean-backdrop.png';
+  img.src = '/textures/ocean-backdrop.jpg';
 
   const coralMat = new StandardMaterial('corais-branqueamento-mat', scene);
   coralMat.diffuseTexture = coralTex;

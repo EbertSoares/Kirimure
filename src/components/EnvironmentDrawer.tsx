@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Icon, type IconName } from './Icons';
 import {
   BTS_SECTORS,
@@ -96,7 +96,7 @@ function getScaleTicks(id: ItemId): readonly string[] | null {
     return ['0', '10 kg', '200 kg', '5 t', '100 t'];
   }
   if (id === 'microplastics') {
-    return ['0', '500', '5,2 mil (média)', '35 mil'];
+    return ['0', '500', '5 mil (referência)', '33 mil (máx. aprox.)'];
   }
   if (id === 'ph') {
     return ['7,70', '8,00', '8,10 (ref.)', '8,20'];
@@ -131,7 +131,6 @@ interface EnvironmentDrawerProps {
   onSewageModeChange: (mode: 'continuous' | 'pulse') => void;
   onTriggerSewagePulse: (massKg: number) => void;
   onToggleIntervention: (id: InterventionId) => void;
-  onOpenInterventionLimits: (id: InterventionId) => void;
   timelineMilestones?: ImpactMilestone[];
   referenceTemperature?: number;
 }
@@ -329,7 +328,6 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
   onSewageModeChange,
   onTriggerSewagePulse,
   onToggleIntervention,
-  onOpenInterventionLimits,
   timelineMilestones,
   referenceTemperature,
 }: EnvironmentDrawerProps) {
@@ -520,7 +518,7 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
                   >
                     <div className="param-row-top">
                       <div className="param-label">
-                        <Icon name={item.icon as any} className="param-icon-svg" />
+                        <Icon name={item.icon} className="param-icon-svg" />
                         <span className="param-name">{item.title}</span>
                         {!item.modeled && (
                           <span
@@ -626,7 +624,7 @@ export const EnvironmentDrawer = memo(function EnvironmentDrawer({
           >
             <header className="limits-modal-header">
               <div className="limits-modal-title-row">
-                <Icon name={selectedLimitIntervention.icon as any} className="limits-modal-icon" />
+                <Icon name={selectedLimitIntervention.icon} className="limits-modal-icon" />
                 <div>
                   <h3 id="limits-modal-title" className="limits-modal-title">{selectedLimitIntervention.title}</h3>
                   <span className="limits-modal-target">Fator associado: {selectedLimitIntervention.targets.join(', ')} · Evidência: {selectedLimitIntervention.evidenceLabel}</span>

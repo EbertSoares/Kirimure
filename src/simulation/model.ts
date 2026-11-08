@@ -77,7 +77,7 @@ export function normalizedReceivedLoad(id: MassLoadId, valueKg: number) {
 
 /**
  * Normaliza a concentração superficial de microplásticos (partículas/m³) na escala
- * ancorada nos levantamentos estuarinos da BTS (0 a 35.000 part./m³; Trindade et al., 2023),
+ * ancorada no máximo aproximado informado para estuários da BTS (0 a 33.000 part./m³; Trindade et al., 2023),
  * sem converter arbitrariamente massa em contagem de partículas.
  */
 export function normalizedMicroplasticsConcentration(particlesPerM3: number): number {

@@ -30,7 +30,15 @@ function setStorageItem(key: string, value: string): void {
 export function clearSavedStorage(): void {
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.clear();
+      // Preserve dados de outras aplicações e preferências que compartilhem a origem.
+      const keysToRemove: string[] = [];
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (key?.startsWith(STORAGE_KEY_PREFIX) || key?.startsWith(STORAGE_TIME_PREFIX)) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
     }
   } catch {
     // Protege contra restrições de sandbox/iframe

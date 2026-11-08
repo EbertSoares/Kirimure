@@ -146,12 +146,12 @@ Para garantir integridade perante os estudantes (11–14 anos) e pesquisadores, 
 ### 2.6. Microplásticos em Estuários da BTS
 - **Símbolo / Unidade:** $C_{\text{MP}}$ [$\text{itens/m}^3$ de água superficial]
 - **Origem:** `in-situ` (dados empíricos de Trindade et al., 2023).
-- **Inventário de Amostragem Empírica:**
-  - Estuário do Rio Paraguaçu: Média $6.840\text{ itens/m}^3$ (faixa $1.240 - 32.784\text{ itens/m}^3$, $94.2\%$ dos itens $< 300\text{ }\mu\text{m}$).
-  - Estuário do Rio Jaguaripe: Média $4.920\text{ itens/m}^3$ (faixa $850 - 18.560\text{ itens/m}^3$, $93.8\% < 300\text{ }\mu\text{m}$).
-  - Estuário do Rio Subaé: Média $5.310\text{ itens/m}^3$ (faixa $980 - 24.110\text{ itens/m}^3$, $95.1\% < 300\text{ }\mu\text{m}$).
-  - Estuário do Rio São Paulo: Média $3.635\text{ itens/m}^3$ (faixa $637 - 14.200\text{ itens/m}^3$, $92.6\% < 300\text{ }\mu\text{m}$).
-  - Média global da pesquisa: $\approx 5.180\text{ itens/m}^3$.
+- **Inventário de Amostragem Empírica verificável:**
+  - Três campanhas em 10 ambientes estuarinos ao redor da BTS.
+  - Abundâncias de até aproximadamente $33.000\text{ itens/m}^3$.
+  - Partículas de $50$ a $5.000\text{ }\mu\text{m}$, com predominância abaixo de $150\text{ }\mu\text{m}$.
+  - Aporte anual estimado pelos três maiores rios: $3{,}88 \times 10^{12}$ itens.
+  - Médias, mínimos, máximos e percentuais exatos por rio não são exibidos sem a tabela ou suplemento rastreável do artigo.
 - **Rigor Dimensional Estrito:** Os dados são mantidos e exibidos estritamente em $\text{itens/m}^3$. Não se realiza conversão linear arbitrária para massa em kg sem distribuição granulométrica de densidades poliméricas.
 - **Visualização:** Partículas discretas determinísticas baseadas em semente fixa (sem números pseudoaleatórios variando a cada frame de renderização).
 
@@ -161,8 +161,8 @@ Para garantir integridade perante os estudantes (11–14 anos) e pesquisadores, 
 
 | Setor | ID | Profundidade Média ($H$) | Volume de Mistura ($V_{\text{mistura}}$) | Tempo de Renovação ($\tau$) | Salinidade de Linha de Base ($S$) |
 |---|---|---|---|---|---|
-| **Ilha dos Frades / Recifes Centrais** | `frades` | $8.0\text{ m}$ | $3.2 \times 10^7\text{ m}^3$ | $25\text{ dias}$ | $35.0\text{ PSU}$ |
-| **Estuário do Rio Paraguaçu** | `paraguacu` | $5.0\text{ m}$ | $1.5 \times 10^7\text{ m}^3$ | $12\text{ dias}$ | $22.0\text{ PSU}$ |
-| **Canal da Barra / Entrada Oceânica** | `barra` | $25.0\text{ m}$ | $1.0 \times 10^8\text{ m}^3$ | $45\text{ dias}$ | $36.5\text{ PSU}$ |
+| **Ilha dos Frades / Recifes Centrais** | `frades` | $8.0\text{ m}$ | $3.2 \times 10^7\text{ m}^3$ | $38\text{ dias}$ (faixa publicada BTS: $38$–$62$) | $35.0\text{ PSU}$ |
+| **Estuário do Rio Paraguaçu** | `paraguacu` | $5.0\text{ m}$ | $1.5 \times 10^7\text{ m}^3$ | $75\text{ dias}$ (hipótese didática) | $22.0\text{ PSU}$ |
+| **Canal da Barra / Entrada Oceânica** | `barra` | $25.0\text{ m}$ | $1.0 \times 10^8\text{ m}^3$ | $9\text{ dias}$ (hipótese didática) | $36.5\text{ PSU}$ |
 
-Fonte hidro oceanográfica dos setores: Cirano & Lessa (2007) / Lessa et al. (2001).
+Fonte hidrodinâmica publicada: Cirano & Lessa (2007) para o tempo de descarga da BTS. Profundidades, volumes de mistura e tempos específicos de Paraguaçu/Barra são hipóteses de compartimentação do modelo, não valores extraídos diretamente do artigo.

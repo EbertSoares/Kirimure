@@ -10,10 +10,10 @@ export const OPEN_METEO_PROVENANCE_BASE: Omit<DatasetProvenance, 'validTimeStart
   sourceName: 'Open-Meteo Marine Weather API',
   sourceUrl: 'https://open-meteo.com/en/docs/marine-weather-api',
   datasetId: 'OPEN_METEO_MARINE_GLOBAL',
-  datasetVersion: 'v1 Global 5km/8km Models (Copernicus/MeteoFrance/ECMWF)',
+  datasetVersion: 'v1 Best Match (resolução e provedor variam por campo)',
   epistemicClass: 'Produto de Modelo',
   license: 'Creative Commons Attribution 4.0 International (CC BY 4.0)',
-  citation: 'Open-Meteo Marine Weather API under CC BY 4.0 license. Global numerical model product; not in-situ tide gauge.',
+  citation: 'Open-Meteo Marine Weather API under CC BY 4.0. Combina MeteoFrance/Copernicus, ECMWF, NOAA NCEP, DWD e ERA5-Ocean conforme a variável; não é medição in situ.',
 };
 
 export const BTS_METEO_FALLBACK_SNAPSHOT: MarineMeteoPoint[] = [

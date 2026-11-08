@@ -20,18 +20,18 @@ O Kirimurê adota uma classificação epistemológica rigorosa de proveniência 
 
 1. **`satellite-derived` (Sensoriamento Remoto Satelital — NOAA Coral Reef Watch):**
    * SST (Temperatura da Superfície do Mar), anomalia térmica, HotSpot, Degree Heating Weeks (DHW) oficial e nível de alerta de branqueamento (`CRW_BAA`, 0 a 7) na grade global de 5 km.
-   * Arquitetura resiliente multi-fonte: PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu`), NOAA CoastWatch ERDDAP (`coastwatch.pfeg.noaa.gov`) e Coral Watch Virtual Station API (`api.coral.tsr.lol`).
+   * Arquitetura resiliente multi-fonte no navegador: PacIOOS ERDDAP (`pae-paha.pacioos.hawaii.edu`) e NOAA CoastWatch ERDDAP (`coastwatch.pfeg.noaa.gov`). O adaptador de estação virtual de terceiros permanece fora do failover até existir um proxy próprio com CORS controlado.
    * A temperatura retornada pela API é injetada diretamente na simulação e salva em armazenamento local persistente (`localStorage`). O usuário acompanha visualmente o status da conexão via badge dedicado no menu de Dados.
    * *Restrição metodológica estrita:* Coordenadas de pixels da grade de satélite não são exibidas como marcadores geográficos locais na baía, respeitando as limitações de resolução espacial costeira.
 
 2. **`external-model` (Modelagem Numérica Oceânica Externa — Open-Meteo Marine):**
-   * Séries temporais de altura significativa de onda ($H_s$), correntes e maré derivadas dos modelos Copernicus/ECMWF para a boca da BTS, com carimbos normalizados em UTC.
+   * Séries temporais de altura significativa de onda ($H_s$), correntes e nível do mar derivadas do conjunto de modelos “Best Match” do Open-Meteo, com carimbos normalizados em UTC. A fonte e a resolução variam por variável e não equivalem a boias ou marégrafos locais.
 
 3. **`kirimure-model` (Modelos Físico-Químicos Acoplados da Simulação Local):**
    * **Oxigênio Dissolvido e DBO (`oxygen.ts`):** Saturação termodinâmica de Weiss (1970), cinética de reaeração ar-mar de Streeter-Phelps, decaimento de $\text{DBO}_5 \rightarrow \text{CBOD}_u$, demanda bentônica de oxigênio (SOD; Bowie et al., 1985) e trocas metabólicas líquidas. Piso termodinâmico a $0{,}05\text{ mg/L}$.
    * **Sistema Carbonato Marinho (`carbonate.ts`):** Equilíbrio de $\text{CO}_2$ marinho pelos coeficientes de Lueker et al. (2000), Dickson (1990) e Mucci (1983). Calcula pH efetivo, $p\text{CO}_2$ e saturação de aragonita ($\Omega_{\text{arag}}$) e calcita ($\Omega_{\text{calc}}$).
    * **Dinâmica e Balanço de Massa de Óleo (`contaminants.ts`):** Particionamento em filme superficial, gotículas dispersas na coluna, HPAs biodisponíveis dissolvidos e adsorção no sedimento bentônico, com atenuação luminosa e ecotoxicologia em corais (May et al., 2020).
-   * **Microplásticos Estuarinos (`part./m³`):** Concentração volumétrica superficial balizada pelas medições empíricas dos estuários da BTS (Trindade et al., 2023; 5.176 a 32.784 itens/m³).
+   * **Microplásticos Estuarinos (`part./m³`):** Concentração volumétrica superficial balizada por três campanhas em 10 ambientes estuarinos da BTS (Trindade et al., 2023; até aproximadamente 33.000 itens/m³, com predomínio abaixo de 150 µm).
 
 4. **`didactic-assumption` (Cenário Interativo Experimental):**
    * Bancada pedagógica interativa para experimentação de hipóteses em sala de aula, sem sobrescrever ou mascarar dados empíricos reais.
@@ -67,7 +67,7 @@ O motor gráfico tridimensional em tempo real utiliza Babylon.js 9 (`WebGL` / `W
 * **Interface:** React 19.
 * **Engine Gráfica 3D:** Babylon.js 9 (`@babylonjs/core`, `@babylonjs/loaders`).
 * **Qualidade de Código & Linting:** ESLint 10 (Flat Config com `@eslint/js`, `typescript-eslint` e `eslint-plugin-react-hooks`).
-* **Testes Automatizados:** Vitest (138 testes cobrindo todo o modelo científico, adaptadores e componentes).
+* **Testes Automatizados:** Vitest (139 testes do modelo e adaptadores), Playwright (fluxos desktop/mobile) e axe-core (WCAG).
 * **Build & Bundler:** Vite 8 com tree-shaking para produção.
 
 ---
@@ -75,7 +75,7 @@ O motor gráfico tridimensional em tempo real utiliza Babylon.js 9 (`WebGL` / `W
 ## Desenvolvimento e Execução Local
 
 ### Pré-requisitos
-* Node.js 20 ou superior
+* Node.js 20.19 ou superior
 * npm
 
 ### Instalação
@@ -93,7 +93,9 @@ npm install
 | `npm run build` | Validação de tipos (`tsc --noEmit`) e compilação para produção em `dist/` |
 | `npm run lint` | Executa o linter ESLint em todo o código-fonte `src` |
 | `npm run lint:fix` | Corrige automaticamente problemas de formatação e lint |
-| `npm run test:run` | Executa a suíte de 138 testes automatizados via Vitest |
+| `npm run test:run` | Executa a suíte de 139 testes automatizados via Vitest |
+| `npm run test:e2e` | Valida fluxos desktop/mobile e acessibilidade WCAG no Chromium |
+| `npm run check` | Executa lint, testes unitários, validação de tipos e build de produção |
 | `npm run preview` | Pré-visualização local dos artefatos compilados de produção |
 
 ---
@@ -125,6 +127,6 @@ docs/
 2. **Lueker, T. J., Dickson, A. G., & Keeling, C. D. (2000).** *Ocean pCO2 calculated from dissolved inorganic carbon, alkalinity, and equations for K1 and K2*. Marine Chemistry, 70(1-3), 105-119.
 3. **Mucci, A. (1983).** *The solubility of calcite and aragonite in seawater at various salinities, temperatures, and one atmosphere total pressure*. American Journal of Science, 283(7), 780-799.
 4. **NOAA Coral Reef Watch (CRW).** *Daily Global 5km Satellite Coral Bleaching Heat Stress Monitoring*.
-5. **May, L. A., et al. (2020).** *Ecotoxicological effects of petroleum hydrocarbons on tropical reef-building corals*. Aquatic Toxicology, 226, 105454.
-6. **Trindade, R. F., et al. (2023).** *Microplastics in estuaries of Todos os Santos Bay, Bahia, Brazil*. Environmental Pollution, 323, 121224.
+5. **May, L. A., et al. (2020).** *Effect of Louisiana sweet crude oil on a Pacific coral, Pocillopora damicornis*. Aquatic Toxicology, 222, 105454.
+6. **Trindade, L. dos S., et al. (2023).** *Microplastics in surface waters of tropical estuaries around a densely populated Brazilian bay*. Environmental Pollution, 323, 121224.
 7. **Cirano, M., & Lessa, G. C. (2007).** *Oceanographic characteristics of Baía de Todos os Santos, Brazil*. Revista Brasileira de Geofísica, 25(4), 363-387.

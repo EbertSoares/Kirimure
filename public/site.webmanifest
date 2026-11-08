@@ -1,0 +1,17 @@
+{
+  "name": "Kirimurê — Laboratório Digital Marinho",
+  "short_name": "Kirimurê",
+  "description": "Simulação educacional dos ecossistemas marinhos da Baía de Todos-os-Santos.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071f31",
+  "theme_color": "#071f31",
+  "icons": [
+    {
+      "src": "/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

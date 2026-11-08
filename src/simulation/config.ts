@@ -26,12 +26,10 @@ export type MassLoadId = (typeof MASS_LOAD_IDS)[number];
 
 /**
  * Escala não linear de concentração de microplásticos em partículas/m³,
- * ancorada nos levantamentos estuarinos da Baía de Todos-os-Santos (Trindade et al., 2023):
+ * ancorada no teto aproximado publicado para estuários da Baía de Todos-os-Santos (Trindade et al., 2023):
  * - 0: condição de referência sem contaminação no cenário;
- * - 5.180 part./m³: média estuarina global reportada em 10 ambientes da BTS;
- * - 24.000 part./m³: patamar elevado observado em estuários urbanos (ex.: Subaé ~24.110 part./m³);
- * - 32.784 part./m³: concentração máxima observada no Estuário do Paraguaçu;
- * - 35.000 part./m³: teto experimental do cenário didático.
+ * - 5.000 e 24.000 part./m³: âncoras didáticas intermediárias;
+ * - 33.000 part./m³: máximo aproximado informado no resumo do estudo e teto do cenário.
  */
 export const MICROPLASTICS_OPTIONS_PARTICLES_M3 = [
   0,
@@ -40,12 +38,11 @@ export const MICROPLASTICS_OPTIONS_PARTICLES_M3 = [
   500,
   1000,
   2500,
-  5180,
+  5000,
   10000,
   15000,
   24000,
-  32784,
-  35000,
+  33000,
 ] as const;
 
 export const BTS_SECTORS: readonly BtsSectorDefinition[] = [
@@ -199,10 +196,10 @@ export const PARAMETERS = {
     sewage: { maximumKg: 100000 * CENTRAL_RETENTION },
   },
   microplastics: {
-    // Escala em concentração (partículas/m³) respaldada por Trindade et al. (2023) nos estuários da BTS
-    maximumParticlesPerM3: 35000,
-    studyMeanParticlesPerM3: 5180,
-    studyMaxParticlesPerM3: 32784,
+    // Escala em concentração (partículas/m³); o artigo informa máximo aproximado de 33.000 itens/m³.
+    maximumParticlesPerM3: 33000,
+    didacticReferenceParticlesPerM3: 5000,
+    studyApproximateMaxParticlesPerM3: 33000,
   },
   sewageLoads: {
     // Escala máxima de taxa contínua de lançamento (kg DBO₅/dia)
@@ -319,6 +316,13 @@ export const CONTROL_GROUPS: readonly ControlGroupDefinition[] = [
     label: 'Poluição',
     subtitle: 'Carga orgânica, óleo e microplásticos',
     items: ['sewage', 'oil', 'microplastics'],
+  },
+  {
+    id: 'ecosystem',
+    label: 'Ecossistema',
+    subtitle: 'Pressão pesqueira',
+    // A recuperação é operada pelas intervenções concretas logo abaixo do painel.
+    items: ['fishing'],
   },
 ] as const;
 
@@ -466,15 +470,15 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     shortLabel: 'Microplásticos',
     category: 'pollution',
     min: 0,
-    max: 35000,
+    max: 33000,
     step: 1,
     unit: 'part./m³',
-    reference: 'Média 5.180 · máx. 32.784 part./m³',
-    warning: 5180,
+    reference: 'Máx. publicado ≈ 33.000 part./m³',
+    warning: 5000,
     critical: 24000,
     riskDirection: 'above',
     tooltip: 'Partículas plásticas menores que 5 mm.',
-    help: 'Medido na BTS (faixa in-situ) / Hipótese do Modelo (efeito): Concentração superficial em partículas/m³, alinhada aos levantamentos empíricos de Trindade et al. (2023) em estuários da BTS (média ~5.180 part./m³; máximo 32.784 part./m³ no Paraguaçu). Sem conversão artificial para massa em kg. Na visualização 3D, as partículas utilizam escala visual ampliada para permitir percepção didática dos estudantes.',
+    help: 'Medido na BTS / Hipótese do Modelo (efeito): concentração superficial em partículas/m³, alinhada a Trindade et al. (2023), que estudou 10 ambientes estuarinos e informou abundâncias de até aproximadamente 33.000 itens/m³. As âncoras intermediárias da escala são didáticas. Sem conversão artificial para massa em kg; a visualização 3D amplia as partículas para percepção em sala de aula.',
     icon: 'bottle',
     scaleType: 'nonlinear',
     scaleBadge: 'Escala não linear',
@@ -570,11 +574,11 @@ export const PARAMETER_EVIDENCE_REGISTRY: readonly ParameterEvidenceRecord[] = [
   {
     id: 'bts-microplastics-range',
     parameter: 'Faixa de microplásticos em estuários da Baía de Todos-os-Santos',
-    valueDisplay: '5.180 (média) · 32.784 (máx.)',
+    valueDisplay: 'até ~33.000',
     unit: 'part./m³',
     evidenceLevel: 'Medido',
     sourceOrBasis: 'Trindade et al. (2023) — 10 estuários da Baía de Todos-os-Santos',
-    scopeNote: 'Amostragem empírica superficial com redes de 64 e 300 µm. O peso de estresse biológico associado no simulador é Hipótese do Modelo.',
+    scopeNote: 'Três campanhas em 10 ambientes estuarinos; o resumo informa predominância abaixo de 150 µm. Valores exatos por rio não são exibidos sem tabela ou suplemento rastreável. O peso de estresse no simulador é Hipótese do Modelo.',
   },
   {
     id: 'pah-sublethal-ecotox',

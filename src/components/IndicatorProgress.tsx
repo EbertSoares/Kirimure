@@ -25,7 +25,6 @@ export function IndicatorProgress({
       type="button"
       className={`indicator-progress tone-${tone}`}
       onClick={onClick}
-      aria-label={`${label}: ${text}${unit && !text.includes(unit) ? ` ${unit}` : ''}. Abrir detalhes`}
       title={tooltip ?? `${label}.`}
     >
       <span className="indicator-progress__label">{label}</span>

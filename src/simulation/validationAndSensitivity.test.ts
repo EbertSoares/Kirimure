@@ -11,11 +11,7 @@ import {
   PARAMETERS,
 } from './config';
 import { calculateCarbonateSystem, calculateRespirationPhImpact } from './carbonate';
-import {
-  BTS_MICROPLASTICS_STUDY_GLOBAL_MEAN_COUNT_PER_M3,
-  BTS_MICROPLASTICS_SURVEY,
-  calculateOilFateBudget,
-} from './contaminants';
+import { BTS_MICROPLASTICS_STUDY, calculateOilFateBudget } from './contaminants';
 import {
   buildTargets,
   calculatePressures,
@@ -127,25 +123,23 @@ describe('Validação Científica, Casos de Referência da BTS e Sensibilidade (
       expect(MICROPLASTICS_OPTIONS_PARTICLES_M3[0]).toBe(0);
       expect(
         MICROPLASTICS_OPTIONS_PARTICLES_M3[MICROPLASTICS_OPTIONS_PARTICLES_M3.length - 1],
-      ).toBe(35000);
+      ).toBe(33000);
 
-      // Verifica âncoras observacionais publicadas da BTS
-      expect(BTS_MICROPLASTICS_STUDY_GLOBAL_MEAN_COUNT_PER_M3).toBe(5180);
-      const maxObserved = Math.max(...BTS_MICROPLASTICS_SURVEY.map((s) => s.maxCountPerM3));
-      expect(maxObserved).toBe(32784);
+      // Verifica o teto aproximado publicado; valores intermediários são didáticos.
+      expect(BTS_MICROPLASTICS_STUDY.approximateMaximumCountPerM3).toBe(33000);
 
       // Monotonicidade estrita da pressão normalizada de microplásticos em [0, 1]
       const pZero = normalizedMicroplasticsConcentration(0);
-      const pMean = normalizedMicroplasticsConcentration(5180);
-      const pExtreme = normalizedMicroplasticsConcentration(32784);
+      const pMean = normalizedMicroplasticsConcentration(5000);
+      const pExtreme = normalizedMicroplasticsConcentration(33000);
 
       expect(pZero).toBe(0);
-      expect(pMean).toBeCloseTo(5180 / 35000, 3);
+      expect(pMean).toBeCloseTo(5000 / 33000, 3);
       expect(pMean).toBeLessThan(pExtreme);
       expect(pExtreme).toBeLessThanOrEqual(1);
 
-      const pressuresMean = calculatePressures({ ...BASELINE, microplastics: 5180 }, 0, 0);
-      const pressuresHigh = calculatePressures({ ...BASELINE, microplastics: 35000 }, 0, 0);
+      const pressuresMean = calculatePressures({ ...BASELINE, microplastics: 5000 }, 0, 0);
+      const pressuresHigh = calculatePressures({ ...BASELINE, microplastics: 33000 }, 0, 0);
       expect(pressuresHigh.microplastics).toBeGreaterThan(pressuresMean.microplastics);
       expect(pressuresHigh.microplastics).toBeCloseTo(1, 3);
     });
@@ -161,8 +155,9 @@ describe('Validação Científica, Casos de Referência da BTS e Sensibilidade (
     it('classifica parâmetros por nível de evidência e organiza os controles em grupos com indicadores', () => {
       expect(FACTOR_ORDER).toHaveLength(8);
       const groupedItems = CONTROL_GROUPS.flatMap((g) => g.items);
-      expect(groupedItems).toHaveLength(6);
-      expect(new Set(groupedItems).size).toBe(6);
+      expect(groupedItems).toHaveLength(7);
+      expect(new Set(groupedItems).size).toBe(7);
+      expect(groupedItems).toContain('fishing');
 
       for (const id of FACTOR_ORDER) {
         const def = ITEM_DEFINITIONS[id];
@@ -224,7 +219,7 @@ describe('Validação Científica, Casos de Referência da BTS e Sensibilidade (
         turbidity: 100,
         sewage: 100000,
         oil: 100000,
-        microplastics: 35000,
+        microplastics: 33000,
         fishing: 100,
         recovery: 0,
       };

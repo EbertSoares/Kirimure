@@ -61,9 +61,9 @@ export interface CoralWatchStationHistoryResponse extends CoralWatchStation {
  * - 2: Aviso (Warning)
  * - 3: Alerta Nível 1
  * - 4: Alerta Nível 2
- * - 5: Alerta Nível 3 (Mortalidade Extrema)
- * - 6: Alerta Nível 4 (Catastrófico)
- * - 7: Alerta Nível 5 (Colapso Estrutural)
+ * - 5: Alerta Nível 3
+ * - 6: Alerta Nível 4
+ * - 7: Alerta Nível 5
  * Valores de preenchimento (_FillValue = 251 na NOAA/PacIOOS) ou inválidos tornam-se null.
  */
 export function validateAlertLevel(raw: unknown): number | null {

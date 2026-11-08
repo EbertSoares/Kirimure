@@ -46,7 +46,7 @@ describe('serviço Open-Meteo Marine API', () => {
         requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
         spatialResolution: '8 km',
         hourlyUnits: {},
-        provenance: {} as any,
+        provenance: BTS_METEO_FALLBACK_SNAPSHOT[0].provenance,
       },
       {
         timestampUtc: '2024-03-01T06:00:00Z',
@@ -59,7 +59,7 @@ describe('serviço Open-Meteo Marine API', () => {
         requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
         spatialResolution: '8 km',
         hourlyUnits: {},
-        provenance: {} as any,
+        provenance: BTS_METEO_FALLBACK_SNAPSHOT[0].provenance,
       },
       {
         timestampUtc: '2024-03-01T12:00:00Z',
@@ -72,7 +72,7 @@ describe('serviço Open-Meteo Marine API', () => {
         requestedCoordinates: { latitude: -12.97, longitude: -38.50 },
         spatialResolution: '8 km',
         hourlyUnits: {},
-        provenance: {} as any,
+        provenance: BTS_METEO_FALLBACK_SNAPSHOT[0].provenance,
       },
     ];
 

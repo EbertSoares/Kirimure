@@ -137,7 +137,6 @@ export function App() {
   const [resetToken, setResetToken] = useState(0);
   const [simulation, setSimulation] = useState<SimulationState>(() => createSectorBaselineState('frades'));
   const simulationRef = useRef<SimulationState>(simulation);
-  simulationRef.current = simulation;
 
   const [focusedFactor, setFocusedFactor] = useState<ItemId | null>(null);
 
@@ -148,7 +147,6 @@ export function App() {
 
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const undoStackRef = useRef<UndoEntry[]>(undoStack);
-  undoStackRef.current = undoStack;
   const pendingUndoBaseRef = useRef<UndoEntry | null>(null);
 
   const [criticalDays, setCriticalDays] = useState<number | null>(null);
@@ -165,6 +163,14 @@ export function App() {
   ]);
   const [metricsSelectorOpen, setMetricsSelectorOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1200));
+
+  useEffect(() => {
+    simulationRef.current = simulation;
+  }, [simulation]);
+
+  useEffect(() => {
+    undoStackRef.current = undoStack;
+  }, [undoStack]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -232,11 +238,14 @@ export function App() {
     };
   }, []);
 
+  const hasRelevantTimelineBod = simulation.biochemicalOxygenDemand > 0.05;
+
   // Recálculo assíncrono (debounce 300 ms) da linha do tempo ecológica independente da velocidade da UI
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const defaultMilestones = buildDefaultImpactMilestones(simulation);
-      const calculated = estimateImpactTimeline(simulation, defaultMilestones, 365);
+      const snapshot = simulationRef.current;
+      const defaultMilestones = buildDefaultImpactMilestones(snapshot);
+      const calculated = estimateImpactTimeline(snapshot, defaultMilestones, 365);
       setTimelineMilestones(calculated);
     }, 300);
 
@@ -246,17 +255,16 @@ export function App() {
     simulation.activeInterventions,
     simulation.sewageDischargeMode,
     simulation.sector,
-    simulation.biochemicalOxygenDemand > 0.05,
+    hasRelevantTimelineBod,
   ]);
 
   // Recálculo assíncrono (debounce 260 ms) do tempo até o limiar crítico do modelo
   useEffect(() => {
-    if (activeFactorIds.length === 0 && simulation.biochemicalOxygenDemand < 0.05) {
-      setCriticalDays(null);
-      return undefined;
-    }
-
     const timer = window.setTimeout(() => {
+      if (activeFactorIds.length === 0 && simulation.biochemicalOxygenDemand < 0.05) {
+        setCriticalDays(null);
+        return;
+      }
       const projected = estimateCriticalDays(simulation.targets, simulation.sector, 3650, {
         sewageDischargeMode: simulation.sewageDischargeMode,
         initialBod: simulation.biochemicalOxygenDemand,
@@ -265,7 +273,7 @@ export function App() {
         initialEnv: simulation.env,
       });
       setCriticalDays(projected);
-    }, 260);
+    }, activeFactorIds.length === 0 && simulation.biochemicalOxygenDemand < 0.05 ? 0 : 260);
 
     return () => window.clearTimeout(timer);
   }, [
@@ -274,7 +282,9 @@ export function App() {
     simulation.sector,
     simulation.sewageDischargeMode,
     simulation.controls,
-    simulation.biochemicalOxygenDemand > 0.1,
+    simulation.biochemicalOxygenDemand,
+    simulation.dissolvedOxygen,
+    simulation.env,
   ]);
 
   useEffect(() => {
@@ -466,25 +476,29 @@ export function App() {
     // Se estiver na tela do mapa (antes de entrar na cena 3D), atualiza
     // a simulação silenciosamente para que abra já com o dado ao vivo pronto
     if (screen === 'map') {
-      setSimulation((curr) => {
-        const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
-        const doSat = calculateWeissOxygenSaturation(rounded, sector.baselineSalinity);
-        return {
-          ...curr,
-          controls: { ...curr.controls, temperature: rounded },
-          env: { ...curr.env, temperature: rounded },
-          targets: { ...curr.targets, temperature: rounded },
-          dissolvedOxygen: doSat,
-          initialConditionSource: 'NOAA_CRW_LIVE',
-          history: curr.history.map((pt) => ({
-            ...pt,
-            temperature: rounded,
+      const timer = window.setTimeout(() => {
+        setSimulation((curr) => {
+          const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
+          const doSat = calculateWeissOxygenSaturation(rounded, sector.baselineSalinity);
+          return {
+            ...curr,
+            controls: { ...curr.controls, temperature: rounded },
+            env: { ...curr.env, temperature: rounded },
+            targets: { ...curr.targets, temperature: rounded },
             dissolvedOxygen: doSat,
-            saturationOxygen: doSat,
-          })),
-        };
-      });
+            initialConditionSource: 'NOAA_CRW_LIVE',
+            history: curr.history.map((pt) => ({
+              ...pt,
+              temperature: rounded,
+              dissolvedOxygen: doSat,
+              saturationOxygen: doSat,
+            })),
+          };
+        });
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
+    return undefined;
   }, [oceanData.latestCrw, simulation.sector, screen]);
 
   const handleToggleIntervention = useCallback((id: InterventionId) => {
@@ -501,13 +515,6 @@ export function App() {
         paused: shouldStart ? false : current.paused,
       };
     });
-  }, []);
-
-  const handleOpenInterventionLimits = useCallback((id: InterventionId) => {
-    setFocusedInterventionId(id);
-    setEnvDrawerOpen(false);
-    setEvidenceTab('sources');
-    setEvidenceOpen(true);
   }, []);
 
   const indicatorViews = useMemo<Record<ContextualIndicatorId, ContextualIndicatorView>>(() => {
@@ -1099,7 +1106,6 @@ export function App() {
           onSewageModeChange={handleSewageModeChange}
           onTriggerSewagePulse={handleTriggerSewagePulse}
           onToggleIntervention={handleToggleIntervention}
-          onOpenInterventionLimits={handleOpenInterventionLimits}
           timelineMilestones={timelineMilestones}
           referenceTemperature={effectiveBaselineTemp}
         />

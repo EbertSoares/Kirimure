@@ -1,4 +1,4 @@
-import type { EpistemologicalBadge, ScientificMetadata } from './types';
+import type { ScientificMetadata } from './types';
 
 /**
  * Módulo de Química do Sistema Carbonato Marinho.

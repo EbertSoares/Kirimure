@@ -49,7 +49,9 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    sourcemap: true,
+    // Source maps públicos expõem o TypeScript original e ampliavam o deploy em ~24 MB.
+    // Gere-os apenas em uma rotina privada de observabilidade, nunca no artefato público padrão.
+    sourcemap: false,
   },
   test: {
     environment: 'node',
