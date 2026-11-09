@@ -51,7 +51,7 @@ const state = () => page.evaluate(() => {
         dhw: Number(rt.state.degreeHeatingWeeks.toFixed(3)),
       },
       fish: rt.fishes?.length,
-      visibleFish: rt.fishes?.filter((f) => f.healthy?.mesh?.isEnabled()).length,
+      aliveFish: rt.fishes?.filter((f) => f.deathStage === 'alive').length,
     } : null,
   };
 });

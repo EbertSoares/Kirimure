@@ -269,7 +269,11 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
           canvas.parentElement?.setAttribute('data-renderer', runtime.backend);
           canvas.parentElement?.setAttribute('data-buoyancy', 'multipoint');
           canvas.parentElement?.setAttribute('data-wave-model', 'shared-gerstner');
-          observer = new ResizeObserver(() => runtime.resize());
+          canvas.parentElement?.setAttribute('data-camera-profile', runtime.cameraProfile);
+          observer = new ResizeObserver(() => {
+            runtime.resize();
+            canvas.parentElement?.setAttribute('data-camera-profile', runtime.cameraProfile);
+          });
           observer.observe(canvas);
           setStatus('ready');
         })

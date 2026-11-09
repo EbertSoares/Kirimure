@@ -39,8 +39,7 @@ async function runVariant(browser, name, options) {
         renderer: marine?.getAttribute('data-renderer'),
       };
     }
-    const enabled = rt.fishes?.filter((f) => f.healthy.mesh.isEnabled()).length;
-    const withTexture = rt.fishes?.filter((f) => f.healthy.material?.diffuseTexture?.isReady?.()).length;
+    const alive = rt.fishes?.filter((f) => f.deathStage === 'alive').length;
     return {
       runtime: true,
       backend: rt.backend,
@@ -49,10 +48,9 @@ async function runVariant(browser, name, options) {
       canvas: canvas ? { width: canvas.width, height: canvas.height, dpr: window.devicePixelRatio } : null,
       renderSize: rt.engine ? [rt.engine.getRenderWidth(true), rt.engine.getRenderHeight(true)] : null,
       fishCount: rt.fishes?.length,
-      fishEnabled: enabled,
-      fishWithTexture: withTexture,
-      rigged: rt.riggedFishes3D?.length,
+      fishAlive: alive,
       backendAttr: marine?.getAttribute('data-renderer'),
+      cameraProfile: marine?.getAttribute('data-camera-profile'),
     };
   });
 

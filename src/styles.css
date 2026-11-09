@@ -308,6 +308,9 @@ summary:focus-visible {
   width: 100%;
   height: 100%;
   overflow: visible;
+  transform-box: border-box;
+  transform-origin: var(--bahia-origin-x, 71.97%) var(--bahia-origin-y, 49.05%);
+  transform: translate3d(0px, 0px, 0px) scale(1);
 }
 
 .state {
@@ -471,54 +474,52 @@ summary:focus-visible {
 }
 
 .brazil-map.zooming-to-bahia .brazil-map-svg {
-  transform-origin: 77.4% 45.7%;
-  transform: translate(-27.4%, 4.3%) scale(6.5);
-  transition: transform 1500ms cubic-bezier(0.2, 0, 0.25, 1);
+  transform-origin: var(--bahia-origin-x, 71.97%) var(--bahia-origin-y, 49.05%);
+  transform: translate3d(var(--bahia-zoom-tx, -148px), var(--bahia-zoom-ty, -36px), 0px) scale(var(--bahia-zoom-scale, 3.65));
+  transition: transform 1080ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 
 .brazil-map.zooming-to-bahia .state:not(.available),
 .brazil-map.zooming-to-bahia .label-layer text:not(.available) {
-  opacity: 0.04;
-  transition: opacity 700ms ease;
+  opacity: 0.08;
+  transition: opacity 650ms ease;
 }
 
 .brazil-map.zooming-to-bahia .state.available .state-shape {
   fill: var(--brand-yellow) !important;
   stroke: #FFFFFF !important;
-  stroke-width: 2.2 !important;
-  filter: drop-shadow(0 0 35px rgba(248, 176, 32, 1)) drop-shadow(0 0 75px rgba(255, 208, 82, 0.85)) !important;
-  transition: fill 500ms ease, stroke 500ms ease, filter 500ms ease;
+  stroke-width: 1.8 !important;
+  filter: drop-shadow(0 0 18px rgba(248, 176, 32, 0.92)) drop-shadow(0 0 38px rgba(255, 208, 82, 0.55)) !important;
+  transition: fill 450ms ease, stroke 450ms ease, filter 450ms ease;
 }
 
 .brazil-map.zooming-to-bahia .state-label.available {
   opacity: 0;
-  transition: opacity 400ms ease;
+  transition: opacity 420ms ease 180ms;
 }
 
 .brazil-map.returning-from-bahia .brazil-map-svg {
-  animation: zoomOutFromBahia 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: zoomOutFromBahia 780ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes zoomOutFromBahia {
   from {
-    transform-origin: 77.4% 45.7%;
-    transform: translate(-27.4%, 4.3%) scale(2.8);
-    opacity: 0.55;
+    transform: translate3d(var(--bahia-zoom-tx, -148px), var(--bahia-zoom-ty, -36px), 0px) scale(2.4);
+    opacity: 0.65;
   }
   to {
-    transform-origin: center center;
-    transform: none;
+    transform: translate3d(0px, 0px, 0px) scale(1);
     opacity: 1;
   }
 }
 
-/* Véu de transição global com gradiente oceânico abissal */
+/* Véu de transição global com gradiente oceânico abissal centralizado */
 .screen-transition-veil {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: radial-gradient(circle at 72.2% 48.0%, #032840 0%, #011422 45%, #00070c 100%);
+  background: radial-gradient(circle at 50% 50%, #032840 0%, #011422 48%, #00070c 100%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 550ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -536,7 +537,7 @@ summary:focus-visible {
 .screen-transition-veil.active.cinematic-dive {
   opacity: 1;
   pointer-events: all;
-  transition: opacity 1100ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 480ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
 /* ── Estrutura Principal do Laboratório ────────────────────────────────── */
@@ -1051,7 +1052,9 @@ summary:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: url('/textures/ocean-backdrop.jpg') center / cover no-repeat #142225;
+  background:
+    radial-gradient(120% 85% at 50% 18%, #1c7488 0%, #0d3c4c 46%, #071a24 100%);
+  overflow: hidden;
 }
 
 .marine-canvas canvas {

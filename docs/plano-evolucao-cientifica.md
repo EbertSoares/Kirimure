@@ -179,7 +179,7 @@ Um modelo biológico defensável não pode ser apenas um gerador unidirecional d
   * Mecânica de DHW em janela de 12 semanas para $HS \ge 1{,}0\text{ °C}$;
   * Escala logarítmica de pH;
   * Modelo de caixa exponencial de primeira ordem ($e^{-t/\tau}$);
-  * 35 peixes recifais, cardume 3D de Pale Bleak e tubarão predador;
+  * Diorama 3D com cardumes de peixe-cirurgião, sargentinho e peixe-papagaio;
   * Estimativa didática inicial de Oxigênio Dissolvido.
 
 * **Seção B (Aprovado para Implementação Imediata - Próxima Etapa):**

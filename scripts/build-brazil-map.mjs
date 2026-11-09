@@ -5,12 +5,14 @@
 // no navegador e calcula um ponto interno de cada estado para servir de
 // âncora para a sigla.
 //
-// Uso: node scripts/build-brazil-map.mjs
+// Uso: node scripts/build-brazil-map.mjs [caminho-do-svg-ibge]
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SOURCE = fileURLToPath(new URL('../src/assets/svg/brasil-estados (1).svg', import.meta.url));
+const DEFAULT_SOURCE = fileURLToPath(new URL('../src/assets/svg/brasil-estados (1).svg', import.meta.url));
+const SOURCE = process.argv[2] ? resolve(process.argv[2]) : DEFAULT_SOURCE;
 const OUTPUT = fileURLToPath(new URL('../src/components/brazilStates.data.ts', import.meta.url));
 
 const VIEWBOX_WIDTH = 1100;
@@ -160,6 +162,18 @@ function formatRing(ring) {
     .map(([x, y]) => `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`)
     .join(' ');
   return `M${points}Z`;
+}
+
+try {
+  await access(SOURCE);
+} catch {
+  console.warn(
+    `Aviso: malha bruta do IBGE não encontrada em "${SOURCE}".\n` +
+      `O arquivo gerado "${OUTPUT}" já está presente no repositório.\n` +
+      `Para regenerar a partir de outro arquivo SVG do IBGE, execute:\n` +
+      `  node scripts/build-brazil-map.mjs /caminho/para/brasil-estados.svg`,
+  );
+  process.exit(0);
 }
 
 const source = await readFile(SOURCE, 'utf8');

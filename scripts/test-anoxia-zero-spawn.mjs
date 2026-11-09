@@ -81,20 +81,18 @@ async function main() {
       const runtime = window.__kirimureRuntime;
       if (!runtime) return null;
       const state = runtime.state;
-      const livingProc = runtime.fishes?.filter(f => f.deathStage === 'alive').length ?? 0;
-      const livingRigged = runtime.riggedFishes3D?.filter(f => f.deathStage === 'alive').length ?? 0;
-      const repopProc = runtime.fishes?.filter(f => f.deathStage === 'repopulating').length ?? 0;
+      const living = runtime.fishes?.filter(f => f.deathStage === 'alive').length ?? 0;
+      const repopulating = runtime.fishes?.filter(f => f.deathStage === 'repopulating').length ?? 0;
       return {
         day: state.elapsedDays,
         oxygen: state.dissolvedOxygen,
         fishHealth: state.health.fish,
         coralHealth: state.health.coral,
-        livingProc,
-        livingRigged,
-        repopProc,
+        living,
+        repopulating,
       };
     });
-    console.log(`Sec ${i+1}: Day ${stats?.day?.toFixed(1)}, O2: ${stats?.oxygen?.toFixed(2)} mg/L, Fish Health: ${stats?.fishHealth?.toFixed(1)}%, Living Fish: ${stats ? stats.livingProc + stats.livingRigged : 0}`);
+    console.log(`Sec ${i+1}: Day ${stats?.day?.toFixed(1)}, O2: ${stats?.oxygen?.toFixed(2)} mg/L, Fish Health: ${stats?.fishHealth?.toFixed(1)}%, Living Fish: ${stats?.living ?? 0}`);
   }
 
   // Check over 5 seconds: does ANY fish respawn?
@@ -104,9 +102,7 @@ async function main() {
     await page.waitForTimeout(1000);
     const living = await page.evaluate(() => {
       const runtime = window.__kirimureRuntime;
-      const livingProc = runtime?.fishes?.filter(f => f.deathStage === 'alive').length ?? 0;
-      const livingRigged = runtime?.riggedFishes3D?.filter(f => f.deathStage === 'alive').length ?? 0;
-      return livingProc + livingRigged;
+      return runtime?.fishes?.filter(f => f.deathStage === 'alive').length ?? 0;
     });
     if (living > 0) {
       console.error(`BUG DETECTED! ${living} fish spawned while water is collapsed!`);
@@ -120,8 +116,7 @@ async function main() {
       day: runtime?.state.elapsedDays,
       oxygen: runtime?.state.dissolvedOxygen,
       fishHealth: runtime?.state.health.fish,
-      livingProc: runtime?.fishes?.filter(f => f.deathStage === 'alive').length,
-      livingRigged: runtime?.riggedFishes3D?.filter(f => f.deathStage === 'alive').length,
+      living: runtime?.fishes?.filter(f => f.deathStage === 'alive').length,
     };
   });
 
@@ -131,7 +126,7 @@ async function main() {
 
   await browser.close();
 
-  if (anySpawned || (finalStats.livingProc ?? 0) + (finalStats.livingRigged ?? 0) > 0) {
+  if (anySpawned || (finalStats.living ?? 0) > 0) {
     console.error('FAILED: Fish spawned during anoxia!');
     process.exit(1);
   } else {

@@ -769,10 +769,10 @@ export function App() {
     if (mapZooming) return;
     setMapZooming(true);
 
-    // O zoom calmo e suave no centro da Bahia e o escurecimento iniciam-se juntos:
+    // Permite visualizar o zoom centralizado na Bahia por completo antes do fade de mergulho:
     window.setTimeout(() => {
       setTransitionDark(true);
-    }, 40);
+    }, 680);
 
     // Aos 1200ms, a tela já está completamente escura (transição invisível ao usuário):
     // Aplica a temperatura ao vivo antes de montar a cena 3D, garantindo que o usuário
