@@ -1,0 +1,116 @@
+Agora vou revisar céu, água e sombras para ajustar o horizonte de Itaparica e a coerência subaquática.
+
+Objective
+Reformular visual e ambientalmente a cena 3D do Kirimurê na mesma cena: batimetria, câmera vertical, barco, água/luz, sombras, peixes por habitat e horizonte de Itaparica.
+Validar tudo e publicar as mudanças na branch 3D-viewer do repositório remoto.
+Requirements
+Manter tudo em português-brasileiro.
+Preservar os modelos atuais de peixes, corais e pedras; melhorar distribuição, escala, posicionamento e integração visual.
+Batimetria irregular com declives, depressões, afloramentos e áreas recifais; ponto de partida de 2–15 m, sem tratar como medição real.
+Não mover objetos pelo mesmo deslocamento vertical; usar função de altura do terreno e substrato adequado para corais.
+Câmera vertical com botão “Descer” próximo aos controles de tempo; animação easeInOutCubic, 3–5 s configurável, estados surface, descending, underwater, ascending.
+Bloquear cliques durante transições; ao final, transformar “Descer” em “Subir” abaixo das métricas superiores.
+Peixes separados em superficiais/pelágicos, intermediários e bentônicos, com limites verticais, preferências ambientais e colisão com terreno; nem todas as espécies formam cardumes.
+Água com absorção/espalhamento por profundidade, turbidez configurável, cáusticas atenuadas e iluminação contínua ao atravessar a superfície.
+Barco com linha d’água, calado, flutuabilidade e contato com ondas corrigidos pela geometria do casco; sem deslocamento vertical arbitrário definitivo.
+Sombras direcionais melhores, CSM/PCF/PCSS quando viável, bias, oclusão de contato e sombras subaquáticas coerentes, sem sombras pretas.
+Horizonte inspirado na Ilha de Itaparica/BTS: relevo baixo, vegetação tropical, praias e perspectiva atmosférica; evitar montanhas altas inventadas.
+Naufrágio apenas se identificação/localização forem verificadas; caso contrário, elemento opcional claramente fictício.
+Desempenho: thin instances, LOD, frustum culling, materiais compartilhados, timestep fixo e qualidade escalável; evitar fluidos volumétricos completos.
+Implementar diretamente nos componentes corretos, com diagnóstico técnico breve antes das mudanças, validação e documentação de arquivos, decisões, parâmetros e limitações.
+Prioridade do usuário: batimetria e câmera vertical primeiro; depois barco e iluminação; modelos definitivos ficam para etapa posterior.
+Manter a seção “Recuperação” da UI e os estilos recovery-*, que representam intervenções reais.
+O usuário autorizou explicitamente commit e push na branch 3D-viewer.
+Decisions
+Remover definitivamente o legado Environment.recovery, ItemId 'recovery', ITEM_DEFINITIONS.recovery, tauDays.recovery e PARAMETERS.recovery; manter recoveryFactor/recoveryThreshold como regeneração biológica natural.
+A recuperação da UI é feita por intervenções concretas e restauração coralina, não por slider genérico.
+Remover componentes, tipos e scripts sem consumidores; manter apenas os 4 geradores/captura em scripts/.
+Não cachear falha de rede como cache oceanográfico válido.
+Perfil mobile separado (mobileProfile('low'|'medium')), com peixes maiores, recife menos denso e layout organizado; desktop permanece natural.
+A reformulação visual ocorre na mesma cena 3D, com continuidade física entre superfície e fundo.
+Extrair a batimetria para um módulo puro (bathymetry.ts) para testar altura e substrato sem GPU.
+A câmera desce pelo canal central para evitar o barco e o terreno; a pose de superfície original é preservada em progress = 0.
+Corais são posicionados apenas em substrato recifal; capim-marinho prefere areia; rochas e seixos aceitam qualquer substrato.
+O naufrágio fica condicionado a verificação histórica; não inventar dados como se fossem fatos.
+Como o diretório não tinha .git, inicializar o repositório, buscar origin/3D-viewer e criar branch local rastreando a remota sem sobrescrever os arquivos.
+“Descer” fica acima dos controles de tempo; após a descida, “Subir” aparece dentro de .contextual-telemetry-bar, abaixo das métricas, com layout robusto para quebra de linha.
+Peixes usam elevação normalizada pela coluna d’água local (0 = leito sob o peixe, 1 = superfície útil), com folga mínima por habitat e bandas ecológicas não sobrepostas.
+O barco não recebe mais offset visual vertical arbitrário (+0.14 removido); a raiz visual é posicionada pela linha d’água de projeto e o centro de massa visual coincide com o do solver em pitch/roll.
+Work State
+Completed
+Auditoria de legado/código morto concluída: recovery removido de tipos, config, modelo, peixes, notificações e fixtures/testes.
+Removidos SciencePanel.tsx, TimelineBar.tsx, IndicatorModal.tsx, EcosystemRadar.tsx, NormativeGaugeBar.tsx, TrophicPyramid.tsx, NicheToleranceCurve.tsx, challenges.ts e missions.ts.
+Removidos 28 scripts antigos de QA/debug/teste; restaram build-brazil-map.mjs, capture_scene.mjs, build-sky-panorama.py e build-reef-models.py.
+.gitignore reorganizado; exports/funções mortas removidos ou desexportados; knip limpo.
+Cache do useOceanData corrigido e coberto por src/hooks/useOceanData.test.ts.
+Perfil mobile implementado em src/scene/babylon/quality.ts; FishSystem.ts usa fishScale; terrain.ts usa reefDensity/reefGardenLayout.
+scripts/capture_scene.mjs aceita --mobile e --output; README documenta a captura mobile.
+Documentação corrigida: README com 184 testes, DADOS-E-PARAMETROS-DO-PROJETO.md com 7 controles, docs/plano-evolucao-cientifica.md e ADR-002 alinhados.
+Validação anterior concluída: npm run check aprovado; npm run test:e2e 3/3; knip sem saída.
+Captura mobile 390×844 validada: perfil “MOBILE COMPACTO”, 159 FPS, 69.743 triângulos.
+Git configurado: branch 3D-viewer rastreando origin/3D-viewer; todas as mudanças ainda não commitadas.
+bathymetry.ts criado com profundidades de 2–15 m, canal sinuoso, bancadas, afloramentos, depressões, ondulações e reefSuitabilityAt.
+terrain.ts integrado à nova batimetria: backdrop até -15.4, cores por profundidade real, posicionamento de corais por substrato e restauração também em reef.
+dive.ts criado com DiveState, DIVE_DURATION_SECONDS = 4.2, easeInOutCubic e DiveController; NaN/dt inválido agora é tratado.
+cameraRig.ts recebeu setDiveProgress, applyPose, eyeY, currentDiveProgress; assinatura do construtor corrigida para 5 argumentos.
+oceanScene.ts recebeu controlador de mergulho, listeners de estado, toggleDive, diveState, diveProgress, atualização da câmera no tick, fog/clearColor dependentes da profundidade e water.setCameraDepth.
+water.ts recebeu setCameraDepth, véu subaquático de tela inteira ao submergir e cores de extinção dependentes da profundidade.
+runtime.ts expõe diveState, toggleDive, onDiveStateChange e reexporta DiveState.
+MarineScene.tsx recebeu DiveToggleApi, props onDiveStateChange/onDiveApiReady, assinatura do listener e limpeza no unmount.
+App.tsx recebeu estado diveState, ref da API, handler e botões “Descer”/“Subir”; styles.css recebeu .scene-dive-btn com posições desktop/mobile.
+Icons.tsx recebeu arrowDown e arrowUp.
+FishSystem.ts removeu FISH_FLOOR_Y; usa columnForPoint, floorElevationAt com folga por espécie e worldForPoint com leito local.
+species.ts recebeu FishHabitat, minClearanceM e bandas separadas: blue-tang pelágico [0.55, 0.96], sargentinho intermediário [0.34, 0.74], papagaio bentônico [0.06, 0.32].
+reefObstacles.ts projeta elevação usando obstacle.baseY como piso local; assinatura de projectReefObstacles atualizada e chamada ajustada.
+boat.ts removeu o offset visual +0.14, usa constantes geométricas do casco, posiciona a raiz pela linha d’água e rotaciona o braço do centro de massa com o quaternion do casco.
+Criados bathymetry.test.ts (5 testes) e dive.test.ts (9 testes); fishAi.test.ts atualizado para as novas bandas/habitat.
+dive.test.ts 9/9 aprovado; bathymetry.test.ts 4/5 antes do ajuste final de limite de continuidade (maior degrau real 1,343 m em (15,48), flanco de afloramento).
+npm run lint aprovado e tsc --noEmit aprovado antes das últimas mudanças do barco.
+Active
+Validar novamente testes de batimetria após ajuste do limite para < 1.5.
+Rodar lint/TypeScript após as mudanças recentes do barco.
+Refinar água/luz/sombras/cáusticas e horizonte costeiro; validar visualmente o barco após remoção do offset.
+Atualizar documentação e fazer commits/push.
+Blocked
+Representação histórica do naufrágio aguarda identificação e localização; não bloqueia os demais ajustes.
+Next Move
+Rodar npx vitest run src/scene/babylon/bathymetry.test.ts src/scene/babylon/dive.test.ts, npm run lint e npx tsc --noEmit.
+Refinar water.ts/oceanScene.ts/sky.ts: cáusticas atenuadas por profundidade, sombras subaquáticas/PCF e horizonte de Itaparica com relevo baixo.
+Capturar desktop/mobile via npm run capture:scene e conferir linha d’água/calado do barco, mergulho e distribuição dos peixes.
+Rodar npm run check, npm run test:e2e e npx knip.
+Documentar arquivos, decisões, parâmetros e limitações (batimetria, mergulho, bandas de peixes, barco).
+Criar commits e fazer push para origin/3D-viewer.
+Relevant Files
+src/scene/babylon/bathymetry.ts: batimetria pura, faixa de profundidade e adequação de substrato.
+src/scene/babylon/dive.ts: máquina de estados, duração e easing da exploração vertical.
+src/scene/babylon/cameraRig.ts: pose de superfície/submersa e interpolação da câmera.
+src/scene/babylon/oceanScene.ts: orquestração do mergulho, fog, luz, sombras e loop.
+src/scene/babylon/terrain.ts: malha do leito, cores por profundidade, grupos de recife e substrato.
+src/scene/babylon/water.ts: véu subaquático, absorção por profundidade e materiais da água.
+src/scene/babylon/runtime.ts: fachada pública do runtime e API de mergulho.
+src/scene/MarineScene.tsx: integração React do runtime e ponte da API de mergulho.
+src/App.tsx: métricas superiores, controles de tempo e botões “Descer”/“Subir”.
+src/styles.css: posicionamento e estilos dos botões de mergulho em desktop/mobile.
+src/scene/babylon/fish/FishSystem.ts: movimento, bandas verticais, colisão com leito e obstáculos.
+src/scene/babylon/fish/species.ts: perfis ecológicos, habitat, folga mínima e faixas de elevação.
+src/scene/babylon/reefObstacles.ts: projeção de obstáculos usando obstacle.baseY.
+src/scene/babylon/boat.ts: solver 6-DOF, calado, flutuabilidade e alinhamento visual pela linha d’água.
+src/scene/babylon/sky.ts: horizonte costeiro, Ilha de Itaparica, luz solar e névoa atmosférica.
+Important Context
+O diretório agora é repositório Git; branch 3D-viewer rastreia origin/3D-viewer (https://github.com/EbertSoares/Kirimure.git), sem commits locais e com todas as mudanças não commitadas.
+npm run check = eslint src + testes + tsc --noEmit + build; última execução completa foi antes de todas as mudanças atuais.
+npm run test:e2e = 3 testes (desktop, mobile, acessibilidade), 3/3 aprovados anteriormente; não rodou após as mudanças.
+npx knip estava limpo antes das mudanças atuais.
+Botão “Descer”: desktop bottom: 67px, mobile bottom: calc(max(12px, env(safe-area-inset-bottom)) + 118px); “Subir” fica dentro de .contextual-telemetry-bar com margin-top: 8px.
+Durante descending/ascending, os botões ficam disabled e DiveController.toggle() também retorna false.
+Câmera de superfície: desktop camY 1.85, camZ -4; mobile camY 1.6, camZ -3.
+Destino do mergulho: z = camZ + (zFar - zNear) * 0.55, y = seabedAt(0,z) + 1.65, margem mínima de 0.85 m acima do leito.
+DIVE_DURATION_SECONDS = 4.2; easing easeInOutCubic; estados surface, descending, underwater, ascending.
+Peixes: worldY = floorY + elevation * (FISH_SURFACE_Y - floorY); FISH_SURFACE_Y = -0.7; folgas 0.95 m (blue-tang), 0.65 m (sargentinho), 0.22 m (papagaio).
+projectReefObstacles(frame, obstacles, surfaceY, maxDepth) agora deriva o piso de cada obstáculo de obstacle.baseY.
+O barco não usa mais +0.14; validar visualmente com captura, pois o alinhamento do FBX pode ter sido calibrado com o offset antigo.
+Avisos residuais não funcionais: Babylon renderingGroupId em instâncias e chunk MarineScene >500 kB.
+A seção “Recuperação” da UI e as classes recovery-* são intencionais e devem continuar.
+Vou retomar validando a base atual e, em paralelo, reler os trechos de água/céu/sombras que ainda precisam de refinamento.
+
+Testes verdes. Agora vou ver o restante do tick e os materiais de água para conectar cáusticas/sombras à profundidade da câmera.
