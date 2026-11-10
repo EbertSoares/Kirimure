@@ -45,7 +45,7 @@ export interface TerrainSystem {
   readonly obstacles: readonly ReefObstacle[];
   heightAt(x: number, z: number): number;
   layout(frame: DioramaFrame): void;
-  updateVisual(visual: VisualState, elapsed: number): void;
+  updateVisual(visual: VisualState, elapsed: number, cameraDepth?: number): void;
 }
 
 const BRANCH_COLORS: ReadonlyArray<readonly [number, number, number]> = [
@@ -1204,7 +1204,7 @@ export function createTerrainSystem(scene: Scene, quality: SceneQualityProfile):
       applyRestoration(frame, currentRestoration);
       rebuildObstacles();
     },
-    updateVisual(visual: VisualState, elapsed: number): void {
+    updateVisual(visual: VisualState, elapsed: number, cameraDepth = 0): void {
       // Animação lenta das cáusticas: deriva contínua com pequena oscilação,
       // como o foco da luz refratada variando com a ondulação da superfície.
       causticTexture.uOffset = (elapsed * 0.011 + Math.sin(elapsed * 0.55) * 0.008) % 1;
@@ -1212,10 +1212,27 @@ export function createTerrainSystem(scene: Scene, quality: SceneQualityProfile):
 
       const shimmer = 0.94 + 0.06 * Math.sin(elapsed * 1.7);
       const clarity = visual.waterClarity;
+
+      // A rede de cáusticas perde contraste conforme a luz percorre a coluna
+      // (Beer-Lambert) e a dispersão múltipla preenche a penumbra do padrão:
+      // na superfície (0 m) força plena; próximo do leito (12 m) resta 42%.
+      // Assim a mesma areia lê como área rasa iluminada de cima e como
+      // recife profundo quando a câmera mergulha por ela.
+      const depthFactor = clamp(cameraDepth / 12, 0, 1);
+      const causticStrength = mix(1, 0.42, depthFactor);
+
       sandMaterial.emissiveColor.set(
-        (0.06 + 0.06 * clarity) * shimmer,
-        (0.07 + 0.07 * clarity) * shimmer,
-        (0.07 + 0.05 * clarity) * shimmer,
+        (0.06 + 0.06 * clarity) * shimmer * causticStrength,
+        (0.07 + 0.07 * clarity) * shimmer * causticStrength,
+        (0.07 + 0.05 * clarity) * shimmer * causticStrength,
+      );
+
+      // A rocha recifal também recebe a rede de luz na mesma frequência do
+      // trecho de areia, mantendo continuidade entre substratos.
+      rockMaterial.emissiveColor.set(
+        0.04 * shimmer * causticStrength,
+        0.05 * shimmer * causticStrength,
+        0.05 * shimmer * causticStrength,
       );
 
       // Volume azul subaquático reage à turbidez, esgoto e óleo

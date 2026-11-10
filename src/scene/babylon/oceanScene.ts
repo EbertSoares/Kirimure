@@ -36,7 +36,7 @@ import { createSkySystem, type SkySystem } from './sky';
 import { createTerrainSystem, type TerrainSystem } from './terrain';
 import { VisualStateTracker } from './visualState';
 import { createWaterSystem, type OceanDebugMode, type WaterSystem } from './water';
-import { clamp } from './procedural';
+import { clamp, mix } from './procedural';
 
 export type SceneDebugVisualizationMode = OceanDebugMode | 'buoyancy';
 
@@ -238,7 +238,15 @@ export class OceanScene3D {
       this.quality.shadowMapSize ??
       (this.quality.level === 'ultra' ? 2048 : this.quality.level === 'low' ? 512 : 1024);
     const generator = new ShadowGenerator(mapSize, this.sky.sunLight);
-    generator.usePercentageCloserFiltering = true;
+    // Ultra: PCSS (contact hardening) — penumbra dura no contato e macia à
+    // distância, coerente com a luz solar filtrada pela água. Nos demais níveis
+    // mantém PCF puro, mais barato e robusto em mobile/integradas.
+    if (this.quality.level === 'ultra') {
+      generator.useContactHardeningShadow = true;
+      generator.contactHardeningLightSizeUVRatio = 0.055;
+    } else {
+      generator.usePercentageCloserFiltering = true;
+    }
     if (this.quality.level === 'ultra') {
       generator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
     } else if (this.quality.level === 'high') {
@@ -325,6 +333,23 @@ export class OceanScene3D {
 
     const visual = this.visual.update(this.state, dt);
     this.sky.update(dt, visual);
+
+    // Continuidade óptica ao atravessar a superfície: abaixo dela a dispersão
+    // múltipla preenche a penumbra das sombras (nunca entram pretas), a luz
+    // solar direta perde o vermelho por absorção difencional e o ambiente
+    // recebe um preenchimento ciano-esverdeado coerente com o véu d'água.
+    const depthFactor = clamp(cameraDepth / 12, 0, 1);
+    if (depthFactor > 0.02) {
+      const sun = this.sky.sunLight;
+      sun.diffuse.set(
+        mix(sun.diffuse.r, 0.56, depthFactor * 0.5),
+        mix(sun.diffuse.g, 0.9, depthFactor * 0.32),
+        mix(sun.diffuse.b, 0.82, depthFactor * 0.3),
+      );
+      this.sky.hemiLight.intensity *= 1 + 0.22 * depthFactor;
+      this.shadowGenerator.darkness = mix(0.52, 0.7, depthFactor);
+    }
+
     this.sky.setCameraPosition(this.cameraRig.camera.position);
 
     const tBoat0 = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -338,7 +363,7 @@ export class OceanScene3D {
     this.water.update(this.elapsed, visual);
     const tOcean1 = typeof performance !== 'undefined' ? performance.now() : 0;
 
-    this.terrain.updateVisual(visual, this.elapsed);
+    this.terrain.updateVisual(visual, this.elapsed, cameraDepth);
     this.effects.update(this.elapsed, dt, visual);
 
     const tFish0 = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -348,7 +373,6 @@ export class OceanScene3D {
     // A névoa subaquática azul-turquesa acompanha turbidez, esgoto e óleo; o céu fica fora da névoa.
     // Abaixo da superfície, a extinção cresce com a profundidade da câmera: a
     // luz solar é absorvida e espalhada ao longo do caminho óptico.
-    const depthFactor = clamp(cameraDepth / 12, 0, 1);
     const underwaterFog = cameraDepth > 0.15 ? 0.004 + depthFactor * 0.02 : 0;
     this.scene.fogDensity = clamp(
       0.0085 + visual.turbidity * 0.026 + visual.sewage * 0.012 + visual.oil * 0.006 + underwaterFog,

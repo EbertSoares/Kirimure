@@ -343,8 +343,8 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
     },
   };
 
-  // Itaparica: serra média à esquerda, com colinas largas e um pequeno
-  // contraforte mais alto. A bruma cobre quase metade da cor.
+  // Itaparica: relevo costeiro baixo à esquerda — colinas largas da costa
+  // leste da ilha, sem serra alta. A bruma cobre quase metade da cor.
   const itaparica: HorizonRidge = {
     name: 'serra-itaparica',
     z: 380,
@@ -355,10 +355,10 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
     rows: 9,
     height(t) {
       const envelope = smoothstep(0.02, 0.14, t) * (1 - smoothstep(0.82, 0.985, t));
-      const rolling = fbm2D(t * 4.1 + 12.7, 1.9, 4) * 9.5;
-      const peak = Math.exp(-Math.pow((t - 0.58) / 0.12, 2)) * 5.5;
-      const shoulder = Math.exp(-Math.pow((t - 0.24) / 0.1, 2)) * 3.2;
-      return envelope * (3.2 + rolling + peak + shoulder);
+      const rolling = fbm2D(t * 4.1 + 12.7, 1.9, 4) * 6.8;
+      const hill = Math.exp(-Math.pow((t - 0.58) / 0.12, 2)) * 3.6;
+      const shoulder = Math.exp(-Math.pow((t - 0.24) / 0.1, 2)) * 2.2;
+      return envelope * (2.6 + rolling + hill + shoulder);
     },
     color(rowT) {
       const top: RidgeColor = [0.26, 0.38, 0.42];
