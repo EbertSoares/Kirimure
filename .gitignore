@@ -17,6 +17,7 @@ dist-ssr/
 test-results/
 playwright-report/
 coverage/
+captures/
 
 # Ambiente local (nunca versionar credenciais)
 .env

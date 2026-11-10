@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { mkdir, resolve } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 
 /**
@@ -48,7 +48,7 @@ async function run() {
   const outputArg = outputIndex >= 0 ? args[outputIndex + 1] : null;
   const viewport = mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 };
   const captureDir = resolve('captures');
-  mkdir(captureDir, { recursive: true });
+  mkdirSync(captureDir, { recursive: true });
 
   console.log('Launching headless Chrome with WebGL/WebGPU...');
   const browser = await chromium.launch({
