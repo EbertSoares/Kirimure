@@ -15,6 +15,95 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Scene } from '@babylonjs/core/scene';
 import type { FishSpeciesId } from '../../../simulation/types';
 
+type FishSocialStyle = 'loose_cluster' | 'compact_school' | 'solitary_grazer';
+type FishTrophicRole = 'herbivore' | 'omnivore' | 'corallivore';
+/** Posição ecológica na coluna d'água, usada para separar as bandas verticais. */
+export type FishHabitat = 'pelagic' | 'midwater' | 'benthic';
+
+export interface FishEcologicalProfile {
+  id: FishSpeciesId;
+  scientificName: string;
+  commonName: string;
+  family: string;
+  trophicRole: FishTrophicRole;
+  socialStyle: FishSocialStyle;
+  habitat: FishHabitat;
+  /**
+   * Faixa de elevação preferencial [mínima, máxima] na coluna d'água local
+   * (0 = leito sob o peixe, 1 = superfície). A conversão para metros usa a
+   * batimetria real sob cada indivíduo, não uma cota fixa.
+   */
+  elevationBand: readonly [number, number];
+  /** Folga mínima acima do leito local, em metros, para cada habitat. */
+  minClearanceM: number;
+  /** Raio de percepção visual no espaço normalizado. */
+  perceptionRadius: number;
+  /** Campo de visão total horizontal em graus (ex: 280° -> 80° de ponto cego caudal). */
+  fieldOfViewDeg: number;
+  /** Tendência territorial (0 = não territorial; 1 = sentinela estrita). */
+  territorialTendency: number;
+  /** Multiplicador de velocidade em fuga (burst flee). */
+  fleeBurstMultiplier: number;
+  /** Velocidade de propagação da onda de direção pelo cardume (em unidades normalizadas por segundo). */
+  wavePropagationSpeed: number;
+  /** Intervalo médio de pastagem em segundos [mín, máx]. */
+  foragingInterval: readonly [number, number];
+}
+
+export const FISH_ECOLOGY: Record<FishSpeciesId, FishEcologicalProfile> = {
+  'blue-tang': {
+    id: 'blue-tang',
+    scientificName: 'Acanthurus bahianus / Acanthurus coeruleus',
+    commonName: 'Peixe-cirurgião-azul / Cirurgião-da-Bahia',
+    family: 'Acanthuridae',
+    trophicRole: 'herbivore',
+    socialStyle: 'loose_cluster',
+    habitat: 'pelagic',
+    elevationBand: [0.55, 0.96],
+    minClearanceM: 0.95,
+    perceptionRadius: 0.16,
+    fieldOfViewDeg: 285,
+    territorialTendency: 0.0,
+    fleeBurstMultiplier: 1.55,
+    wavePropagationSpeed: 2.8,
+    foragingInterval: [4.0, 9.0],
+  },
+  'sergeant-major': {
+    id: 'sergeant-major',
+    scientificName: 'Abudefduf saxatilis',
+    commonName: 'Sargentinho / Pintado',
+    family: 'Pomacentridae',
+    trophicRole: 'omnivore',
+    socialStyle: 'compact_school',
+    habitat: 'midwater',
+    elevationBand: [0.34, 0.74],
+    minClearanceM: 0.65,
+    perceptionRadius: 0.14,
+    fieldOfViewDeg: 290,
+    territorialTendency: 0.35,
+    fleeBurstMultiplier: 1.65,
+    wavePropagationSpeed: 3.6,
+    foragingInterval: [5.0, 11.0],
+  },
+  parrotfish: {
+    id: 'parrotfish',
+    scientificName: 'Sparisoma viride / Scarus trispinosus',
+    commonName: 'Peixe-papagaio / Budião-azul',
+    family: 'Scaridae',
+    trophicRole: 'corallivore',
+    socialStyle: 'solitary_grazer',
+    habitat: 'benthic',
+    elevationBand: [0.06, 0.32],
+    minClearanceM: 0.22,
+    perceptionRadius: 0.12,
+    fieldOfViewDeg: 270,
+    territorialTendency: 0.05,
+    fleeBurstMultiplier: 1.35,
+    wavePropagationSpeed: 1.8,
+    foragingInterval: [2.5, 6.0],
+  },
+};
+
 export interface FishVisualDefinition {
   id: FishSpeciesId;
   label: string;
@@ -44,56 +133,56 @@ export const FISH_VISUALS: Record<FishSpeciesId, FishVisualDefinition> = {
   'blue-tang': {
     id: 'blue-tang',
     label: 'Peixe-cirurgião',
-    length: 0.42,
-    height: 0.31,
-    width: 0.13,
+    length: 0.30,
+    height: 0.22,
+    width: 0.09,
     bodyColor: [0.05, 0.28, 0.95],
     tailColor: [0.98, 0.78, 0.12],
     finColor: [0.04, 0.2, 0.65],
     bleachedColor: [0.82, 0.86, 0.88],
-    cruiseSpeed: 0.072,
-    maxSpeed: 0.12,
-    turnRate: 3.0,
-    acceleration: 0.20,
-    tailBeat: 6.2,
+    cruiseSpeed: 0.068,
+    maxSpeed: 0.125,
+    turnRate: 2.8,
+    acceleration: 0.22,
+    tailBeat: 5.8,
     schools: 2,
-    spread: [0.072, 0.034, 0.018],
+    spread: [0.125, 0.072, 0.048],
   },
   'sergeant-major': {
     id: 'sergeant-major',
     label: 'Sargentinho',
-    length: 0.28,
-    height: 0.27,
-    width: 0.12,
+    length: 0.18,
+    height: 0.17,
+    width: 0.08,
     bodyColor: [0.93, 0.87, 0.5],
     tailColor: [0.9, 0.84, 0.5],
     finColor: [0.85, 0.78, 0.42],
     bleachedColor: [0.88, 0.88, 0.82],
-    cruiseSpeed: 0.048,
-    maxSpeed: 0.088,
-    turnRate: 3.2,
-    acceleration: 0.22,
-    tailBeat: 5.8,
+    cruiseSpeed: 0.052,
+    maxSpeed: 0.096,
+    turnRate: 3.4,
+    acceleration: 0.24,
+    tailBeat: 6.0,
     schools: 2,
-    spread: [0.088, 0.046, 0.024],
+    spread: [0.082, 0.048, 0.032],
   },
   parrotfish: {
     id: 'parrotfish',
     label: 'Peixe-papagaio',
-    length: 0.68,
-    height: 0.23,
-    width: 0.14,
+    length: 0.60,
+    height: 0.20,
+    width: 0.12,
     bodyColor: [0.12, 0.62, 0.46],
     tailColor: [0.95, 0.44, 0.36],
     finColor: [0.1, 0.5, 0.4],
     bleachedColor: [0.82, 0.88, 0.82],
-    cruiseSpeed: 0.026,
-    maxSpeed: 0.052,
-    turnRate: 1.8,
-    acceleration: 0.08,
+    cruiseSpeed: 0.028,
+    maxSpeed: 0.056,
+    turnRate: 1.9,
+    acceleration: 0.09,
     tailBeat: 3.2,
     schools: 0,
-    spread: [0.068, 0.032, 0.016],
+    spread: [0.065, 0.032, 0.020],
   },
 };
 
@@ -286,12 +375,14 @@ export function createFishMeshes(scene: Scene, definition: FishVisualDefinition)
   body.alwaysSelectAsActiveMesh = true;
   body.doNotSyncBoundingInfo = true;
   body.isPickable = false;
+  body.receiveShadows = true;
 
   const tail = createTailMesh(scene, definition);
   tail.material = tailMaterial;
   tail.alwaysSelectAsActiveMesh = true;
   tail.doNotSyncBoundingInfo = true;
   tail.isPickable = false;
+  tail.receiveShadows = true;
 
   return { body, tail, bodyMaterial, tailMaterial };
 }

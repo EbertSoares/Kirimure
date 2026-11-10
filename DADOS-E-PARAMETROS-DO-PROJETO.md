@@ -59,7 +59,6 @@ $$X(t + \Delta t) = X(t) + \left( X_{\text{alvo}} - X(t) \right) \cdot \left( 1 
 | **Poluição** | Óleo / Petróleo | `3` | Parâmetro Didático | Espalhamento superficial e emulsão inicial |
 | **Poluição** | Microplásticos | `5` | Parâmetro Didático | Mistura superficial das partículas na coluna d'água |
 | **Ecossistema** | Pressão Pesqueira | `2` | Parâmetro Didático | Resposta rápida ao esforço de captura |
-| **Ecossistema** | Recuperação Ecológica | `20` | Parâmetro Didático | Maturação lenta de medidas de proteção e manejo |
 
 > **Nota científica:** Os valores de $\tau_i$ ordenam velocidades relativas entre processos físicos e de manejo para investigação didática; não devem ser interpretados como taxas empíricas medidas diretamente em campo.
 
@@ -83,7 +82,7 @@ Na Baía Central (Ilha dos Frades, $\tau \in [38, 62]\text{ d}$), a retenção c
 
 ## 4. Variáveis de Entrada Agrupadas e Condições de Referência
 
-Os oito controles ambientais dividem-se em três categorias funcionais:
+Os sete controles ambientais dividem-se em três categorias funcionais:
 
 | Grupo | Variável | Baseline | Faixa | Escala | Unidade | Limiares (Atenção / Crítico) | Base de Referência |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -94,7 +93,10 @@ Os oito controles ambientais dividem-se em três categorias funcionais:
 | **Poluição** | Óleo / Petróleo | `0` | `0 a 100.000` | Logarítmica discreta | `kg` | `1.000` / `20.000 kg` | Toxicidade subletal de HPAs: $\text{EC}_{50} = 10\text{–}27\ \mu\text{g/L tPAH}_{50}$ (May et al., 2020) |
 | **Poluição** | Microplásticos | `0` | `0 a 33.000` | Não linear discreta | `part./m³` | `5.000` / `24.000 part./m³` | Âncoras intermediárias didáticas; máximo publicado de aproximadamente `33.000 part./m³` (Trindade et al., 2023) |
 | **Ecossistema** | Pressão Pesqueira | `0` | `0 a 100` | Linear (`1`) | `% índice` | `35%` / `70%` | Esforço relativo sobre ictiofauna, com maior peso sobre raspadores |
-| **Ecossistema** | Recuperação Ecológica | `0` | `0 a 100` | Linear (`1`) | `% índice` | — | Proteção costeira, áreas marinhas protegidas e restauração |
+
+As ações de recuperação não são um slider genérico: são intervenções concretas
+(tratamento de efluente, contenção de óleo, controle de erosão, área protegida e
+restauração de corais) aplicadas pelo painel e avaliadas pelo modelo de intervenção.
 
 ### Escalas Discretas Não Lineares
 - **Cargas de Massa (`óleo` e `esgoto`, em kg ou kg/dia):**
@@ -193,8 +195,8 @@ $$S_{\text{coral}} = \text{clamp}\left( S_{\text{base}} \cdot \left[ 1 + 0,50 \c
 A função `estimateCriticalDays()` projeta em quantos dias simulados o índice agregado cruzaria o patamar interno $\le 33/100$, mantidas constantes as condições atuais.
 > **Rótulo obrigatório na interface e relatórios:** *"Tempo estimado até o limiar crítico do modelo ($\le 33/100$)"*. Trata-se de uma convenção didática interna de bancada, **não** de uma previsão demográfica de colapso ou extinção biológica na Baía de Todos-os-Santos.
 
-### 8.4. Desacoplamento da Recuperação Legada e Modelo Causal de Restauração Coralina
-- **Desacoplamento do controle universal:** A função de atualização da saúde biológica (`updateHealth`) foi rigorosamente desacoplada do controle genérico `recovery`. A regeneração natural só ocorre se as pressões ambientais calculadas caírem abaixo do limiar biológico de estresse ($\text{estresse} < 0,10$). A saúde do recife nativo não recebe mais bônus numéricos arbitrários de sliders.
+### 8.4. Regeneração Natural e Modelo Causal de Restauração Coralina
+- **Regeneração condicionada ao estresse:** A função de atualização da saúde biológica (`updateHealth`) calcula dano e regeneração apenas a partir das pressões ambientais efetivas. A regeneração natural só ocorre se o estresse calculado cair abaixo do limiar biológico ($\text{estresse} < 0,10$). Nenhum controle genérico adiciona bônus numérico à saúde do recife.
 - **Intervenções de Mitigação Causais:** As intervenções atuam estritamente sobre fluxos físicos e estoques:
   - *Tratamento de esgoto (ETE):* Reduz até 75% da DBO contínua e pulsada;
   - *Interceptação de microplásticos:* Retém até 65% na drenagem superficial;

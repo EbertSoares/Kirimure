@@ -30,7 +30,6 @@ describe('Ações de Recuperação e Modelo Científico de Intervenção', () =>
       microplastics: 10000,
       turbidity: 80,
       fishing: 1,
-      recovery: 0,
     };
 
     const activeInterventions: ActiveIntervention[] = [

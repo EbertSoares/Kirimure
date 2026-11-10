@@ -1,13 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon, type IconName } from '../components/Icons';
 import { ITEM_DEFINITIONS, PARAMETERS, type MassLoadId } from '../simulation/config';
 import { isFactorActive } from '../simulation/model';
 import type { Environment, SimulationState } from '../simulation/types';
-import { BabylonOceanRuntime } from './babylon/runtime';
+import { BabylonOceanRuntime, type DiveState } from './babylon/runtime';
+
+export interface DiveToggleApi {
+  toggle: () => boolean;
+}
 
 interface MarineSceneProps {
   state: SimulationState;
   resetToken?: number;
+  onDiveStateChange?: (state: DiveState) => void;
+  onDiveApiReady?: (api: DiveToggleApi | null) => void;
 }
 
 type SceneStatus = 'loading' | 'ready' | 'error';
@@ -106,16 +112,6 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
     });
   }
 
-  if (Math.abs(next.recovery - prev.recovery) > 1e-6 && isFactorActive('recovery', next.recovery)) {
-    notices.push({
-      id: `recovery-${Date.now()}`,
-      tone: 'recovery',
-      icon: 'shield',
-      label: 'Conservação',
-      detail: `Manejo em ${Math.round(next.recovery)}%`,
-    });
-  }
-
   if (Math.abs(next.temperature - prev.temperature) > 0.05) {
     const tempStr = next.temperature.toFixed(1).replace('.0', '').replace('.', ',');
     notices.push({
@@ -141,17 +137,24 @@ function buildChangedFactorNotices(prev: Environment, next: Environment, control
   return notices;
 }
 
-export function MarineScene({ state, resetToken }: MarineSceneProps) {
+export function MarineScene({ state, resetToken, onDiveStateChange, onDiveApiReady }: MarineSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<BabylonOceanRuntime | null>(null);
   const stateRef = useRef(state);
   const prevTargetsRef = useRef<Environment>({ ...state.targets });
+  const diveStateCallbackRef = useRef(onDiveStateChange);
+  const diveApiCallbackRef = useRef(onDiveApiReady);
   const [status, setStatus] = useState<SceneStatus>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [notices, setNotices] = useState<ActiveFactorNotice[]>([]);
   const [noticeVersion, setNoticeVersion] = useState(0);
   const isResettingRef = useRef(false);
   const lastResetTimeRef = useRef(0);
+
+  useEffect(() => {
+    diveStateCallbackRef.current = onDiveStateChange;
+    diveApiCallbackRef.current = onDiveApiReady;
+  }, [onDiveApiReady, onDiveStateChange]);
 
   useEffect(() => {
     stateRef.current = state;
@@ -238,11 +241,23 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
     };
   }, [state.controls, state.targets]);
 
+  // Libera os recursos de GPU antes de o React remover o <canvas> do DOM.
+  // O cleanup de useEffect roda depois da remoção do nó; nesse intervalo o
+  // navegador já pode ter invalidado a swapchain do canvas. O useLayoutEffect
+  // garante a ordem correta de descarte (canvas ainda presente).
+  useLayoutEffect(() => {
+    return () => {
+      runtimeRef.current?.dispose();
+      runtimeRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
     let cancelled = false;
     let observer: ResizeObserver | null = null;
+    let stopDiveListener: (() => void) | null = null;
 
     setStatus('loading');
 
@@ -275,6 +290,10 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
             canvas.parentElement?.setAttribute('data-camera-profile', runtime.cameraProfile);
           });
           observer.observe(canvas);
+          stopDiveListener = runtime.onDiveStateChange((diveState) => {
+            diveStateCallbackRef.current?.(diveState);
+          });
+          diveApiCallbackRef.current?.({ toggle: () => runtime.toggleDive() });
           setStatus('ready');
         })
         .catch((error: unknown) => {
@@ -289,6 +308,8 @@ export function MarineScene({ state, resetToken }: MarineSceneProps) {
       cancelled = true;
       window.clearTimeout(startTimer);
       observer?.disconnect();
+      stopDiveListener?.();
+      diveApiCallbackRef.current?.(null);
       if (typeof window !== 'undefined') {
         delete (window as unknown as { __kirimureRuntime?: BabylonOceanRuntime }).__kirimureRuntime;
       }

@@ -16,6 +16,16 @@
 import type { Vec3Tuple } from './steering';
 import { length, normalize, scale, sub, steer } from './steering';
 
+type SchoolFlowMode = 'stream' | 'mill' | 'cluster';
+
+const TRAIL_CAPACITY = 28;
+const TRAIL_SAMPLE_INTERVAL = 0.065;
+
+export interface HeadingSample {
+  time: number;
+  heading: number;
+}
+
 export interface SchoolBand {
   uMin: number;
   uMax: number;
@@ -36,12 +46,11 @@ export interface SchoolConfig {
   spreadU: number;
   spreadElevation: number;
   spreadDepth: number;
+  /** Modo de formação preferido: 'cluster' (nuvem 3D volumétrica) ou 'stream' (fita/diamante). */
+  formationMode?: SchoolFlowMode;
+  /** Velocidade da onda de propagação de curva (unidades normalizadas/s). */
+  wavePropagationSpeed?: number;
 }
-
-export type SchoolFlowMode = 'stream' | 'mill';
-
-const TRAIL_CAPACITY = 28;
-const TRAIL_SAMPLE_INTERVAL = 0.065;
 
 export interface SchoolState {
   center: Vec3Tuple;
@@ -52,9 +61,13 @@ export interface SchoolState {
   phase: number;
   /** Direção suavizada da formação no plano (u, depth), evitando inversões bruscas de assentos. */
   heading?: number;
-  /** Modo coreográfico atual: fluxo em fita ('stream') ou giro circular em cardume ('mill'). */
+  /** Taxa de rotação instantânea do cardume (rad/s), útil para ondulação e inclinação. */
+  turnRate?: number;
+  /** Histórico temporal de direções para cálculo de propagação em onda durante curvas. */
+  headingHistory?: HeadingSample[];
+  /** Modo coreográfico atual: fluxo em fita ('stream'), giro circular ('mill') ou nuvem 3D ('cluster'). */
   mode?: SchoolFlowMode;
-  /** Transição contínua (0 = stream, 1 = mill) para evitar saltos ao entrar/sair do carrossel. */
+  /** Transição contínua (0 = stream/cluster, 1 = mill) para evitar saltos ao entrar/sair do carrossel. */
   millBlend?: number;
   /** Sentido do giro circular (1 = horário, -1 = anti-horário). */
   millDirection?: 1 | -1;
@@ -84,7 +97,7 @@ export function clampPointToBand(point: Vec3Tuple, band: SchoolBand): Vec3Tuple 
   ];
 }
 
-export function randomPointInBand(random: RandomLike, band: SchoolBand): Vec3Tuple {
+function randomPointInBand(random: RandomLike, band: SchoolBand): Vec3Tuple {
   // Prefere o interior da faixa (margem suave) para evitar alvos colados nas bordas
   const padU = (band.uMax - band.uMin) * 0.1;
   const padE = (band.elevationMax - band.elevationMin) * 0.14;
@@ -132,6 +145,7 @@ export function createSchoolState(random: RandomLike, config: SchoolConfig): Sch
   const velocity: Vec3Tuple = [vu, ve, vd];
   const heading = Math.atan2(vu, vd);
 
+  const initialMode = config.formationMode ?? 'stream';
   return {
     center,
     velocity,
@@ -139,7 +153,9 @@ export function createSchoolState(random: RandomLike, config: SchoolConfig): Sch
     retarget: config.retargetMin + random() * (config.retargetMax - config.retargetMin),
     phase: random() * Math.PI * 2,
     heading,
-    mode: 'stream',
+    turnRate: 0,
+    headingHistory: [{ time: 0, heading }],
+    mode: initialMode,
     millBlend: 0,
     millDirection: random() < 0.5 ? 1 : -1,
     flowTime: random() * 20,
@@ -148,7 +164,7 @@ export function createSchoolState(random: RandomLike, config: SchoolConfig): Sch
   };
 }
 
-/** Atualiza o centro do cardume com curvas S contínuas pelo recife e alternância stream/mill. */
+/** Atualiza o centro do cardume com curvas S contínuas pelo recife e alternância stream/mill/cluster. */
 export function updateSchoolState(
   school: SchoolState,
   dt: number,
@@ -177,10 +193,11 @@ export function updateSchoolState(
       : config.band.uMin + spanU * (0.12 + random() * 0.24);
     school.target = clampPointToBand(nextTarget, config.band);
 
-    // Alterna organicamente entre fluxo em cadeia ('stream') e carrossel circular ('mill')
+    // Alterna organicamente entre fluxo normal e carrossel circular ('mill')
+    const defaultMode = config.formationMode ?? 'stream';
     if (school.mode === 'mill') {
-      school.mode = 'stream';
-    } else if (random() < 0.32) {
+      school.mode = defaultMode;
+    } else if (random() < 0.28) {
       school.mode = 'mill';
       school.millDirection = random() < 0.5 ? 1 : -1;
       school.target = clampPointToBand(
@@ -191,10 +208,12 @@ export function updateSchoolState(
         ],
         config.band,
       );
+    } else {
+      school.mode = defaultMode;
     }
   }
 
-  // Transição suave entre o modo linear em fita (0) e o carrossel circular (1)
+  // Transição suave entre o modo de travessia e o carrossel circular (1)
   const targetMill = school.mode === 'mill' ? 1 : 0;
   const currentMill = school.millBlend ?? targetMill;
   school.millBlend = currentMill + (targetMill - currentMill) * Math.min(1, step * 1.4);
@@ -300,11 +319,24 @@ export function updateSchoolState(
     const targetHeading = Math.atan2(school.velocity[0], school.velocity[2]);
     if (school.heading === undefined) {
       school.heading = targetHeading;
+      school.turnRate = 0;
     } else {
       const diff = wrapAngleDelta(targetHeading - school.heading);
       const maxHeadingStep = config.turnMax * 0.85 * step;
-      school.heading += Math.max(-maxHeadingStep, Math.min(maxHeadingStep, diff));
+      const actualStep = Math.max(-maxHeadingStep, Math.min(maxHeadingStep, diff));
+      school.heading += actualStep;
+      school.turnRate = actualStep / Math.max(step, 1e-4);
     }
+  }
+
+  // Registra histórico temporal de direções para cálculo de propagação em onda durante curvas
+  if (!school.headingHistory) {
+    school.headingHistory = [];
+  }
+  const curFlowTime = school.flowTime ?? 0;
+  school.headingHistory.push({ time: curFlowTime, heading: school.heading ?? 0 });
+  while (school.headingHistory.length > 2 && school.headingHistory[0].time < curFlowTime - 2.5) {
+    school.headingHistory.shift();
   }
 
   // Atualiza o histórico de trilha do centro para a formação em cadeia ("ribbon trail")
@@ -373,16 +405,52 @@ export function repelSchools(
 }
 
 /**
+ * Amostra uma direção suavizada do histórico do cardume com um retardo temporal (delay).
+ * Usado para a onda de propagação da curva: os peixes na frente viram primeiro, e os da
+ * cauda viram com retardo progressivo proporcional à distância longitudinal.
+ */
+export function sampleDelayedHeading(
+  history: readonly HeadingSample[] | undefined,
+  currentTime: number,
+  delay: number,
+  currentHeading: number,
+): number {
+  if (!history || history.length === 0 || delay <= 0.001) return currentHeading;
+  const targetTime = currentTime - delay;
+  if (targetTime <= history[0].time) return history[0].heading;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    if (history[i].time <= targetTime) {
+      if (i === history.length - 1) return history[i].heading;
+      const t0 = history[i].time;
+      const t1 = history[i + 1].time;
+      const frac = (targetTime - t0) / Math.max(1e-4, t1 - t0);
+      const h0 = history[i].heading;
+      const h1 = history[i + 1].heading;
+      const diff = wrapAngleDelta(h1 - h0);
+      return h0 + diff * frac;
+    }
+  }
+  return history[0].heading;
+}
+
+/**
  * Posição de um assento de formação no espaço normalizado.
  *
  * `offset` é local:
- *  - `offset[0]`: afastamento lateral na faixa da cadeia;
+ *  - `offset[0]`: afastamento lateral na faixa do grupo;
  *  - `offset[1]`: afastamento vertical;
  *  - `offset[2]`: posição ao longo da espinha longitudinal da cadeia (+frente .. -cauda).
  *
- * No modo `'stream'`, os peixes seguem a trilha histórica (`school.trail`) com
- * ondulação progressiva em S; no modo `'mill'`, orbitam em carrossel circular
- * sincronizado com transição suave (`millBlend`).
+ * Suporta três modos:
+ *  - `'cluster'`: Nuvem 3D volumétrica solta (ideal para cirurgiões-azuis), com distâncias
+ *    variáveis e sem colapso em fila indiana;
+ *  - `'stream'`: Cadeia alinhada e fluida com trilha histórica;
+ *  - `'mill'`: Carrossel circular dinâmico.
+ *
+ * Incorpora:
+ *  - Onda de propagação de curva: peixes da frente viram primeiro, seguidos pelos vizinhos;
+ *  - Troca dinâmica de posições (slot drift): indivíduos mudam lentamente de posição e
+ *    revezam a liderança ao longo do tempo.
  */
 export function formationPosition(
   center: Vec3Tuple,
@@ -395,24 +463,45 @@ export function formationPosition(
 ): Vec3Tuple {
   const spanU = Math.max(1e-4, band.uMax - band.uMin);
   const spanD = Math.max(1e-4, band.depthMax - band.depthMin);
-  // Fator de aspecto para nunca estourar a espessura estreita da camada de profundidade
-  const depthAspect = Math.min(0.32, (spanD / spanU) * 0.9);
+  const isCluster = school?.mode === 'cluster';
+  // Aspecto de profundidade: mais generoso para nuvem 3D volumétrica, contido em fita
+  const depthAspect = isCluster ? Math.min(0.65, (spanD / spanU) * 1.5) : Math.min(0.38, (spanD / spanU) * 0.95);
+
+  // 1. Troca dinâmica e orgânica de posições (slot drift ao longo de 20-40 segundos)
+  const driftCycle = seconds * 0.08 + wobble * 0.75;
+  const driftZ = Math.sin(driftCycle) * 0.024;
+  const driftX = Math.cos(driftCycle * 0.7) * 0.018;
+  const driftY = Math.sin(driftCycle * 1.25) * 0.014;
+
+  const effectiveOffset: Vec3Tuple = [
+    offset[0] + driftX,
+    offset[1] + driftY,
+    offset[2] + driftZ,
+  ];
+
+  // 2. Onda de propagação da curva: o líder/frente inicia a curva e os peixes de trás
+  // respondem com um atraso proporcional à sua posição longitudinal.
+  const waveSpeed = 0.36; // unidades normalizadas/segundo
+  const lagDist = Math.max(0, 0.06 - effectiveOffset[2]);
+  const lagSeconds = Math.min(1.2, lagDist / waveSpeed);
 
   const horizontal = Math.hypot(velocity[0], velocity[2]);
-  const yaw =
-    school?.heading !== undefined
-      ? school.heading
-      : horizontal > 1e-5
-        ? Math.atan2(velocity[0], velocity[2])
-        : Math.PI * 0.5;
+  const defaultHeading = horizontal > 1e-5 ? Math.atan2(velocity[0], velocity[2]) : Math.PI * 0.5;
+  const currentHeading = school?.heading !== undefined ? school.heading : defaultHeading;
+  const yaw = sampleDelayedHeading(
+    school?.headingHistory,
+    school?.flowTime ?? seconds,
+    lagSeconds,
+    currentHeading,
+  );
+
   const cos = Math.cos(yaw);
   const sin = Math.sin(yaw);
 
-  // 1) Posição em cadeia fluida ('stream'): usa o histórico de trilha quando disponível
+  // 3. Posição base
   let baseCenter: Vec3Tuple = center;
-  if (school?.trail && school.trail.length > 1) {
-    // Mapeia offset[2] (+frente .. -cauda) para índice contínuo na trilha [0 .. trail.length - 1]
-    const normalizedLag = Math.min(1, Math.max(0, 0.45 - offset[2] * 5.2));
+  if (!isCluster && school?.trail && school.trail.length > 1) {
+    const normalizedLag = Math.min(1, Math.max(0, 0.42 - effectiveOffset[2] * 4.4));
     const exactIdx = normalizedLag * (school.trail.length - 1);
     const i0 = Math.floor(exactIdx);
     const i1 = Math.min(school.trail.length - 1, i0 + 1);
@@ -426,11 +515,11 @@ export function formationPosition(
     ];
   }
 
-  // Ondulação progressiva ao longo do eixo longitudinal como uma fita viva
-  const streamWave = Math.sin(seconds * 1.55 - offset[2] * 22 + wobble * 0.55) * 0.011;
-  const lx = offset[0] + streamWave + Math.sin(seconds * 0.48 + wobble) * 0.005;
-  const ly = offset[1] + Math.sin(seconds * 0.62 + wobble * 1.2 - offset[2] * 14) * 0.012;
-  const lz = (school?.trail && school.trail.length > 1 ? offset[2] * 0.35 : offset[2]) +
+  // Ondulação progressiva ao longo do eixo longitudinal como um corpo vivo
+  const streamWave = Math.sin(seconds * 1.55 - effectiveOffset[2] * 20 + wobble * 0.55) * 0.011;
+  const lx = effectiveOffset[0] + streamWave + Math.sin(seconds * 0.48 + wobble) * 0.005;
+  const ly = effectiveOffset[1] + Math.sin(seconds * 0.62 + wobble * 1.2 - effectiveOffset[2] * 14) * 0.012;
+  const lz = (isCluster ? effectiveOffset[2] : (school?.trail && school.trail.length > 1 ? effectiveOffset[2] * 0.45 : effectiveOffset[2])) +
     Math.cos(seconds * 0.32 + wobble * 0.7) * 0.005;
 
   const streamU = baseCenter[0] + lx * cos + lz * sin;
@@ -448,15 +537,15 @@ export function formationPosition(
     return clampPointToBand([streamU, streamE, streamD], band);
   }
 
-  // 2) Posição no carrossel/vórtice circular ('mill')
+  // 4. Posição no carrossel/vórtice circular ('mill')
   const dir = school?.millDirection ?? 1;
-  const baseAngle = Math.atan2(offset[0], offset[2] || 1e-4) + wobble * 0.42;
+  const baseAngle = Math.atan2(effectiveOffset[0], effectiveOffset[2] || 1e-4) + wobble * 0.42;
   const orbitAngle = baseAngle + dir * seconds * 0.95;
-  const radiusFactor = Math.min(1.25, Math.max(0.48, Math.hypot(offset[0], offset[2]) * 11));
+  const radiusFactor = Math.min(1.25, Math.max(0.48, Math.hypot(effectiveOffset[0], effectiveOffset[2]) * 10));
   const ringU = Math.max(0.038, Math.min(0.088, spanU * 0.095 * radiusFactor));
   const ringD = Math.max(0.012, Math.min(0.036, spanD * 0.28 * radiusFactor));
   const waveY =
-    offset[1] * 0.82 + Math.sin(orbitAngle * 2 + (school?.phase ?? 0)) * 0.02;
+    effectiveOffset[1] * 0.82 + Math.sin(orbitAngle * 2 + (school?.phase ?? 0)) * 0.02;
 
   const millU = center[0] + Math.sin(orbitAngle) * ringU;
   const millE = center[1] + waveY;

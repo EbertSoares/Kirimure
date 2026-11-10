@@ -14,14 +14,14 @@ export interface ActiveIntervention {
   status: 'active' | 'completed' | 'paused';
 }
 
-export type InterventionMechanism =
+type InterventionMechanism =
   | 'reduceInput'
   | 'removeSurfaceStock'
   | 'reduceMortality'
   | 'increaseRecruitment'
   | 'longTermForcing';
 
-export type InterventionEvidenceLabel =
+type InterventionEvidenceLabel =
   | 'Estabelecido'
   | 'Dependente do contexto'
   | 'Em desenvolvimento';
@@ -158,10 +158,3 @@ export const INTERVENTIONS: readonly InterventionDefinition[] = [
   },
 ] as const;
 
-export function getInterventionDefinition(id: InterventionId): InterventionDefinition {
-  const found = INTERVENTIONS.find((item) => item.id === id);
-  if (!found) {
-    throw new Error(`Unknown intervention id: ${id}`);
-  }
-  return found;
-}

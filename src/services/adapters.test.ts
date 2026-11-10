@@ -130,17 +130,13 @@ describe('camada de serviços de dados oceanográficos e proveniência', () => {
 
   it('respeita a restrição estrita: nenhum pixel de grade NOAA tem coordenadas expostas na UI', async () => {
     // Importa o código-fonte como string via Vite ?raw para verificação estática
-    const sciencePanelModule = await import('../components/SciencePanel.tsx?raw');
     const evidenceDrawerModule = await import('../components/EvidenceDrawer.tsx?raw');
     const brazilMapModule = await import('../components/BrazilMapScreen.tsx?raw');
 
-    const sciencePanelCode = sciencePanelModule.default;
     const evidenceDrawerCode = evidenceDrawerModule.default;
     const brazilMapCode = brazilMapModule.default;
 
     // Não deve conter interpolação de latitude/longitude de gridCell para NOAA na UI
-    expect(sciencePanelCode).not.toContain('Célula de Grade NOAA');
-    expect(sciencePanelCode).not.toMatch(/latestCrw\.gridCell(\?|\.)latitude/);
     expect(evidenceDrawerCode).not.toMatch(/latestCrw\.gridCell(\?|\.)latitude/);
     expect(brazilMapCode).not.toContain('gridCell');
     expect(brazilMapCode).not.toContain('NOAA');

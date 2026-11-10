@@ -7,8 +7,7 @@ export type ItemId =
   | 'oil'
   | 'sewage'
   | 'turbidity'
-  | 'fishing'
-  | 'recovery';
+  | 'fishing';
 
 export type ControlCategoryId = 'water' | 'pollution' | 'ecosystem';
 
@@ -47,8 +46,6 @@ export type EpistemologicalBadge =
   | 'Cenário Didático / Modelo de Caixa'
   | 'Regra do Modelo'
   | 'Efeito Visual';
-
-export type EpistemicClass = EpistemologicalBadge;
 
 export interface ScientificMetadata {
   recordId: string;
@@ -102,7 +99,6 @@ export interface Environment {
   sewage: number;
   turbidity: number;
   fishing: number;
-  recovery: number;
 }
 
 export interface Health {
@@ -156,7 +152,7 @@ export interface HistoryPoint {
   species?: Record<FishSpeciesId, number>;
 }
 
-export interface ThermalDoseDay {
+interface ThermalDoseDay {
   day: number;
   degreeDays: number;
 }
@@ -248,52 +244,4 @@ export interface Indicator {
   metadata?: ScientificMetadata;
 }
 
-export interface Challenge {
-  id: string;
-  title: string;
-  brief: string;
-  hint: string;
-  /** Dias consecutivos que a condição precisa se manter. */
-  windowDays: number;
-  /** Avalia um dia do histórico. */
-  holds: (point: HistoryPoint, state: SimulationState) => boolean;
-}
 
-export type MissionStepId =
-  | 'intro'
-  | 'hypothesis'
-  | 'experiment'
-  | 'solution'
-  | 'conclusion';
-
-export interface MissionHypothesisOption {
-  id: string;
-  label: string;
-  isCorrectMechanism: boolean;
-  explanation: string;
-}
-
-export interface MissionDefinition {
-  id: string;
-  title: string;
-  subtitle: string;
-  targetGrade: string;
-  estimatedMinutes: number;
-  question: string;
-  hypotheses: MissionHypothesisOption[];
-  focusFactor: ItemId;
-  defaultControls: Partial<Environment>;
-  targetLoad: number;
-  solutionControls: Partial<Environment>;
-  transferQuestion: string;
-}
-
-export interface MissionState {
-  missionId: string;
-  step: MissionStepId;
-  selectedHypothesisId: string | null;
-  customHypothesisText?: string;
-  testedOrganicLoad?: number;
-  solutionApplied?: boolean;
-  completedAtDay?: number;
-}

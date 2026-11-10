@@ -13,14 +13,21 @@ import '@babylonjs/core/Shaders/default.fragment';
 import '@babylonjs/core/Shaders/pbr.vertex';
 import '@babylonjs/core/Shaders/pbr.fragment';
 import '@babylonjs/core/Shaders/rgbdDecode.fragment';
+import '@babylonjs/core/Shaders/shadowMap.vertex';
+import '@babylonjs/core/Shaders/shadowMap.fragment';
+import '@babylonjs/core/Shaders/depth.vertex';
+import '@babylonjs/core/Shaders/depth.fragment';
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { Scene } from '@babylonjs/core/scene';
 import type { SimulationState } from '../../simulation/types';
 import { CameraRig } from './cameraRig';
 import { createBoatSystem, type BoatSystem } from './boat';
+import { DiveController, type DiveState } from './dive';
 import { createEffectsSystem, type EffectsSystem } from './effects';
 import { createFishSystem, type FishDiagnostic, type FishSystem } from './fish/FishSystem';
 import type { DioramaFrame } from './framing';
@@ -60,6 +67,7 @@ export class OceanScene3D {
   private readonly boat: BoatSystem;
   private readonly effects: EffectsSystem;
   private readonly fish: FishSystem;
+  private readonly shadowGenerator: ShadowGenerator;
   private readonly hdr: DefaultRenderingPipeline;
   private readonly visual = new VisualStateTracker();
   private state: SimulationState;
@@ -68,6 +76,12 @@ export class OceanScene3D {
   private debugMode: SceneDebugVisualizationMode = 'none';
   private readonly telemetry: OceanPerformanceTelemetry;
   private readonly renderCallback: () => void;
+  private readonly baseHardwareScaling: number;
+  private readonly dive = new DiveController();
+  private readonly diveListeners = new Set<(state: DiveState) => void>();
+  private lastDiveState: DiveState = 'surface';
+  private governorTime = 0;
+  private governorCooldown = 6;
 
   constructor(engine: AbstractEngine, canvas: HTMLCanvasElement, quality: SceneQualityProfile, state: SimulationState) {
     this.quality = quality;
@@ -77,8 +91,8 @@ export class OceanScene3D {
     this.scene.clearColor = new Color4(0.02, 0.28, 0.52, 1);
     this.scene.ambientColor = new Color3(0.08, 0.22, 0.34);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogColor = new Color3(0.03, 0.34, 0.58);
-    this.scene.fogDensity = 0.012;
+    this.scene.fogColor = new Color3(0.02, 0.29, 0.52);
+    this.scene.fogDensity = 0.0085;
 
     const renderWidth = engine.getRenderWidth();
     const renderHeight = engine.getRenderHeight();
@@ -88,12 +102,17 @@ export class OceanScene3D {
     this.sky = createSkySystem(this.scene, quality);
     this.terrain = createTerrainSystem(this.scene, quality);
     this.water = createWaterSystem(this.scene, quality);
-    this.boat = createBoatSystem(this.scene);
+    this.boat = createBoatSystem(this.scene, quality, (loadedMesh) => {
+      this.shadowGenerator.addShadowCaster(loadedMesh, false);
+      this.water.addRenderable(loadedMesh);
+    });
     this.effects = createEffectsSystem(this.scene, quality);
     this.fish = createFishSystem(this.scene, quality, {
       obstacles: this.terrain.obstacles,
       seabedAt: this.terrain.heightAt,
     });
+    this.shadowGenerator = this.createShadowSystem();
+    this.baseHardwareScaling = engine.getHardwareScalingLevel();
 
     for (const mesh of this.terrain.meshes) this.water.addRenderable(mesh);
     for (const mesh of this.boat.meshes) this.water.addRenderable(mesh);
@@ -132,6 +151,10 @@ export class OceanScene3D {
     return this.fish.fishes;
   }
 
+  get shadows(): ShadowGenerator {
+    return this.shadowGenerator;
+  }
+
   get currentState(): SimulationState {
     return this.state;
   }
@@ -142,6 +165,33 @@ export class OceanScene3D {
 
   getDiagnostics(): OceanPerformanceTelemetry {
     return this.telemetry;
+  }
+
+  get diveState(): DiveState {
+    return this.dive.state;
+  }
+
+  get diveProgress(): number {
+    return this.dive.easedProgress;
+  }
+
+  /** Inicia/retoma a exploração vertical. Retorna false durante transições. */
+  toggleDive(): boolean {
+    const started = this.dive.toggle();
+    if (started) this.emitDiveState();
+    return started;
+  }
+
+  /** Observa mudanças de estado da câmera vertical (surface/underwater/etc.). */
+  onDiveStateChange(listener: (state: DiveState) => void): () => void {
+    this.diveListeners.add(listener);
+    return () => {
+      this.diveListeners.delete(listener);
+    };
+  }
+
+  private emitDiveState(): void {
+    for (const listener of this.diveListeners) listener(this.dive.state);
   }
 
   setDebugVisualizationMode(mode: SceneDebugVisualizationMode): void {
@@ -167,6 +217,7 @@ export class OceanScene3D {
     const height = engine.getRenderHeight();
     const result = this.cameraRig.resize(width, height);
     this.applyLayout(result.frame);
+    this.cameraRig.setDiveProgress(this.dive.easedProgress, this.terrain.heightAt);
   }
 
   resetReefLife(): void {
@@ -177,8 +228,46 @@ export class OceanScene3D {
 
   dispose(): void {
     this.scene.getEngine().stopRenderLoop(this.renderCallback);
+    this.shadowGenerator.dispose();
     this.hdr.dispose();
     this.scene.dispose();
+  }
+
+  private createShadowSystem(): ShadowGenerator {
+    const mapSize =
+      this.quality.shadowMapSize ??
+      (this.quality.level === 'ultra' ? 2048 : this.quality.level === 'low' ? 512 : 1024);
+    const generator = new ShadowGenerator(mapSize, this.sky.sunLight);
+    generator.usePercentageCloserFiltering = true;
+    if (this.quality.level === 'ultra') {
+      generator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+    } else if (this.quality.level === 'high') {
+      generator.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+    } else {
+      generator.filteringQuality = ShadowGenerator.QUALITY_LOW;
+    }
+
+    generator.bias = 0.0025;
+    generator.normalBias = 0.01;
+    generator.darkness = 0.52;
+    generator.transparencyShadow = false;
+
+    // 1. Sombras do barco
+    for (const mesh of this.boat.shadowCasters) {
+      generator.addShadowCaster(mesh, false);
+    }
+
+    // 2. Sombras das pedras e corais
+    for (const mesh of this.terrain.shadowCasters) {
+      generator.addShadowCaster(mesh, false);
+    }
+
+    // 3. Sombras dos peixes
+    for (const mesh of this.fish.shadowCasters) {
+      generator.addShadowCaster(mesh, false);
+    }
+
+    return generator;
   }
 
   private createHdrPipeline(): DefaultRenderingPipeline {
@@ -191,17 +280,31 @@ export class OceanScene3D {
     pipeline.fxaaEnabled = this.quality.fxaa;
     pipeline.samples = this.quality.level === 'low' ? 0 : this.quality.level === 'medium' ? 2 : 4;
     pipeline.bloomEnabled = this.quality.bloom;
-    pipeline.bloomThreshold = 0.94;
-    pipeline.bloomWeight = 0.16;
-    pipeline.bloomKernel = 32;
+    pipeline.bloomThreshold = 1.0;
+    pipeline.bloomWeight = 0.22;
+    pipeline.bloomKernel = 48;
     pipeline.bloomScale = 0.5;
 
     const imageProcessing = pipeline.imageProcessing;
     imageProcessing.toneMappingEnabled = true;
     imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    imageProcessing.exposure = 0.98;
-    imageProcessing.contrast = 1.1;
-    imageProcessing.vignetteEnabled = false;
+    imageProcessing.exposure = 1.02;
+    imageProcessing.contrast = 1.14;
+
+    // Color grading sutil: saturação tropical sem estourar os brancos da
+    // espuma e do céu, com sombras um pouco mais ricas.
+    const curves = new ColorCurves();
+    curves.globalSaturation = 13;
+    curves.shadowsSaturation = 8;
+    curves.highlightsSaturation = -6;
+    imageProcessing.colorCurvesEnabled = true;
+    imageProcessing.colorCurves = curves;
+
+    // Vinheta discreta para fechar o diorama e puxar o olhar ao centro.
+    imageProcessing.vignetteEnabled = true;
+    imageProcessing.vignetteWeight = 1.15;
+    imageProcessing.vignetteStretch = 0.28;
+    imageProcessing.vignetteColor = new Color4(0.01, 0.045, 0.075, 1);
     return pipeline;
   }
 
@@ -210,6 +313,15 @@ export class OceanScene3D {
     const dt = clamp((frameStart - this.lastTime) / 1000, 0, 0.05);
     this.lastTime = frameStart;
     this.elapsed += dt;
+
+    this.dive.update(dt);
+    if (this.dive.state !== this.lastDiveState) {
+      this.lastDiveState = this.dive.state;
+      this.emitDiveState();
+    }
+    this.cameraRig.setDiveProgress(this.dive.easedProgress, this.terrain.heightAt);
+    const cameraDepth = Math.max(0, -this.cameraRig.eyeY);
+    this.water.setCameraDepth(cameraDepth);
 
     const visual = this.visual.update(this.state, dt);
     this.sky.update(dt, visual);
@@ -234,14 +346,32 @@ export class OceanScene3D {
     const tFish1 = typeof performance !== 'undefined' ? performance.now() : 0;
 
     // A névoa subaquática azul-turquesa acompanha turbidez, esgoto e óleo; o céu fica fora da névoa.
-    this.scene.fogDensity = clamp(0.011 + visual.turbidity * 0.028 + visual.sewage * 0.012 + visual.oil * 0.006, 0.008, 0.052);
+    // Abaixo da superfície, a extinção cresce com a profundidade da câmera: a
+    // luz solar é absorvida e espalhada ao longo do caminho óptico.
+    const depthFactor = clamp(cameraDepth / 12, 0, 1);
+    const underwaterFog = cameraDepth > 0.15 ? 0.004 + depthFactor * 0.02 : 0;
+    this.scene.fogDensity = clamp(
+      0.0085 + visual.turbidity * 0.026 + visual.sewage * 0.012 + visual.oil * 0.006 + underwaterFog,
+      0.007,
+      0.062,
+    );
+    const fogR = 0.024 + visual.turbidity * 0.06 + visual.sewage * 0.05;
+    const fogG = 0.3 - visual.turbidity * 0.05 + visual.sewage * 0.03 - visual.oil * 0.08;
+    const fogB = 0.52 - visual.turbidity * 0.14 - visual.sewage * 0.14 - visual.oil * 0.16;
     this.scene.fogColor.set(
-      0.028 + visual.turbidity * 0.06 + visual.sewage * 0.05,
-      0.34 - visual.turbidity * 0.06 + visual.sewage * 0.03 - visual.oil * 0.08,
-      0.58 - visual.turbidity * 0.16 - visual.sewage * 0.14 - visual.oil * 0.16,
+      fogR + (0.008 - fogR) * depthFactor * 0.7,
+      fogG + (0.13 - fogG) * depthFactor * 0.7,
+      fogB + (0.3 - fogB) * depthFactor * 0.7,
+    );
+    this.scene.clearColor.set(
+      this.scene.fogColor.r,
+      this.scene.fogColor.g,
+      this.scene.fogColor.b,
+      1,
     );
 
     this.scene.render();
+    this.updatePerformanceGovernor(dt);
     const frameEnd = typeof performance !== 'undefined' ? performance.now() : frameStart + 16;
 
     // Suaviza métricas de telemetria
@@ -257,24 +387,39 @@ export class OceanScene3D {
     void canvas;
   }
 
+  /**
+   * Governador dinâmico de resolução: se o dispositivo não sustentar ~42 FPS,
+   * reduz a resolução interna em passos de 12% (até 1.9x o scaling base). Se
+   * sobrar folga (>56 FPS por 6 s), devolve a nitidez aos poucos. Isso mantém
+   * celulares e GPUs integradas fluidos sem tocar na composição da cena.
+   */
+  private updatePerformanceGovernor(dt: number): void {
+    this.governorTime += dt;
+    this.governorCooldown = Math.max(0, this.governorCooldown - dt);
+    if (this.governorTime < 1.6) return;
+    this.governorTime = 0;
+
+    const engine = this.scene.getEngine();
+    const fps = engine.getFps();
+    if (!Number.isFinite(fps) || fps <= 0) return;
+    const current = engine.getHardwareScalingLevel();
+    const min = this.baseHardwareScaling;
+    const max = this.baseHardwareScaling * 1.9;
+
+    if (fps < 42 && current < max - 1e-4) {
+      engine.setHardwareScalingLevel(Math.min(max, current * 1.12));
+      this.governorCooldown = 4;
+    } else if (fps > 56 && this.governorCooldown <= 0 && current > min + 1e-4) {
+      engine.setHardwareScalingLevel(Math.max(min, current * 0.93));
+      this.governorCooldown = 6;
+    }
+  }
+
   private applyLayout(frame: DioramaFrame): void {
     this.terrain.layout(frame);
     this.water.layout(frame);
     this.boat.layout(frame);
     this.effects.layout(frame, this.terrain.heightAt);
     this.fish.layout(frame);
-    this.updateDepthVariables(frame);
-  }
-
-  private updateDepthVariables(frame: DioramaFrame): void {
-    if (typeof document === 'undefined') return;
-    const card = document.querySelector<HTMLElement>('.scene-card');
-    if (!card) return;
-    const referenceDepth = 0.72;
-    const top = frame.surfaceScreenYAtDepth(referenceDepth);
-    const bottom = frame.seabedScreenYAtDepth(referenceDepth, -8.4);
-    card.style.setProperty('--depth-top', `${(top * 100).toFixed(2)}%`);
-    card.style.setProperty('--depth-bottom', `${(bottom * 100).toFixed(2)}%`);
-    card.setAttribute('data-camera-profile', frame.profile.id);
   }
 }

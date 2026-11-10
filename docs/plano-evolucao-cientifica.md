@@ -183,7 +183,7 @@ Um modelo biológico defensável não pode ser apenas um gerador unidirecional d
   * Estimativa didática inicial de Oxigênio Dissolvido.
 
 * **Seção B (Aprovado para Implementação Imediata - Próxima Etapa):**
-  * Integração dos 5 selos epistemológicos na interface (`SciencePanel`, tooltips e `TeachingConsole`);
+  * Integração dos 5 selos epistemológicos na interface (`EvidenceDrawer`, tooltips e indicadores);
   * Correção do texto de HotSpot ($SST > 28{,}0\text{ °C}$; exibido em $28{,}1\text{ °C}$ na resolução da tela);
   * Correção das categorias de oxigênio (troca de "anóxia" por "hipóxia severa" para $< 2\text{ mg/L}$);
   * Inclusão do Oxigênio Dissolvido na leitura principal e no painel de indicadores;

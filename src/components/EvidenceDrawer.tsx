@@ -66,6 +66,8 @@ function getTopSpeciesPressures(state: SimulationState, speciesId: FishSpeciesId
     state.respiratoryDicUmolKg,
     state.sewageDischargeMode,
     state.elapsedDays,
+    state.recoveredOilKg ?? 0,
+    state.activeInterventions,
   );
   const sensitivity = FISH_SPECIES.find((s) => s.id === speciesId)?.sensitivity;
   if (!sensitivity) return [];
@@ -243,7 +245,13 @@ export function EvidenceDrawer({
     simulation.env.temperature,
     sector.baselineSalinity,
   ).carbonateSystem;
-  const doBreakdown = getDissolvedOxygenBreakdown(simulation.env, algae, simulation.sector);
+  const doBreakdown = getDissolvedOxygenBreakdown(
+    simulation.env,
+    algae,
+    simulation.sector,
+    simulation.biochemicalOxygenDemand,
+    simulation.sewageDischargeMode,
+  );
 
   const oilMassKg = Math.max(simulation.controls.oil, simulation.env.oil);
   const oilBudget = oilMassKg > 0 ? calculateOilFateBudget(oilMassKg, simulation.sector, Math.max(0.5, simulation.elapsedDays)) : null;

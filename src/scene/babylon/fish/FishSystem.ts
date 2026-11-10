@@ -47,11 +47,24 @@ import {
   sub,
   type Vec3Tuple,
 } from './steering';
-import { createFishMeshes, FISH_VISUALS, type FishMeshSet, type FishVisualDefinition } from './species';
+import {
+  createFishMeshes,
+  FISH_ECOLOGY,
+  FISH_VISUALS,
+  type FishMeshSet,
+  type FishVisualDefinition,
+} from './species';
 
-export type FishDeathStage = 'alive' | 'sinking' | 'bottom' | 'repopulating';
-export type FishBehavior = 'school' | 'nibble' | 'hide' | 'hover' | 'wander' | 'dart';
-export type FishSocialRole = 'school' | 'solitary' | 'territorial';
+type FishDeathStage = 'alive' | 'sinking' | 'bottom' | 'repopulating';
+type FishBehavior =
+  | 'school'
+  | 'nibble'
+  | 'hide'
+  | 'hover'
+  | 'wander'
+  | 'dart'
+  | 'flee';
+type FishSocialRole = 'school' | 'solitary' | 'territorial';
 
 export interface FishDiagnostic {
   species: FishSpeciesId;
@@ -70,6 +83,10 @@ export interface FishDiagnostic {
   behavior: FishBehavior;
   /** Intensidade da bicada no coral (0..1). */
   nibble: number;
+  /** Velocidade escalar atual no espaço normalizado. */
+  speed?: number;
+  /** Quantidade de vizinhos detectados no raio de percepção. */
+  neighborsCount?: number;
   /** Ponto-alvo da interação atual (null quando apenas nadando). */
   behaviorTarget: Vec3Tuple | null;
 }
@@ -93,6 +110,9 @@ interface FishAgent {
   scared: boolean;
   behaviorTimer: number;
   behaviorCooldown: number;
+  minDwellTimer: number;
+  decisionTimer: number;
+  neighborsCount: number;
   behaviorTarget: Vec3Tuple | null;
   behaviorObstacle: ScreenObstacle | null;
   nibble: number;
@@ -115,6 +135,7 @@ interface FishAgent {
   previousY: number;
   previousZ: number;
   screenV: number;
+  currentQuat: Quaternion;
   diagnostic: FishDiagnostic | null;
 }
 
@@ -146,6 +167,7 @@ export interface FishEnvironment {
 
 export interface FishSystem {
   readonly meshes: AbstractMesh[];
+  readonly shadowCasters: readonly AbstractMesh[];
   readonly fishes: FishDiagnostic[];
   layout(frame: DioramaFrame): void;
   update(
@@ -159,9 +181,18 @@ export interface FishSystem {
 }
 
 const SPECIES_ORDER: FishSpeciesId[] = ['blue-tang', 'sergeant-major', 'parrotfish'];
-const FISH_FLOOR_Y = -7.3;
+/** Topo da coluna útil: ligeiramente abaixo da superfície para evitar corte da nadadeira. */
 const FISH_SURFACE_Y = -0.7;
+const DEFAULT_FLOOR_CLEARANCE_M = 0.54;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+interface FishColumn {
+  x: number;
+  z: number;
+  relZ: number;
+  floorY: number;
+  spanY: number;
+}
 
 function writeIdentity(matrices: Float32Array, index: number): void {
   const offset = index * 16;
@@ -190,12 +221,26 @@ function createAgent(
   const ringRadius = Math.sqrt((localIndex + 0.5) / count);
   const angle = localIndex * GOLDEN_ANGLE;
 
-  // Assento em fita alongada para membros de cardume
-  const seat: Vec3Tuple = [
-    Math.cos(angle) * (0.28 + 0.72 * ringRadius) * definition.spread[0] * 0.95,
-    Math.sin(angle * 1.17) * (0.28 + 0.72 * ringRadius) * definition.spread[1] * 1.15,
-    (0.5 - progress) * 0.17 + Math.cos(angle * 0.73) * definition.spread[2] * 0.35,
-  ];
+  let seat: Vec3Tuple;
+  if (definition.id === 'blue-tang') {
+    // Cirurgiões-azuis: distribuição volumétrica 3D (casca + núcleo elipsoidal) com espaçamento variável
+    const phi = Math.acos(1 - 2 * ((localIndex + 0.5) / count));
+    const theta = angle;
+    const r = Math.cbrt((localIndex + 0.35) / count) * (0.55 + random() * 0.45);
+    seat = [
+      Math.sin(phi) * Math.cos(theta) * definition.spread[0] * r * 1.35,
+      Math.cos(phi) * definition.spread[1] * r * 1.35,
+      Math.sin(phi) * Math.sin(theta) * definition.spread[2] * r * 1.45,
+    ];
+  } else {
+    // Sargentinhos: formação compacta escalonada
+    const zOffset = (0.5 - progress) * definition.spread[2] * 2.0;
+    seat = [
+      Math.cos(angle) * (0.28 + 0.72 * ringRadius) * definition.spread[0],
+      Math.sin(angle * 1.15) * (0.28 + 0.72 * ringRadius) * definition.spread[1],
+      zOffset + Math.cos(angle * 0.7) * definition.spread[2] * 0.45,
+    ];
+  }
   const wobble = localIndex * 0.52 + random() * 0.6;
   let point: Vec3Tuple;
   let velocity: Vec3Tuple;
@@ -244,6 +289,9 @@ function createAgent(
     scared: false,
     behaviorTimer: 0,
     behaviorCooldown: 2.5 + random() * 6.5,
+    minDwellTimer: 0,
+    decisionTimer: random() * 0.5,
+    neighborsCount: 0,
     behaviorTarget: null,
     behaviorObstacle: null,
     nibble: 0,
@@ -266,6 +314,7 @@ function createAgent(
     previousY: 0,
     previousZ: 0,
     screenV: 0.5,
+    currentQuat: Quaternion.Identity(),
     diagnostic: null,
   };
 }
@@ -281,6 +330,7 @@ export function createFishSystem(
   const allAgents: Array<{ agent: FishAgent; definition: FishVisualDefinition; school: SchoolRuntime | null }> = [];
   const diagnostics: FishDiagnostic[] = [];
 
+  const fishScale = Math.max(1, quality.fishScale);
   let frameRef: DioramaFrame | null = null;
   let schoolIdCounter = 0;
   let lastColorUpdate = -1;
@@ -289,6 +339,8 @@ export function createFishSystem(
 
   for (const species of SPECIES_ORDER) {
     const definition = FISH_VISUALS[species];
+    const ecology = FISH_ECOLOGY[species];
+    const isBlueTang = species === 'blue-tang';
     const count = quality.fishPopulation[species];
     const meshes = createFishMeshes(scene, definition);
     const group: SpeciesRuntime = {
@@ -311,10 +363,10 @@ export function createFishSystem(
     const baseBand: SchoolBand = {
       uMin: 0.1,
       uMax: 0.9,
-      elevationMin: 0.24,
-      elevationMax: 0.72,
-      depthMin: 0.3,
-      depthMax: 0.86,
+      elevationMin: ecology.elevationBand[0],
+      elevationMax: ecology.elevationBand[1],
+      depthMin: 0.28,
+      depthMax: 0.88,
     };
 
     for (let index = 0; index < definition.schools; index += 1) {
@@ -323,18 +375,25 @@ export function createFishSystem(
       const config: SchoolConfig = {
         band: { ...baseBand, depthMin, depthMax },
         speed: definition.cruiseSpeed,
-        aMax: definition.acceleration * 0.28,
-        turnMax: 1.15,
-        retargetMin: 7.5,
-        retargetMax: 14.5,
+        aMax: definition.acceleration * 0.32,
+        turnMax: isBlueTang ? 1.05 : 1.35,
+        retargetMin: isBlueTang ? 8.5 : 6.5,
+        retargetMax: isBlueTang ? 15.5 : 13.0,
         spreadU: definition.spread[0],
         spreadElevation: definition.spread[1],
         spreadDepth: definition.spread[2],
+        formationMode: isBlueTang ? 'cluster' : 'stream',
+        wavePropagationSpeed: ecology.wavePropagationSpeed,
       };
       const state = createSchoolState(random, config);
       const slotFraction = (index + 0.5) / Math.max(1, definition.schools);
       state.center[0] = clamp(0.18 + slotFraction * 0.64, config.band.uMin + 0.06, config.band.uMax - 0.06);
-      state.center[1] = clamp(0.34 + ((schoolIdCounter % 3) * 0.14) + (random() - 0.5) * 0.06, config.band.elevationMin + 0.05, config.band.elevationMax - 0.05);
+      const elevSpan = config.band.elevationMax - config.band.elevationMin;
+      state.center[1] = clamp(
+        config.band.elevationMin + elevSpan * (0.35 + (index * 0.3) + (random() - 0.5) * 0.12),
+        config.band.elevationMin + 0.04,
+        config.band.elevationMax - 0.04,
+      );
       state.center[2] = (depthMin + depthMax) * 0.5;
       const initialSign = schoolIdCounter % 2 === 0 ? 1 : -1;
       state.velocity[0] = initialSign * definition.cruiseSpeed * 0.92;
@@ -533,9 +592,14 @@ export function createFishSystem(
   const bendQuaternion = Quaternion.Identity();
   const nibbleQuaternion = Quaternion.Identity();
   const finalBodyQuaternion = Quaternion.Identity();
+  const scratchQuat1 = Quaternion.Identity();
   const tailOffset = new Vector3();
 
-  function configureBand(frame: DioramaFrame, depthLayer: number): SchoolBand {
+  function configureBand(
+    frame: DioramaFrame,
+    depthLayer: number,
+    speciesId: FishSpeciesId = 'blue-tang',
+  ): SchoolBand {
     // Margem horizontal folgada para manter os cardumes longe dos paredões laterais de rocha
     const margin = frame.profile.marginX + 0.048;
     const [depthMin, depthMax] = schoolDepthBand(
@@ -543,11 +607,18 @@ export function createFishSystem(
       frame.profile.fishDepthMax,
       depthLayer,
     );
+    const ecology = FISH_ECOLOGY[speciesId];
+    const elevMin = ecology.elevationBand[0];
+    const elevMax =
+      frame.profile.id === 'mobile'
+        ? Math.min(0.86, ecology.elevationBand[1] + 0.04)
+        : ecology.elevationBand[1];
+
     return {
       uMin: margin,
       uMax: 1 - margin,
-      elevationMin: 0.25,
-      elevationMax: frame.profile.id === 'mobile' ? 0.78 : 0.74,
+      elevationMin: elevMin,
+      elevationMax: elevMax,
       depthMin,
       depthMax,
     };
@@ -557,10 +628,11 @@ export function createFishSystem(
 
   function updateSchoolBands(frame: DioramaFrame): void {
     for (const school of schoolRuntime) {
-      const band = configureBand(frame, school.depthLayer);
+      const band = configureBand(frame, school.depthLayer, school.species);
       school.config.band = band;
       if (!hasLaidOutOnce) {
         school.state.center[2] = (band.depthMin + band.depthMax) * 0.5;
+        school.state.center[1] = (band.elevationMin + band.elevationMax) * 0.5;
       }
       school.state.center = clampPointToBand(school.state.center, band);
       school.state.target = clampPointToBand(school.state.target, band);
@@ -593,23 +665,42 @@ export function createFishSystem(
     hasLaidOutOnce = true;
   }
 
-  function floorElevationAt(frame: DioramaFrame, point: Vec3Tuple): number {
+  /**
+   * Converte a posição normalizada do peixe para o mundo e resolve o leito
+   * *local* sob ele. A elevação 0 é o sedimento naquele ponto; a elevação 1 é
+   * a superfície útil. Assim cada espécie mantém sua banda vertical mesmo sobre
+   * bancadas rasas, canais de 15 m e depressões.
+   */
+  function columnForPoint(frame: DioramaFrame, point: Vec3Tuple): FishColumn {
     const relZ = frame.relativeDepth(point[2]);
     const x = (point[0] * 2 - 1) * relZ * frame.tanHalfFov * frame.aspect;
     const z = frame.camZ + relZ;
-    const seabed = environment.seabedAt(x, z);
-    // Folga mínima de 0.54m acima das ondulações da areia para nenhum peixe raspar no fundo
-    const elevation = (seabed + 0.54 - FISH_FLOOR_Y) / (FISH_SURFACE_Y - FISH_FLOOR_Y);
-    return clamp(elevation, 0.14, 0.86);
+    const floorY = Math.min(FISH_SURFACE_Y - 0.2, environment.seabedAt(x, z));
+    return { x, z, relZ, floorY, spanY: FISH_SURFACE_Y - floorY };
   }
 
-  function worldForPoint(frame: DioramaFrame, point: Vec3Tuple): { x: number; y: number; z: number; relZ: number } {
-    const relZ = frame.relativeDepth(point[2]);
+  function floorElevationAt(
+    frame: DioramaFrame,
+    point: Vec3Tuple,
+    clearanceM = DEFAULT_FLOOR_CLEARANCE_M,
+  ): number {
+    const { spanY } = columnForPoint(frame, point);
+    // A folga é convertida para elevação local (0 = leito). Corais, rochas e
+    // ondulações de areia nunca são atravessados, independentemente da cota.
+    return clamp(clearanceM / Math.max(1e-4, spanY), 0.02, 0.82);
+  }
+
+  function worldForPoint(
+    frame: DioramaFrame,
+    point: Vec3Tuple,
+  ): { x: number; y: number; z: number; relZ: number; spanY: number } {
+    const column = columnForPoint(frame, point);
     return {
-      x: (point[0] * 2 - 1) * relZ * frame.tanHalfFov * frame.aspect,
-      y: FISH_FLOOR_Y + clamp(point[1]) * (FISH_SURFACE_Y - FISH_FLOOR_Y),
-      z: frame.camZ + relZ,
-      relZ,
+      x: column.x,
+      y: column.floorY + clamp(point[1]) * column.spanY,
+      z: column.z,
+      relZ: column.relZ,
+      spanY: column.spanY,
     };
   }
 
@@ -654,9 +745,9 @@ export function createFishSystem(
 
   function updateAgentBodyRadii(frame: DioramaFrame, agent: FishAgent, definition: FishVisualDefinition): number {
     const halfWidth = Math.max(1e-4, frame.halfWidthAtDepth(agent.point[2]));
-    const spanY = Math.max(1e-4, FISH_SURFACE_Y - FISH_FLOOR_Y);
+    const spanY = Math.max(1e-4, columnForPoint(frame, agent.point).spanY);
     const spanZ = Math.max(1e-4, frame.profile.zFar - frame.profile.zNear);
-    const bodyLen = definition.length * agent.size;
+    const bodyLen = definition.length * agent.size * fishScale;
 
     // Raios elípticos proporcionais à geometria 3D real do corpo (fino na vertical e lateral)
     agent.bodyRadiusU = clamp((bodyLen * 0.34) / halfWidth, 0.006, 0.032);
@@ -666,12 +757,7 @@ export function createFishSystem(
   }
 
   /**
-   * Aciona um comportamento contextual inteligente:
-   *  - Quando `scared = true` (susto por sombra/onda ou agitação): o peixe corre
-   *    para se esconder dentro/ao lado do coral mais próximo ou atrás de uma rocha;
-   *  - Quando calmo: o peixe-papagaio (e ocasionalmente o cirurgião-azul) vai
-   *    pastar na coroa de um coral vivo (`nibble`), enquanto sargentos e outros
-   *    exploram abrigos em corais e rochas (`hide`).
+   * Aciona um comportamento contextual de susto/abrigo ou pastagem.
    */
   function beginBehavior(agent: FishAgent, bodyRadius: number, forceScared = false): void {
     if (forceScared) {
@@ -681,6 +767,7 @@ export function createFishSystem(
         agent.scared = true;
         agent.behaviorObstacle = shelter;
         agent.behaviorTimer = 2.6 + random() * 2.2;
+        agent.minDwellTimer = 1.8;
         agent.behaviorTarget = reefInteractionTarget(shelter, 'hide', agent.point);
         agent.nibble = 0;
         return;
@@ -694,6 +781,7 @@ export function createFishSystem(
         agent.scared = false;
         agent.behaviorObstacle = coral;
         agent.behaviorTimer = 3.6 + random() * 3.0;
+        agent.minDwellTimer = 2.4;
         agent.behaviorTarget = reefInteractionTarget(coral, 'nibble', agent.point);
         agent.nibble = 0;
         return;
@@ -706,6 +794,7 @@ export function createFishSystem(
       agent.scared = random() < 0.35;
       agent.behaviorObstacle = shelter;
       agent.behaviorTimer = 2.8 + random() * 2.6;
+      agent.minDwellTimer = 2.0;
       agent.behaviorTarget = reefInteractionTarget(shelter, 'hide', agent.point);
       return;
     }
@@ -713,10 +802,19 @@ export function createFishSystem(
     agent.behaviorCooldown = 3.5 + random() * 6.5;
   }
 
-  function updateBehavior(
+  /**
+   * Máquina de estados hierárquica por prioridades com histerese (Etapa 5).
+   * Prioridade 1: FLEE (ameaça do barco ou sobressalto agudo);
+   * Prioridade 2: HIDE (busca de refúgio por estresse ou susto);
+   * Prioridade 3: DART (machos territoriais defendendo o recife);
+   * Prioridade 4: NIBBLE (pastagem em corais ou algas com bicadas rítmicas);
+   * Prioridade 5: SCHOOL / WANDER / HOVER (nado social em 3D, exploração ou flutuação).
+   */
+  function evaluateAgentState(
     agent: FishAgent,
+    definition: FishVisualDefinition,
     step: number,
-    bodyRadius: number,
+    boatBounds?: BoatHullBounds,
   ): void {
     if (agent.stage !== 'alive') {
       agent.behavior = 'school';
@@ -728,29 +826,139 @@ export function createFishSystem(
       return;
     }
 
-    if (agent.behavior === 'school') {
-      agent.behaviorCooldown -= step;
-      if (agent.behaviorCooldown <= 0) {
-        beginBehavior(agent, bodyRadius, false);
-      }
-    } else {
-      agent.behaviorTimer -= step;
-      if (agent.behaviorTimer <= 0 || !agent.behaviorTarget) {
-        agent.behavior = 'school';
-        agent.scared = false;
-        agent.behaviorTarget = null;
-        agent.behaviorObstacle = null;
-        agent.behaviorTimer = 0;
-        agent.behaviorCooldown = 4.0 + random() * 7.5;
+    agent.minDwellTimer = Math.max(0, agent.minDwellTimer - step);
+    agent.decisionTimer = Math.max(0, agent.decisionTimer - step);
+
+    // ── Prioridade 1: Fuga de Ameaças (Barco / Perturbação) ───────────
+    let boatThreat = false;
+    if (boatBounds && agent.hasPrevious) {
+      const dxB = agent.worldX - boatBounds.x;
+      const dzB = agent.worldZ - boatBounds.z;
+      const dyB = agent.worldY - (boatBounds.y - boatBounds.draft * 0.5);
+      if (
+        Math.abs(dxB) < boatBounds.halfLength * 1.9 &&
+        Math.abs(dzB) < boatBounds.halfLength * 1.9 &&
+        dyB > -3.5
+      ) {
+        const bCos = Math.cos(boatBounds.yaw);
+        const bSin = Math.sin(boatBounds.yaw);
+        const localLong = dxB * bSin + dzB * bCos;
+        const localLat = dxB * bCos - dzB * bSin;
+        const hullDist = Math.hypot(
+          localLong / Math.max(1, boatBounds.halfLength * 1.3),
+          localLat / Math.max(1, boatBounds.halfBeam * 1.5),
+        );
+        if (hullDist < 1.45) {
+          boatThreat = true;
+        }
       }
     }
 
-    if (agent.behavior === 'nibble' && agent.behaviorTarget) {
-      const distance = length(sub(agent.behaviorTarget, agent.point));
-      const target = distance < 0.065 ? 1 : 0;
-      agent.nibble += (target - agent.nibble) * Math.min(1, step * 5.0);
-    } else {
-      agent.nibble += (0 - agent.nibble) * Math.min(1, step * 3.5);
+    if (boatThreat) {
+      if (agent.behavior !== 'flee') {
+        agent.behavior = 'flee';
+        agent.scared = true;
+        agent.behaviorTimer = 2.2 + random() * 1.4;
+        agent.minDwellTimer = 1.8;
+      }
+    }
+
+    if (agent.behavior === 'flee') {
+      agent.behaviorTimer -= step;
+      if (agent.behaviorTimer <= 0 && !boatThreat) {
+        agent.behavior =
+          agent.socialRole === 'school'
+            ? 'school'
+            : agent.socialRole === 'territorial'
+              ? 'hover'
+              : 'wander';
+        agent.scared = false;
+        agent.minDwellTimer = 1.0;
+      }
+      agent.nibble += (0 - agent.nibble) * Math.min(1, step * 4);
+      return;
+    }
+
+    // ── Prioridade 2: Refúgio em Corais/Rochas (Hide) ─────────────────
+    if (agent.behavior === 'hide') {
+      agent.behaviorTimer -= step;
+      if (agent.behaviorTimer <= 0 || !agent.behaviorTarget) {
+        agent.behavior =
+          agent.socialRole === 'school'
+            ? 'school'
+            : agent.socialRole === 'territorial'
+              ? 'hover'
+              : 'wander';
+        agent.scared = false;
+        agent.behaviorTarget = null;
+        agent.behaviorObstacle = null;
+        agent.minDwellTimer = 1.5;
+        agent.behaviorCooldown = 4.0 + random() * 6.0;
+      }
+      agent.nibble += (0 - agent.nibble) * Math.min(1, step * 4);
+      return;
+    }
+
+    // ── Prioridade 3: Defesa Territorial (Dart / Bote) ────────────────
+    if (agent.socialRole === 'territorial') {
+      agent.dartTimer -= step;
+      if (agent.behavior === 'dart') {
+        agent.behaviorTimer -= step;
+        if (agent.behaviorTimer <= 0) {
+          agent.behavior = 'hover';
+          agent.minDwellTimer = 1.5;
+        }
+      } else if (agent.dartTimer <= 0) {
+        agent.behavior = 'dart';
+        agent.behaviorTimer = 0.45;
+        agent.minDwellTimer = 0.45;
+        agent.dartTimer = 5.0 + random() * 6.5;
+        const dartDir = agent.dir[0] >= 0 ? 1 : -1;
+        agent.velocity = [dartDir * 0.058, (random() - 0.4) * 0.015, (random() - 0.5) * 0.022];
+      }
+      return;
+    }
+
+    // ── Prioridade 4: Pastagem (Nibble) ───────────────────────────────
+    if (agent.behavior === 'nibble') {
+      agent.behaviorTimer -= step;
+      if (agent.behaviorTimer <= 0 || !agent.behaviorTarget) {
+        agent.behavior = agent.socialRole === 'school' ? 'school' : 'wander';
+        agent.behaviorTarget = null;
+        agent.behaviorObstacle = null;
+        agent.behaviorCooldown =
+          agent.species === 'parrotfish' ? 3.0 + random() * 4.0 : 6.0 + random() * 8.0;
+        agent.minDwellTimer = 2.0;
+      } else {
+        const dist = length(sub(agent.behaviorTarget, agent.point));
+        const atTarget = dist < 0.055 ? 1 : 0;
+        agent.nibble += (atTarget - agent.nibble) * Math.min(1, step * 4.5);
+      }
+      return;
+    }
+
+    agent.nibble += (0 - agent.nibble) * Math.min(1, step * 4);
+
+    // ── Prioridade 5: Linha de Base / Decisões Periódicas ─────────────
+    if (agent.minDwellTimer <= 0 && agent.decisionTimer <= 0) {
+      agent.decisionTimer = 0.5 + random() * 0.5;
+      agent.behaviorCooldown -= step * 3;
+
+      if (agent.behaviorCooldown <= 0 && screenObstacles.length > 0) {
+        if (agent.species === 'parrotfish' || (agent.species === 'blue-tang' && random() < 0.35)) {
+          const kind = agent.species === 'parrotfish' ? 'coral' : 'rock';
+          const obs = nearestReefObstacle(agent.point, screenObstacles, kind, 7.5, agent.bodyRadiusU);
+          if (obs) {
+            agent.behavior = 'nibble';
+            agent.behaviorObstacle = obs;
+            agent.behaviorTarget = reefInteractionTarget(obs, 'nibble', agent.point);
+            agent.behaviorTimer =
+              agent.species === 'parrotfish' ? 3.8 + random() * 3.2 : 2.8 + random() * 2.2;
+            agent.minDwellTimer = 2.5;
+            return;
+          }
+        }
+      }
     }
   }
 
@@ -780,8 +988,9 @@ export function createFishSystem(
   }
 
   /**
-   * Calcula forças Boids 3D via Spatial Hashing O(N) com ponderação de Campo de
-   * Visão (FOV ~ 290°, ponto cego caudal) + Separação + Alinhamento + Coesão.
+   * Calcula forças Boids 3D via Spatial Hashing O(N) com percepção biológica:
+   * Campo de Visão por espécie (FOV ~ 270°-290°, ponto cego caudal) + Separação +
+   * Alinhamento suave com limite de taxa angular + Coesão dinâmica.
    */
   function computeBoidsForces(): void {
     rebuildSpatialGrid();
@@ -791,11 +1000,15 @@ export function createFishSystem(
       a.boidsForce[0] = 0;
       a.boidsForce[1] = 0;
       a.boidsForce[2] = 0;
+      a.neighborsCount = 0;
     }
 
     for (let i = 0; i < allAgents.length; i += 1) {
       const a = allAgents[i].agent;
       if (a.stage !== 'alive' && a.stage !== 'repopulating') continue;
+
+      const aEcology = FISH_ECOLOGY[a.species];
+      const cosHalfFov = Math.cos((aEcology.fieldOfViewDeg * 0.5 * Math.PI) / 180);
 
       const cu = Math.min(GRID_U - 1, Math.max(0, Math.floor(a.point[0] * GRID_U)));
       const ce = Math.min(GRID_E - 1, Math.max(0, Math.floor(a.point[1] * GRID_E)));
@@ -808,6 +1021,7 @@ export function createFishSystem(
       let cohE = 0;
       let cohD = 0;
       let neighborWeightSum = 0;
+      let localNeighbors = 0;
 
       const aSpeed = Math.hypot(a.velocity[0], a.velocity[1], a.velocity[2]);
       const fwdU = aSpeed > 1e-5 ? a.velocity[0] / aSpeed : 0;
@@ -833,7 +1047,10 @@ export function createFishSystem(
                   a.schoolId === b.schoolId &&
                   a.socialRole === 'school' &&
                   b.socialRole === 'school';
-                const sepMultiplier = sameSchool ? 1.55 : 2.35;
+
+                // Durante fuga (flee), o cardume se comprime mais sem sobrepor corpos
+                const compressFactor = (a.behavior === 'flee' || b.behavior === 'flee') ? 0.75 : 1.0;
+                const sepMultiplier = (sameSchool ? 1.6 : 2.4) * compressFactor;
                 const radU = (a.bodyRadiusU + b.bodyRadiusU) * sepMultiplier;
                 const radE = (a.bodyRadiusE + b.bodyRadiusE) * sepMultiplier;
                 const radD = (a.bodyRadiusD + b.bodyRadiusD) * sepMultiplier;
@@ -843,21 +1060,22 @@ export function createFishSystem(
                 const dd = a.point[2] - b.point[2];
 
                 if (
-                  Math.abs(du) <= radU * 1.6 &&
-                  Math.abs(de) <= radE * 1.6 &&
-                  Math.abs(dd) <= radD * 1.6
+                  Math.abs(du) <= radU * 1.8 &&
+                  Math.abs(de) <= radE * 1.8 &&
+                  Math.abs(dd) <= radD * 1.8
                 ) {
                   const su = du / Math.max(1e-4, radU);
                   const se = de / Math.max(1e-4, radE);
                   const sd = dd / Math.max(1e-4, radD);
                   const dist = Math.hypot(su, se, sd);
 
+                  // 1. Separação suave sem vibrações
                   if (dist < 1 && dist > 1e-5) {
-                    const strength = Math.pow(1 - dist, 1.5) * (sameSchool ? 0.024 : 0.045);
+                    const strength = Math.pow(1 - dist, 1.4) * (sameSchool ? 0.026 : 0.048);
                     const inv = 1 / dist;
                     const fx = su * inv * strength;
                     const fy = se * inv * strength * 0.55;
-                    const fz = sd * inv * strength * 0.35;
+                    const fz = sd * inv * strength * 0.4;
 
                     a.boidsForce[0] += fx;
                     a.boidsForce[1] += fy;
@@ -868,23 +1086,42 @@ export function createFishSystem(
                     b.boidsForce[2] -= fz;
                   }
 
-                  if (sameSchool && dist < 1.6 && dist > 1e-5) {
-                    // Ponderação por Campo de Visão (FOV ~ 290°: cos > -0.58)
-                    const invD = 1 / dist;
-                    const cosAngle = (-su * fwdU - se * fwdE - sd * fwdD) * invD;
-                    const fovWeight = cosAngle > -0.58 ? 1.0 : 0.25;
+                  // 2. Alinhamento e Coesão com Campo de Visão (FOV) e Ponto Cego Caudal
+                  if (sameSchool && dist < 1.8 && dist > 1e-5) {
+                    localNeighbors += 1;
+                    b.neighborsCount += 1;
 
-                    alignVx += b.velocity[0] * fovWeight;
-                    alignVy += b.velocity[1] * fovWeight;
-                    alignVz += b.velocity[2] * fovWeight;
-                    cohU += b.point[0] * fovWeight;
-                    cohE += b.point[1] * fovWeight;
-                    cohD += b.point[2] * fovWeight;
-                    neighborWeightSum += fovWeight;
+                    // Ponto de vista de 'a' olhando para 'b'
+                    const toB_u = -du;
+                    const toB_e = -de;
+                    const toB_d = -dd;
+                    const invDist = 1 / Math.max(1e-5, Math.hypot(toB_u, toB_e, toB_d));
+                    const dotA = (toB_u * fwdU + toB_e * fwdE + toB_d * fwdD) * invDist;
+                    const fovWeightA = dotA >= cosHalfFov ? 1.0 : 0.12;
 
-                    b.boidsForce[0] += (a.velocity[0] - b.velocity[0]) * 0.065 * fovWeight;
-                    b.boidsForce[1] += (a.velocity[1] - b.velocity[1]) * 0.055 * fovWeight;
-                    b.boidsForce[2] += (a.velocity[2] - b.velocity[2]) * 0.045 * fovWeight;
+                    alignVx += b.velocity[0] * fovWeightA;
+                    alignVy += b.velocity[1] * fovWeightA;
+                    alignVz += b.velocity[2] * fovWeightA;
+                    cohU += b.point[0] * fovWeightA;
+                    cohE += b.point[1] * fovWeightA;
+                    cohD += b.point[2] * fovWeightA;
+                    neighborWeightSum += fovWeightA;
+
+                    // Ponto de vista de 'b' olhando para 'a'
+                    const bSpeed = Math.hypot(b.velocity[0], b.velocity[1], b.velocity[2]);
+                    const bFwdU = bSpeed > 1e-5 ? b.velocity[0] / bSpeed : 0;
+                    const bFwdE = bSpeed > 1e-5 ? b.velocity[1] / bSpeed : 0;
+                    const bFwdD = bSpeed > 1e-5 ? b.velocity[2] / bSpeed : 1;
+                    const dotB = (du * bFwdU + de * bFwdE + dd * bFwdD) * invDist;
+                    const fovWeightB = dotB >= cosHalfFov ? 1.0 : 0.12;
+
+                    b.boidsForce[0] += (a.velocity[0] - b.velocity[0]) * 0.075 * fovWeightB;
+                    b.boidsForce[1] += (a.velocity[1] - b.velocity[1]) * 0.055 * fovWeightB;
+                    b.boidsForce[2] += (a.velocity[2] - b.velocity[2]) * 0.05 * fovWeightB;
+
+                    b.boidsForce[0] += (a.point[0] - b.point[0]) * 0.038 * fovWeightB;
+                    b.boidsForce[1] += (a.point[1] - b.point[1]) * 0.028 * fovWeightB;
+                    b.boidsForce[2] += (a.point[2] - b.point[2]) * 0.025 * fovWeightB;
                   }
                 }
               }
@@ -894,11 +1131,12 @@ export function createFishSystem(
         }
       }
 
+      a.neighborsCount += localNeighbors;
       if (neighborWeightSum > 0) {
         const invW = 1 / neighborWeightSum;
-        a.boidsForce[0] += (alignVx * invW - a.velocity[0]) * 0.12 + (cohU * invW - a.point[0]) * 0.055;
-        a.boidsForce[1] += (alignVy * invW - a.velocity[1]) * 0.1 + (cohE * invW - a.point[1]) * 0.045;
-        a.boidsForce[2] += (alignVz * invW - a.velocity[2]) * 0.08 + (cohD * invW - a.point[2]) * 0.035;
+        a.boidsForce[0] += (alignVx * invW - a.velocity[0]) * 0.13 + (cohU * invW - a.point[0]) * 0.058;
+        a.boidsForce[1] += (alignVy * invW - a.velocity[1]) * 0.10 + (cohE * invW - a.point[1]) * 0.046;
+        a.boidsForce[2] += (alignVz * invW - a.velocity[2]) * 0.09 + (cohD * invW - a.point[2]) * 0.038;
       }
     }
   }
@@ -1027,6 +1265,10 @@ export function createFishSystem(
     agent.scared = false;
     agent.behaviorTimer = 0;
     agent.behaviorCooldown = 2.0 + random() * 6.5;
+    agent.minDwellTimer = 0;
+    agent.decisionTimer = 0;
+    agent.neighborsCount = 0;
+    agent.currentQuat.copyFromFloats(0, 0, 0, 1);
     agent.behaviorTarget = null;
     agent.behaviorObstacle = null;
     agent.nibble = 0;
@@ -1036,8 +1278,11 @@ export function createFishSystem(
   const schoolsById = new Map<number, SchoolRuntime>();
   for (const school of schoolRuntime) schoolsById.set(school.id, school);
 
+  const fishMeshes = speciesRuntime.flatMap((group) => [group.meshes.body, group.meshes.tail]);
+
   return {
-    meshes: speciesRuntime.flatMap((group) => [group.meshes.body, group.meshes.tail]),
+    meshes: fishMeshes,
+    shadowCasters: fishMeshes,
     fishes: diagnostics,
 
     layout(frame: DioramaFrame): void {
@@ -1046,7 +1291,6 @@ export function createFishSystem(
       screenObstacles = projectReefObstacles(
         frame,
         environment.obstacles,
-        FISH_FLOOR_Y,
         FISH_SURFACE_Y,
         0.995,
       );
@@ -1091,11 +1335,13 @@ export function createFishSystem(
             frame.profile.fishDepthMin + 0.04,
             frame.profile.fishDepthMax - 0.04,
           );
-          const floorElev = floorElevationAt(frame, [u, 0.3, depth]);
+          const clearance = FISH_ECOLOGY[agent.species].minClearanceM;
+          const floorElev = floorElevationAt(frame, [u, 0.3, depth], clearance);
+          const [bandMin, bandMax] = FISH_ECOLOGY[agent.species].elevationBand;
           const elev =
             agent.species === 'parrotfish'
-              ? clamp(floorElev + 0.06 + (solitaryIdx % 3) * 0.06, 0.22, 0.48)
-              : clamp(floorElev + 0.15 + (solitaryIdx % 4) * 0.08, 0.28, 0.68);
+              ? clamp(floorElev + 0.04 + (solitaryIdx % 3) * 0.04, bandMin, bandMax)
+              : clamp(floorElev + 0.08 + (solitaryIdx % 4) * 0.05, bandMin, bandMax);
           agent.point = [u, elev, depth];
           const dirSign = solitaryIdx % 2 === 0 ? 1 : -1;
           agent.velocity = [dirSign * entry.definition.cruiseSpeed, 0, 0];
@@ -1153,7 +1399,11 @@ export function createFishSystem(
         );
         const minSchoolElev = Math.max(
           school.config.band.elevationMin,
-          floorElevationAt(frame, school.state.center) + 0.08,
+          floorElevationAt(
+            frame,
+            school.state.center,
+            FISH_ECOLOGY[school.species].minClearanceM,
+          ) + 0.08,
         );
         if (school.state.center[1] < minSchoolElev) {
           school.state.center[1] = minSchoolElev;
@@ -1198,11 +1448,10 @@ export function createFishSystem(
         const lethal = state.dissolvedOxygen < 2.2 || state.health.fish < 5 || speciesHealth < 0.06;
         const distressed = state.dissolvedOxygen < 3.4 || state.health.fish < 24 || speciesHealth < 0.2;
         const recovered = state.dissolvedOxygen > 4.3 && state.health.fish > 38 && speciesHealth > 0.28;
-        const recoveryBoost =
-          clamp(state.env.recovery / 100) +
-          clamp((state.restoration?.restoredCoverPercent ?? 0) / 100) * 0.5;
+        // Só intervenções reais de restauração liberam a repopulação visual.
+        const restorationBoost = clamp((state.restoration?.restoredCoverPercent ?? 0) / 100) * 0.5;
 
-        const globalBand: SchoolBand = configureBand(frame, 1);
+        const globalBand: SchoolBand = configureBand(frame, 1, definition.id);
 
         for (let index = 0; index < group.agents.length; index += 1) {
           const agent = group.agents[index];
@@ -1219,7 +1468,7 @@ export function createFishSystem(
             }
           } else if (agent.stage === 'sinking') {
             agent.stageElapsed += step;
-            const floor = floorElevationAt(frame, agent.point);
+            const floor = floorElevationAt(frame, agent.point, 0.12);
             agent.point[1] = Math.max(floor + 0.004, agent.point[1] - step * 0.22);
             agent.roll += (Math.PI - agent.roll) * Math.min(1, step * 3);
             if (agent.point[1] <= floor + 0.008 || agent.stageElapsed > 4.5) {
@@ -1228,9 +1477,9 @@ export function createFishSystem(
             }
           } else if (agent.stage === 'bottom') {
             agent.stageElapsed += step;
-            agent.point[1] = floorElevationAt(frame, agent.point) + 0.004;
+            agent.point[1] = floorElevationAt(frame, agent.point, 0.12) + 0.004;
             agent.roll = Math.PI;
-            if (recovered && recoveryBoost > 0.04 && agent.stageElapsed > 1.2) {
+            if (recovered && restorationBoost > 0.04 && agent.stageElapsed > 1.2) {
               agent.stage = 'repopulating';
               agent.stageElapsed = 0;
               if (school && agent.socialRole === 'school') {
@@ -1371,7 +1620,11 @@ export function createFishSystem(
                         currentBand.depthMin,
                         currentBand.depthMax,
                       );
-                      const floorE = floorElevationAt(frame, [targetU, 0.3, targetD]);
+                      const floorE = floorElevationAt(
+                        frame,
+                        [targetU, 0.3, targetD],
+                        FISH_ECOLOGY[agent.species].minClearanceM,
+                      );
                       agent.solitaryTarget = [targetU, clamp(floorE + 0.06 + random() * 0.14, 0.22, 0.48), targetD];
                     }
                   } else {
@@ -1400,7 +1653,11 @@ export function createFishSystem(
                         currentBand.depthMin,
                         currentBand.depthMax,
                       );
-                      const floorE = floorElevationAt(frame, [targetU, 0.3, targetD]);
+                      const floorE = floorElevationAt(
+                        frame,
+                        [targetU, 0.3, targetD],
+                        FISH_ECOLOGY[agent.species].minClearanceM,
+                      );
                       agent.solitaryTarget = [targetU, clamp(floorE + 0.12 + random() * 0.22, 0.26, 0.68), targetD];
                     }
                   }
@@ -1459,7 +1716,7 @@ export function createFishSystem(
                     beginBehavior(agent, bodyRadius, true);
                   }
                 }
-                updateBehavior(agent, step, bodyRadius);
+                evaluateAgentState(agent, definition, step, boatBounds);
               }
 
               const seat = formationPosition(
@@ -1471,11 +1728,20 @@ export function createFishSystem(
                 currentBand,
                 school.state,
               );
-              seat[1] = Math.max(seat[1], floorElevationAt(frame, seat) + 0.025);
+              seat[1] = Math.max(
+                seat[1],
+                floorElevationAt(
+                  frame,
+                  seat,
+                  FISH_ECOLOGY[agent.species].minClearanceM,
+                ) + 0.025,
+              );
 
               millBlend = school.state.millBlend ?? (school.state.mode === 'mill' ? 1 : 0);
               let targetPoint: Vec3Tuple = seat;
-              if (millBlend < 0.45 && agent.localIndex > 0) {
+
+              // Cadeia de seguimento: SOMENTE para sargentinhos em 'stream' mode, NUNCA para nuvens 3D de cirurgião!
+              if (school.state.mode !== 'cluster' && millBlend < 0.45 && agent.localIndex > 0) {
                 const predecessor = school.agents[agent.localIndex - 1];
                 if (
                   predecessor &&
@@ -1488,11 +1754,11 @@ export function createFishSystem(
                       ? scale(predecessor.velocity, -1 / predSpeed)
                       : [school.state.velocity[0] >= 0 ? -1 : 1, 0, 0];
                   const followSpot: Vec3Tuple = [
-                    predecessor.point[0] + trailDir[0] * agent.bodyRadiusU * 1.85 + (agent.seat[0] - predecessor.seat[0]) * 0.45,
-                    predecessor.point[1] + (agent.seat[1] - predecessor.seat[1]) * 0.55,
-                    predecessor.point[2] + trailDir[2] * agent.bodyRadiusD * 1.4 + (agent.seat[2] - predecessor.seat[2]) * 0.25,
+                    predecessor.point[0] + trailDir[0] * agent.bodyRadiusU * 1.6 + (agent.seat[0] - predecessor.seat[0]) * 0.7,
+                    predecessor.point[1] + (agent.seat[1] - predecessor.seat[1]) * 0.8,
+                    predecessor.point[2] + trailDir[2] * agent.bodyRadiusD * 1.2 + (agent.seat[2] - predecessor.seat[2]) * 0.6,
                   ];
-                  const chainWeight = 0.26 * (1 - millBlend);
+                  const chainWeight = 0.16 * (1 - millBlend);
                   targetPoint = [
                     seat[0] * (1 - chainWeight) + followSpot[0] * chainWeight,
                     seat[1] * (1 - chainWeight) + followSpot[1] * chainWeight,
@@ -1561,15 +1827,21 @@ export function createFishSystem(
                 }
               }
 
+              if (agent.behavior === 'flee') {
+                desired[1] -= 0.07;
+              }
+
               maxSpeed =
                 definition.maxSpeed *
-                (agent.scared ? 1.32 : 1.0) *
+                (agent.behavior === 'flee' ? 1.55 : agent.scared ? 1.32 : 1.0) *
                 (1 + (1 - speciesHealth) * 0.22 + thermalStress * 0.15) *
                 (1 - hypoxia * 0.28);
               minSpeed =
-                agent.behavior !== 'school' && agent.behaviorTarget && length(sub(agent.behaviorTarget, agent.point)) < 0.045
-                  ? definition.cruiseSpeed * 0.16
-                  : definition.cruiseSpeed * 0.34;
+                agent.behavior === 'flee'
+                  ? definition.cruiseSpeed * 0.95
+                  : agent.behavior !== 'school' && agent.behaviorTarget && length(sub(agent.behaviorTarget, agent.point)) < 0.045
+                    ? definition.cruiseSpeed * 0.16
+                    : definition.cruiseSpeed * 0.34;
             }
 
             // Acoplamento suave com o campo de correntes marinhas 3D
@@ -1629,8 +1901,8 @@ export function createFishSystem(
               agent.velocity,
               desired,
               step,
-              definition.acceleration * (agent.scared ? 1.55 : 1.0),
-              definition.turnRate * (agent.scared ? 1.4 : 1.0),
+              definition.acceleration * (agent.behavior === 'flee' ? 2.2 : agent.scared ? 1.55 : 1.0),
+              definition.turnRate * (agent.behavior === 'flee' ? 1.6 : agent.scared ? 1.4 : 1.0),
               minSpeed,
               maxSpeed,
             );
@@ -1659,7 +1931,11 @@ export function createFishSystem(
             resolveReefCollisions(agent.point, bodyRadius, screenObstacles, agent.velocity);
 
             const settled = clampPointToBand(agent.point, currentBand);
-            const minFloor = floorElevationAt(frame, settled);
+            const minFloor = floorElevationAt(
+              frame,
+              settled,
+              FISH_ECOLOGY[agent.species].minClearanceM,
+            );
             agent.point[0] = settled[0];
             agent.point[1] = Math.max(settled[1], minFloor);
             agent.point[2] = settled[2];
@@ -1702,7 +1978,14 @@ export function createFishSystem(
           // Garante após resolveFishOverlaps que nenhum peixe entrou em pedra ou areia
           if (alive || repopulating) {
             resolveReefCollisions(agent.point, agent.bodyRadiusU, screenObstacles, agent.velocity);
-            agent.point[1] = Math.max(agent.point[1], floorElevationAt(frame, agent.point));
+            agent.point[1] = Math.max(
+              agent.point[1],
+              floorElevationAt(
+                frame,
+                agent.point,
+                FISH_ECOLOGY[agent.species].minClearanceM,
+              ),
+            );
           }
 
           const world = worldForPoint(frame, agent.point);
@@ -1716,7 +1999,7 @@ export function createFishSystem(
           // Vetor de direção 3D cinemático (derivado da velocidade suavizada do agente no mundo 3D,
           // imune a micro-ajustes posicionais de colisão e calibrado contra escorço excessivo em Z)
           const metricScaleX = 2 * relZ * frame.tanHalfFov * frame.aspect;
-          const metricScaleY = FISH_SURFACE_Y - FISH_FLOOR_Y;
+          const metricScaleY = world.spanY;
           const metricScaleZ = (frame.profile.zFar - frame.profile.zNear) * 0.34;
 
           let vxWorld = agent.velocity[0] * metricScaleX;
@@ -1810,7 +2093,7 @@ export function createFishSystem(
           const scaleFromStage = repopulating
             ? 0.3 + 0.7 * clamp(agent.stageElapsed / 1.6)
             : 1;
-          const worldScale = definition.length * agent.size * scaleFromStage;
+          const worldScale = definition.length * agent.size * fishScale * scaleFromStage;
           scratchScale.setAll(worldScale);
 
           const forward = scratchForward;
@@ -1840,17 +2123,25 @@ export function createFishSystem(
           right.set(rx, ry, rz);
           up.set(ux, uy, uz);
 
-          Quaternion.RotationQuaternionFromAxisToRef(right, up, forward, bodyQuaternion);
+          Quaternion.RotationQuaternionFromAxisToRef(right, up, forward, scratchQuat1);
+          // Slerp suave da rotação para evitar qualquer estalo angular
+          if (agent.hasPrevious) {
+            Quaternion.SlerpToRef(agent.currentQuat, scratchQuat1, Math.min(1.0, step * definition.turnRate * 3.5), bodyQuaternion);
+          } else {
+            bodyQuaternion.copyFrom(scratchQuat1);
+          }
+          agent.currentQuat.copyFrom(bodyQuaternion);
+
           // Onda biomecânica em S: oscilação propulsiva sutil do tronco em fase com a cauda + curvatura da curva
           const bodySway = alive || repopulating ? Math.sin(agent.phase - 0.65) * 0.055 : 0;
-          const bendAngle = alive || repopulating ? agent.bend * 0.2 + bodySway : 0;
+          const bendAngle = alive || repopulating ? agent.bend * 0.22 + bodySway : 0;
           if (Math.abs(bendAngle) > 1e-5) {
             Quaternion.RotationAxisToRef(Vector3.UpReadOnly, bendAngle, bendQuaternion);
             bodyQuaternion.multiplyToRef(bendQuaternion, bodyQuaternion);
           }
 
           if (agent.nibble > 0.01) {
-            const peck = Math.sin(seconds * 11 + agent.phase * 2.3) * 0.22 * agent.nibble;
+            const peck = (Math.sin(seconds * 11 + agent.phase * 2.3) * 0.22 - 0.22) * agent.nibble;
             Quaternion.RotationAxisToRef(right, peck, nibbleQuaternion);
             nibbleQuaternion.multiplyToRef(bodyQuaternion, finalBodyQuaternion);
             bodyQuaternion.copyFrom(finalBodyQuaternion);
@@ -1863,10 +2154,12 @@ export function createFishSystem(
           tailOffset.set(0, 0, -0.5 * worldScale);
           tailOffset.rotateByQuaternionToRef(bodyQuaternion, scratchTailPosition);
           scratchTailPosition.addInPlace(scratchPosition);
+          const tailAmpMultiplier =
+            agent.behavior === 'flee' ? 1.45 : agent.behavior === 'hover' ? 0.42 : 1.0;
           const tailAngle =
             alive || repopulating
-              ? Math.sin(agent.phase - 1.35) * (0.36 + Math.min(0.28, length(agent.velocity) * 2.8)) +
-                agent.bend * 0.48
+              ? (Math.sin(agent.phase - 1.35) * (0.36 + Math.min(0.28, length(agent.velocity) * 2.8)) +
+                agent.bend * 0.48) * tailAmpMultiplier
               : agent.bend * 0.2;
           Quaternion.RotationAxisToRef(Vector3.UpReadOnly, tailAngle, bendQuaternion);
           bodyQuaternion.multiplyToRef(bendQuaternion, tailQuaternion);
@@ -1919,6 +2212,8 @@ export function createFishSystem(
     diagnostic.elevation = agent.point[1];
     diagnostic.behavior = agent.behavior;
     diagnostic.nibble = agent.nibble;
+    diagnostic.speed = length(agent.velocity);
+    diagnostic.neighborsCount = agent.neighborsCount;
     diagnostic.behaviorTarget = agent.behaviorTarget;
     diagnostic.position.u = agent.point[0];
     diagnostic.position.v = agent.screenV;

@@ -48,17 +48,19 @@ const MIN_RADIUS = 0.002;
 export function projectReefObstacles(
   frame: DioramaFrame,
   obstacles: readonly ReefObstacle[],
-  floorY: number,
   surfaceY: number,
   maxDepth = 0.98,
 ): ScreenObstacle[] {
   const result: ScreenObstacle[] = [];
-  const spanY = Math.max(1e-4, surfaceY - floorY);
   const spanZ = Math.max(1e-4, frame.profile.zFar - frame.profile.zNear);
 
   for (const obstacle of obstacles) {
-    const height = Math.max(0.2, obstacle.topY - obstacle.baseY);
-    const midY = obstacle.baseY + height * 0.55;
+    // O piso local do obstáculo é a própria base: cada coral/rocha cresce do
+    // leito em que está assentado, não de uma cota fixa do diorama.
+    const localFloorY = Math.min(surfaceY - 0.2, obstacle.baseY);
+    const spanY = Math.max(1e-4, surfaceY - localFloorY);
+    const height = Math.max(0.2, obstacle.topY - localFloorY);
+    const midY = localFloorY + height * 0.55;
     const projected = frame.projectWorld(obstacle.x, midY, obstacle.z);
     if (!projected) continue;
     if (projected.depth < 0 || projected.depth > maxDepth) continue;
@@ -67,7 +69,7 @@ export function projectReefObstacles(
     result.push({
       u: projected.u,
       depth: projected.depth,
-      elevation: (midY - floorY) / spanY,
+      elevation: (midY - localFloorY) / spanY,
       halfHeight: (height * 0.5) / spanY,
       radiusU: Math.max(MIN_RADIUS, obstacle.radius / halfWidth),
       radiusDepth: Math.max(MIN_RADIUS, obstacle.radius / spanZ),

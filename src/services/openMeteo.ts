@@ -25,7 +25,6 @@ interface OpenMeteoMarineResponse {
 export {
   BTS_METEO_FALLBACK_SNAPSHOT,
   BTS_METEO_FRADES_FALLBACK_SNAPSHOT,
-  BTS_METEO_SECTOR_FALLBACKS,
 } from './openMeteoSnapshots';
 
 /**

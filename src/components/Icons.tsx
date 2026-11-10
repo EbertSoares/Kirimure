@@ -3,6 +3,8 @@ import type { ReactNode, SVGProps } from 'react';
 export type IconName =
   | 'map'
   | 'arrowLeft'
+  | 'arrowDown'
+  | 'arrowUp'
   | 'waves'
   | 'leaf'
   | 'bottle'
@@ -56,6 +58,18 @@ export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconN
       <>
         <path d="m12 19-7-7 7-7" />
         <path d="M19 12H5" />
+      </>
+    ),
+    arrowDown: (
+      <>
+        <path d="M12 5v14" />
+        <path d="m19 12-7 7-7-7" />
+      </>
+    ),
+    arrowUp: (
+      <>
+        <path d="M12 19V5" />
+        <path d="m5 12 7-7 7 7" />
       </>
     ),
     waves: (

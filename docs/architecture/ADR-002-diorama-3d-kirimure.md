@@ -165,15 +165,13 @@ O recife e o barco também são ancorados em `(u, v, depth)`, mas com posições
 tridimensionais de mundo. Um `layout(frame)` é executado no `resize()` para reposicionar
 as instâncias de corais, rochas, leques e o barco sem reconstruir a cena inteira.
 
-### 5.4 HUD de profundidade
+### 5.4 Diagnóstico de enquadramento
 
-A régua CSS de profundidade usa o frame novo:
-
-- superfície: projeção de um ponto em `y = 0` numa profundidade de referência;
-- leito: projeção de um ponto em `y = seabedY` na mesma profundidade.
-
-As variáveis `--depth-top` e `--depth-bottom` continuam sendo escritas no `.scene-card`,
-mas agora derivam de `DioramaFrame`, não do backdrop.
+O runtime publica o perfil de câmera ativo (`desktop` ou `mobile`) no atributo
+`data-camera-profile` do contêiner `.marine-canvas`, usado pelos testes visuais e
+pela depuração. Não há mais régua CSS de profundidade: as antigas variáveis
+`--depth-top` e `--depth-bottom` eram escritas num seletor inexistente
+(`.scene-card`) e foram removidas junto com a dependência de DOM do `applyLayout`.
 
 ## 6. Céu, luz e HDR
 
@@ -368,7 +366,7 @@ Evolução do `deepsea` com organização de fluxo e IA contextual de recife:
 
 ### 10.4 Ciclo de vida
 
-Os agentes mantêm os estágios legados para compatibilidade científica e de diagnóstico:
+Os agentes percorrem estágios de vida explícitos, usados também para diagnóstico:
 
 `alive → sinking → bottom → repopulating → alive`
 
@@ -376,7 +374,7 @@ Os agentes mantêm os estágios legados para compatibilidade científica e de di
   espécie abaixo do limiar ou saúde geral dos peixes próxima de zero.
 - O peixe afunda, gira de barriga para cima, repousa no leito, desvanece e só retorna
   quando a água volta a ser aceitável.
-- A recuperação é mais rápida com `recovery` alto e restauração de coral.
+- A repopulação visual é liberada por intervenções reais de restauração de coral (`restoration.restoredCoverPercent`).
 - A pressão de pesca reduz a população ativa; ao diminuir, os peixes retornam como
   `repopulating`.
 
@@ -395,7 +393,7 @@ normalizada para os testes de fumaça.
 | Turbidez | névoa, cor da água, atenuação de cáusticas e luz | `env.turbidity / 100` |
 | Hipóxia | peixes na superfície, natação lenta, mortandade, água mais opaca | `hypoxiaStress(dissolvedOxygen)` |
 | Pesca | redução da população ativa e cardumes mais ariscos | `pressures.fishing` |
-| Recuperação | retorno de cor, novos corais, peixes repovoando, água mais clara | `recovery`, `restoration` |
+| Recuperação | retorno de cor, novos corais, peixes repovoando, água mais clara | `activeInterventions`, `restoration` |
 
 Não há mais leitura de pixels do backdrop. Toda resposta é geométrica, material ou
 paramétrica.

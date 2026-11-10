@@ -11,8 +11,6 @@
 
 export type Vec3Tuple = [number, number, number];
 
-export const tuple = (x = 0, y = 0, z = 0): Vec3Tuple => [x, y, z];
-
 export function length(v: Vec3Tuple): number {
   return Math.hypot(v[0], v[1], v[2]);
 }
@@ -34,16 +32,8 @@ export function scale(v: Vec3Tuple, amount: number): Vec3Tuple {
   return [v[0] * amount, v[1] * amount, v[2] * amount];
 }
 
-export function dot(a: Vec3Tuple, b: Vec3Tuple): number {
+function dot(a: Vec3Tuple, b: Vec3Tuple): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
-export function lerpTuple(a: Vec3Tuple, b: Vec3Tuple, amount: number): Vec3Tuple {
-  return [
-    a[0] + (b[0] - a[0]) * amount,
-    a[1] + (b[1] - a[1]) * amount,
-    a[2] + (b[2] - a[2]) * amount,
-  ];
 }
 
 export function clampLength(v: Vec3Tuple, min: number, max: number): Vec3Tuple {
@@ -186,3 +176,45 @@ export function steerFish(
   velocity[2] = heading[2] * next;
   return angle;
 }
+
+export function distance(a: Vec3Tuple, b: Vec3Tuple): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+export function distanceSquared(a: Vec3Tuple, b: Vec3Tuple): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  const dz = a[2] - b[2];
+  return dx * dx + dy * dy + dz * dz;
+}
+
+export function cross(a: Vec3Tuple, b: Vec3Tuple): Vec3Tuple {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+/**
+ * Verifica se um ponto alvo está dentro do cone de visão do agente.
+ * @param pos Posição do agente.
+ * @param forward Vetor unitário frontal do agente.
+ * @param target Posição do alvo.
+ * @param cosHalfFov Cosseno do meio-ângulo do FOV (ex: FOV 280° -> cos(140°) = -0.766).
+ */
+export function isInFov(
+  pos: Vec3Tuple,
+  forward: Vec3Tuple,
+  target: Vec3Tuple,
+  cosHalfFov = -0.766,
+): boolean {
+  const dx = target[0] - pos[0];
+  const dy = target[1] - pos[1];
+  const dz = target[2] - pos[2];
+  const dist = Math.hypot(dx, dy, dz);
+  if (dist < 1e-6) return true;
+  const dotVal = (dx * forward[0] + dy * forward[1] + dz * forward[2]) / dist;
+  return dotVal >= cosHalfFov;
+}
+

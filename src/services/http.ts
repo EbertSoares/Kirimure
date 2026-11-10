@@ -49,7 +49,7 @@ export interface TextResponse {
  * Extrai a mensagem legível de um corpo de erro do ERDDAP
  * (formato `Error { code=404; message="..."; }`) ou devolve um trecho do texto.
  */
-export function extractServerMessage(body: string): string | undefined {
+function extractServerMessage(body: string): string | undefined {
   if (!body) return undefined;
   const erddap = body.match(/message="([\s\S]*?)";/);
   if (erddap?.[1]) return erddap[1].replace(/\\"/g, '"').trim().slice(0, 400);
@@ -120,7 +120,7 @@ export async function fetchTextWithTimeout(
 }
 
 /** Indica se uma falha é transitória e justifica uma nova tentativa. */
-export function isTransient(err: unknown): boolean {
+function isTransient(err: unknown): boolean {
   if (!(err instanceof RemoteDataError)) return false;
   if (err.kind === 'timeout' || err.kind === 'network') return true;
   return err.kind === 'http' && (err.status ?? 0) >= 500;

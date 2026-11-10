@@ -1,19 +1,7 @@
 import { calculateAlgae, calculateTrophicBalance } from './model';
 import type { EducationalMessage, SimulationState } from './types';
 
-export const INTRO_MESSAGE: EducationalMessage = {
-  id: 'intro',
-  title: 'Comece com uma hipótese',
-  badge: 'Cenário Didático',
-  what: 'O recife está saudável. Use este estado como referência antes de alterar o ambiente.',
-  cause: 'As condições começam nas referências ambientais adotadas pelo modelo.',
-  effect: 'A simulação começa assim que você aplica uma nova condição.',
-  ask: 'Qual fator causará a primeira mudança visível? Por quê?',
-  tone: 'neutral',
-  matches: () => false,
-};
-
-export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
+const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
   {
     id: 'thermal_stress',
     title: 'Estresse térmico acumulado nos corais',
@@ -101,7 +89,15 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     ask: 'O que acontece com a cadeia quando as algas ficam sem quem as raspe?',
     tone: 'alert',
     matches: (state) =>
-      calculateTrophicBalance(state.species, calculateAlgae(state.env, state.health)) < 45,
+      calculateTrophicBalance(
+        state.species,
+        calculateAlgae(
+          state.env,
+          state.health,
+          state.sewageDischargeMode,
+          state.biochemicalOxygenDemand,
+        ),
+      ) < 45,
   },
   {
     id: 'coral_bleaching',
@@ -133,7 +129,13 @@ export const EDUCATIONAL_MESSAGES: EducationalMessage[] = [
     effect: 'O recife deixa de ser um sistema dominado por corais e passa a ser dominado por algas.',
     ask: 'Por que reduzir os nutrientes costuma ser o primeiro passo?',
     tone: 'alert',
-    matches: (state) => calculateAlgae(state.env, state.health) >= 62,
+    matches: (state) =>
+      calculateAlgae(
+        state.env,
+        state.health,
+        state.sewageDischargeMode,
+        state.biochemicalOxygenDemand,
+      ) >= 62,
   },
   {
     id: 'parrotfish_decline',
@@ -221,10 +223,3 @@ export function evaluateMessages(state: SimulationState): SimulationState {
   };
 }
 
-export function getMessage(id: string | null) {
-  return EDUCATIONAL_MESSAGES.find((message) => message.id === id) ?? INTRO_MESSAGE;
-}
-
-export function getMessageById(id: string) {
-  return [...EDUCATIONAL_MESSAGES, INTRO_MESSAGE].find((message) => message.id === id) ?? INTRO_MESSAGE;
-}

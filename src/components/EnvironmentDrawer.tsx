@@ -20,7 +20,7 @@ import type {
   SimulationState,
 } from '../simulation/types';
 
-export function formatParameterValue(id: ItemId, value: number, sewageMode: 'continuous' | 'pulse' = 'continuous'): {
+function formatParameterValue(id: ItemId, value: number, sewageMode: 'continuous' | 'pulse' = 'continuous'): {
   value: string;
   unit: string;
 } {

@@ -46,12 +46,8 @@ export interface CoralWatchCurrentRecord {
   stress_level: number | null;
 }
 
-export interface CoralWatchCurrentResponse extends CoralWatchStation {
+interface CoralWatchCurrentResponse extends CoralWatchStation {
   current: CoralWatchCurrentRecord;
-}
-
-export interface CoralWatchStationHistoryResponse extends CoralWatchStation {
-  data: CoralWatchCurrentRecord[];
 }
 
 /**
@@ -88,7 +84,7 @@ function computeSimpleHash(text: string): string {
  * Frades e Barra compartilham a mesma estação externa da província recifal da Bahia.
  * Paraguaçu é identificado como canal estuarino interior sem cobertura na grade de 5 km.
  */
-export const SECTOR_CORAL_WATCH_STATIONS: Record<
+const SECTOR_CORAL_WATCH_STATIONS: Record<
   BtsSectorId,
   { slug: string; isRegionalReference: boolean; note: string }
 > = {

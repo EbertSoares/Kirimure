@@ -14,7 +14,7 @@ import type { BtsSectorId, Environment, EpistemologicalBadge, ScientificMetadata
  * - Solução analítica de estado estacionário para cálculo instantâneo coerente com a EDO.
  */
 
-export type OxygenCategory =
+type OxygenCategory =
   | 'normoxia'
   | 'respiratory_stress'
   | 'hypoxia'
@@ -249,6 +249,7 @@ export function calculateEquilibriumOxygen(
   sectorId: BtsSectorId = 'frades',
   algaeCoverage = 15,
   dischargeType: SewageDischargeType = 'continuous_daily',
+  pulseBodMgL = 0,
 ): number {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const saturation = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
@@ -261,6 +262,9 @@ export function calculateEquilibriumOxygen(
     const cbodDailyKg = convertBOD5ToUltimateBOD(env.sewage);
     const bodInputDailyMgL = (cbodDailyKg * 1000) / sector.mixingVolumeM3;
     bodEq = bodInputDailyMgL / (kd + hydroExportRate);
+  } else if (dischargeType === 'instant_pulse' && pulseBodMgL > 0) {
+    // Pulso isolado: a concentração inicial de CBODu já está na caixa de mistura.
+    bodEq = pulseBodMgL;
   }
 
   const sodFlux = PARAMETERS.oxygen.sodRate / sector.depthMeters;

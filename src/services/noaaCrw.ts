@@ -10,7 +10,6 @@ import type { ThermalForcingPoint } from './types';
 export {
   BTS_CRW_BARRA_FALLBACK_SNAPSHOT,
   BTS_CRW_FALLBACK_SNAPSHOT,
-  BTS_CRW_SECTOR_FALLBACKS,
 } from './noaaCrwSnapshots';
 
 /**
@@ -37,7 +36,7 @@ export interface CrwDistributor {
   datasetId: string;
 }
 
-export const CRW_DISTRIBUTORS: readonly CrwDistributor[] = [
+const CRW_DISTRIBUTORS: readonly CrwDistributor[] = [
   {
     id: 'pacioos',
     label: 'PacIOOS ERDDAP (redistribuição oficial do NOAA CRW 5 km)',
@@ -55,13 +54,13 @@ export const CRW_DISTRIBUTORS: readonly CrwDistributor[] = [
 const CRW_VARIABLES = ['CRW_SST', 'CRW_SSTANOMALY', 'CRW_HOTSPOT', 'CRW_DHW', 'CRW_BAA', 'CRW_BAA_7D_MAX'] as const;
 
 /** Número de dias recentes consultados para o indicador atual (o painel usa o dado mais recente). */
-export const CRW_RECENT_DAYS = 7;
+const CRW_RECENT_DAYS = 7;
 
 /** Orçamento total máximo para a operação de consulta (evita bloqueios prolongados da interface). */
-export const CRW_TOTAL_BUDGET_MS = 16000;
+const CRW_TOTAL_BUDGET_MS = 16000;
 
 /** Timeout por tentativa individual de consulta a distribuidor. */
-export const CRW_ATTEMPT_TIMEOUT_MS = 6000;
+const CRW_ATTEMPT_TIMEOUT_MS = 6000;
 
 /**
  * Pixels oceânicos da grade NOAA de 5 km para cada setor da BTS.
@@ -71,7 +70,7 @@ export const CRW_ATTEMPT_TIMEOUT_MS = 6000;
  * - Paraguaçu: canal estuarino interior 100% mascarado como continente na grade de 5 km.
  *   Não recebe consulta remota para não atribuir águas abertas ao manguezal interno.
  */
-export const NOAA_CRW_PIXELS: Record<
+const NOAA_CRW_PIXELS: Record<
   BtsSectorId,
   { latitude: number; longitude: number; hasDirectCoverage: boolean; note: string }
 > = {
@@ -131,7 +130,7 @@ function parseNumber(raw: string | undefined): number | null {
  * - 7: Alerta Nível 5
  * Valores de preenchimento (_FillValue = 251 na NOAA/PacIOOS) ou inválidos tornam-se null.
  */
-export function parseAlertLevel(raw: string | undefined): number | null {
+function parseAlertLevel(raw: string | undefined): number | null {
   if (raw === undefined) return null;
   const value = Number(raw.trim());
   if (!Number.isFinite(value) || !Number.isInteger(value)) return null;
@@ -177,7 +176,7 @@ export function splitTimeWindowIntoChunks(
   return chunks;
 }
 
-export function buildCrwQueryUrl(
+function buildCrwQueryUrl(
   distributor: CrwDistributor,
   pixel: { latitude: number; longitude: number },
   timeSelector: string,

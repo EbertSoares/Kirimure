@@ -56,6 +56,7 @@ O motor gráfico tridimensional em tempo real utiliza Babylon.js 9 (`WebGL` / `W
   * **Desktop:** Indicadores ilimitados com quebra automática de linha (*flex-wrap*) para garantir legibilidade integral.
   * **Mobile:** Limite de 3 métricas em smartphones padrão ($\le 680\text{px}$) e 2 métricas em telas ultra-compactas ($\le 390\text{px}$).
   * **Substituição Inteligente FIFO:** Ao marcar uma nova métrica no mobile, a primeira selecionada é desmarcada automaticamente, mantendo a tela despoluída.
+* **Diorama adaptado ao celular:** os peixes recebem escala visual ampliada e o recife usa menos rochas, corais e seixos, distribuídos em faixas laterais simétricas. A medida preserva a leitura em telas pequenas sem alterar a composição natural do desktop.
 * **Controles Temporais e Escala de Simulação:** Velocidades 1× (`0,5 dia/s`), 3×, 5× e 10× (`5 dias/s`), com integração numérica por sub-stepping para invariância física dos resultados.
 * **Botão de Apoio à Causa:** Integrado na barra superior com estilo e curvatura unificados aos botões de controle (`var(--radius-control)`).
 
@@ -67,7 +68,7 @@ O motor gráfico tridimensional em tempo real utiliza Babylon.js 9 (`WebGL` / `W
 * **Interface:** React 19.
 * **Engine Gráfica 3D:** Babylon.js 9 (`@babylonjs/core`, `@babylonjs/loaders`).
 * **Qualidade de Código & Linting:** ESLint 10 (Flat Config com `@eslint/js`, `typescript-eslint` e `eslint-plugin-react-hooks`).
-* **Testes Automatizados:** Vitest (139 testes do modelo e adaptadores), Playwright (fluxos desktop/mobile) e axe-core (WCAG).
+* **Testes Automatizados:** Vitest (184 testes do modelo, adaptadores e cena), Playwright (fluxos desktop/mobile) e axe-core (WCAG).
 * **Build & Bundler:** Vite 8 com tree-shaking para produção.
 
 ---
@@ -93,10 +94,15 @@ npm install
 | `npm run build` | Validação de tipos (`tsc --noEmit`) e compilação para produção em `dist/` |
 | `npm run lint` | Executa o linter ESLint em todo o código-fonte `src` |
 | `npm run lint:fix` | Corrige automaticamente problemas de formatação e lint |
-| `npm run test:run` | Executa a suíte de 139 testes automatizados via Vitest |
+| `npm run test:run` | Executa a suíte de 184 testes automatizados via Vitest |
 | `npm run test:e2e` | Valida fluxos desktop/mobile e acessibilidade WCAG no Chromium |
 | `npm run check` | Executa lint, testes unitários, validação de tipos e build de produção |
 | `npm run preview` | Pré-visualização local dos artefatos compilados de produção |
+| `npm run assets:map` | Regenera `brazilStates.data.ts` a partir da malha simplificada do IBGE |
+| `npm run capture:scene` | Captura um quadro do diorama em 1440×900 para inspeção visual local |
+| `npm run capture:scene -- --mobile --output caminho.png` | Captura o diorama em 390×844 para validar o layout de celular |
+
+Os geradores Python `scripts/build-sky-panorama.py` e `scripts/build-reef-models.py` são utilitários manuais de assets e não fazem parte do build da aplicação.
 
 ---
 
@@ -105,7 +111,7 @@ npm install
 ```text
 src/
 ├── assets/               Modelos 3D, texturas procedurais e artes visuais
-├── components/           Interface, Topbar, Controles de Métricas, Mapa da Bahia e Painel de Ciência
+├── components/           Interface, Topbar, Controles de Métricas, Mapa da Bahia e Painel de Evidências
 ├── hooks/                Sincronização de dados oceanográficos e estado de redimensionamento
 ├── scene/                Cena 3D Babylon.js, cardumes e simulação de fluidos
 ├── services/             Clientes NOAA CRW, Open-Meteo, tipos de proveniência e persistência
@@ -113,6 +119,7 @@ src/
 ├── styles.css            Design system responsivo com temas oceânicos e suporte a toque
 ├── App.tsx               Orquestrador principal de estado da simulação e interface
 └── main.tsx              Ponto de entrada React 19
+scripts/                  Geradores manuais de mapa, panorama, modelos recifais e captura
 docs/
 ├── architecture/         Decisões arquiteturais (ADR Babylon.js WebGPU)
 ├── data-sources/         Mapeamento de fontes locais da BTS (UFBA, INEMA)

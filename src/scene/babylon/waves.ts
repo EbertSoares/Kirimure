@@ -47,17 +47,66 @@ export interface MarineCurrentSample {
   orbitalZ: number;
 }
 
-export const MEAN_WATER_LEVEL = 0;
-export const WATER_LEVEL = MEAN_WATER_LEVEL;
-
 /** Instância canônica compartilhada entre renderização, física 6-DOF e IA. */
-const canonicalSimulator = new SpectralOceanSimulator(64, 20261109);
+let canonicalSimulator = new SpectralOceanSimulator(64, 20261109);
+
+/**
+ * Atlas RGBA float32 reutilizado a cada quadro (`R = altura`, `G = inclinação X`,
+ * `B = inclinação Z`, `A = Jacobiano`). As cascatas ficam empilhadas na vertical.
+ */
+let fftAtlasScratch = new Float32Array(64 * 64 * 3 * 4);
+let fftAtlasWidth = 64;
+let fftAtlasHeight = 64 * 3;
+let fftAtlasLayers = 3;
+
+/**
+ * Ajusta a síntese espectral ao perfil do dispositivo (potência de dois entre
+ * 16 e 128; 1..3 cascatas). Reconstruir o simulador custa alguns milissegundos
+ * apenas uma vez, no boot da cena. Dispositivos modestos pagam menos IFFT e
+ * menos amostragem por vértice, mantendo a mesma linguagem de ondas.
+ */
+export function configureOceanSpectrum(size: number, cascades: number): void {
+  const clampedSize = Math.max(16, Math.min(128, Math.round(size)));
+  const powerOfTwo = 2 ** Math.round(Math.log2(clampedSize));
+  const layers = Math.max(1, Math.min(3, Math.round(cascades)));
+  if (canonicalSimulator.size === powerOfTwo && canonicalSimulator.cascades.length === layers) {
+    return;
+  }
+  canonicalSimulator = new SpectralOceanSimulator(powerOfTwo, 20261109, layers);
+  fftAtlasScratch = new Float32Array(powerOfTwo * powerOfTwo * layers * 4);
+  fftAtlasWidth = powerOfTwo;
+  fftAtlasHeight = powerOfTwo * layers;
+  fftAtlasLayers = layers;
+}
 
 /**
  * Avança explicitamente o espectro FFT para o instante `seconds`.
  */
 export function stepOceanSpectrum(seconds: number): void {
   canonicalSimulator.step(seconds);
+}
+
+/**
+ * Avança o espectro e devolve o atlas de campos espectrais para upload direto
+ * em uma `RawTexture` RGBA float32 consumida pelo vertex shader da água.
+ */
+export function getOceanFftAtlas(seconds: number): {
+  data: Float32Array;
+  width: number;
+  height: number;
+  layers: number;
+} {
+  canonicalSimulator.step(seconds);
+  const packed = canonicalSimulator.packFieldAtlas(fftAtlasScratch);
+  fftAtlasWidth = packed.width;
+  fftAtlasHeight = packed.height;
+  fftAtlasLayers = packed.layers;
+  return {
+    data: fftAtlasScratch,
+    width: fftAtlasWidth,
+    height: fftAtlasHeight,
+    layers: fftAtlasLayers,
+  };
 }
 
 /**
@@ -73,11 +122,6 @@ export function sampleOcean(
   out?: WaveSample,
 ): WaveSample {
   return canonicalSimulator.sample(x, z, seconds, vertexSpacing, out);
-}
-
-export function waterNormalAt(x: number, z: number, seconds: number) {
-  const sample = canonicalSimulator.sample(x, z, seconds, 0);
-  return { x: sample.normalX, y: sample.normalY, z: sample.normalZ };
 }
 
 /** Amostra rápida de altura para boias, espuma e física 6-DOF do barco. */

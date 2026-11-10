@@ -25,7 +25,7 @@ export interface CarbonateSystemState {
  * Constante aparente de produto de solubilidade da aragonita K'sp (mol^2/kg^2)
  * em função da temperatura (K) e salinidade (Mucci, 1983).
  */
-export function calculateKspAragonite(tempCelsius: number, salinity = 35.0): number {
+function calculateKspAragonite(tempCelsius: number, salinity = 35.0): number {
   const tk = tempCelsius + 273.15;
   const logKsp0 =
     -171.945 -
@@ -45,7 +45,7 @@ export function calculateKspAragonite(tempCelsius: number, salinity = 35.0): num
  * Constante aparente de produto de solubilidade da calcita K'sp (mol^2/kg^2)
  * segundo Mucci (1983) e Dickson et al. (2007) / CO2SYS.
  */
-export function calculateKspCalcite(tempCelsius: number, salinity = 35.0): number {
+function calculateKspCalcite(tempCelsius: number, salinity = 35.0): number {
   const tk = tempCelsius + 273.15;
   const logKsp0 =
     -171.9065 -

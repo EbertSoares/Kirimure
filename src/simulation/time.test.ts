@@ -113,7 +113,6 @@ describe('relógio e velocidades da simulação (1×, 3×, 5×, 10×)', () => {
       microplastics: 10000,
       turbidity: 55,
       fishing: 45,
-      recovery: 20,
     };
     state.paused = false;
     state.speed = 10;

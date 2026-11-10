@@ -19,7 +19,7 @@ export function hash2D(ix: number, iy: number): number {
   return value - Math.floor(value);
 }
 
-export function valueNoise2D(x: number, y: number): number {
+function valueNoise2D(x: number, y: number): number {
   const ix = Math.floor(x);
   const iy = Math.floor(y);
   const fx = x - ix;
@@ -97,15 +97,3 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-export function lerpColor(
-  from: { r: number; g: number; b: number },
-  to: { r: number; g: number; b: number },
-  amount: number,
-): { r: number; g: number; b: number } {
-  const t = clamp(amount);
-  return {
-    r: mix(from.r, to.r, t),
-    g: mix(from.g, to.g, t),
-    b: mix(from.b, to.b, t),
-  };
-}

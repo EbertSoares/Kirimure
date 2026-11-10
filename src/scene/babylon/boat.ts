@@ -8,19 +8,32 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
+import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial';
+import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
+import '@babylonjs/loaders/FBX';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
+import { assetUrl } from './assetPaths';
 import type { DioramaFrame } from './framing';
+import type { SceneQualityProfile } from './quality';
 import { clamp, mix, smoothstep } from './procedural';
 import { sampleOcean, waterHeightAt, type WaveSample } from './waves';
 import type { BoatWakeState } from './water';
 
 const WATER_DENSITY = 1025.0; // kg/m³ (água salgada tropical)
 const GRAVITY = 9.81; // m/s²
-const FIXED_SUBSTEP_DT = 1 / 120; // 120 Hz substeps fixos
+const DEFAULT_SUBSTEP_HZ = 120;
 
-export interface HullVolumeCell {
+// Geometria local do casco (escala 1.0). A linha d'água de projeto é y = 0:
+// a raiz visual é posicionada nela, e o centro de massa do solver fica em
+// localCmY. O calado visual é a profundidade real da quilha abaixo dessa linha.
+const HULL_LENGTH_LOCAL = 4.4;
+const HULL_HALF_LENGTH_LOCAL = HULL_LENGTH_LOCAL * 0.5;
+const HULL_HALF_BEAM_LOCAL = 0.84 * 1.04;
+const HULL_DRAFT_LOCAL = 0.52;
+
+interface HullVolumeCell {
   /** Posição local em relação à origem do modelo (m, escala 1.0). */
   readonly localX: number;
   readonly localY: number;
@@ -40,7 +53,7 @@ export interface HullVolumeCell {
  * Volume total (escala 1.0) = 2.76 m³; em equilíbrio hidrostático (h = 0),
  * ~50% do volume (1.38 m³) fica submerso na linha d'água de projeto.
  */
-export const HULL_VOLUME_CELLS: readonly HullVolumeCell[] = [
+const HULL_VOLUME_CELLS: readonly HullVolumeCell[] = [
   // Quilha central (4 estações longitudinais simétricas, garantem lastro baixo e trim nivelado)
   { localX: 0.0, localY: -0.35, localZ: -1.45, height: 0.36, volume: 0.17, area: 0.54, zone: 'keel' },
   { localX: 0.0, localY: -0.38, localZ: -0.48, height: 0.36, volume: 0.20, area: 0.62, zone: 'keel' },
@@ -126,9 +139,19 @@ export class BoatRigidBody6DOF {
 
   private accumulator = 0;
   private simTime = 0;
+  /** Taxa efetiva de integração (Hz), configurada por perfil de qualidade. */
+  substepHz = DEFAULT_SUBSTEP_HZ;
 
   constructor(scale = 3.4, anchorX = 0, anchorZ = 24, anchorYaw = 1.22) {
     this.configure(scale, anchorX, anchorZ, anchorYaw);
+  }
+
+  /**
+   * Define a taxa de integração do solver conforme o orçamento do dispositivo.
+   * 120 Hz em desktops fortes; 60 Hz em celulares, mantendo a mesma física.
+   */
+  setSubstepRate(hz: number): void {
+    this.substepHz = Math.max(30, Math.min(240, Math.round(hz)));
   }
 
   configure(scale: number, anchorX: number, anchorZ: number, anchorYaw = 1.22): void {
@@ -137,7 +160,10 @@ export class BoatRigidBody6DOF {
     this.anchorZ = anchorZ;
     this.anchorYaw = anchorYaw;
     this.x = anchorX;
-    this.y = 0.25 * (this.hullScale / 3.4);
+    // Começa com o centro de massa na cota de projeto (linha d'água em y=0).
+    // O aquecimento inicial do solver converge o equilíbrio com as ondas reais,
+    // sem depender de um deslocamento vertical fixo.
+    this.y = this.localCmY * this.hullScale;
     this.z = anchorZ;
     this.vx = 0;
     this.vy = 0;
@@ -172,13 +198,14 @@ export class BoatRigidBody6DOF {
     if (clampedDt <= 0) return;
 
     this.accumulator += clampedDt;
+    const fixedDt = 1 / this.substepHz;
     const maxSubsteps = 16;
     let steps = 0;
 
-    while (this.accumulator >= FIXED_SUBSTEP_DT && steps < maxSubsteps) {
-      this.accumulator -= FIXED_SUBSTEP_DT;
+    while (this.accumulator >= fixedDt && steps < maxSubsteps) {
+      this.accumulator -= fixedDt;
       steps += 1;
-      this.integrateSubstep(FIXED_SUBSTEP_DT, seconds, sampler);
+      this.integrateSubstep(fixedDt, seconds, sampler);
     }
 
     if (steps === 0 && this.accumulator > 1e-5) {
@@ -426,6 +453,7 @@ export interface BoatHullBounds {
 
 export interface BoatSystem {
   readonly meshes: AbstractMesh[];
+  readonly shadowCasters: readonly AbstractMesh[];
   readonly root: TransformNode;
   readonly solver: BoatRigidBody6DOF;
   getWakeState(): BoatWakeState;
@@ -543,9 +571,70 @@ function createFoamTexture(scene: Scene): DynamicTexture {
   return texture;
 }
 
-export function createBoatSystem(scene: Scene): BoatSystem {
+function createFishingShipMaterials(scene: Scene): MultiMaterial {
+  const multiMat = new MultiMaterial('barco-pesca-multimaterial', scene);
+
+  const makeTexture = (file: string, invertY = true): Texture => {
+    const tex = new Texture(
+      assetUrl(`models/boat/${file}`),
+      scene,
+      false,
+      invertY,
+      Texture.TRILINEAR_SAMPLINGMODE,
+    );
+    tex.anisotropicFilteringLevel = 8;
+    return tex;
+  };
+
+  // 1. Exterior do navio (Fishing_Ship — casco, cabine, mastro, decalque IH 102)
+  const shipMat = new PBRMaterial('barco-pesca-exterior-mat', scene);
+  shipMat.albedoTexture = makeTexture('Fishing_Ship_Base_Color.png', true);
+  shipMat.bumpTexture = makeTexture('Fishing_Ship_Normal_OpenGL.png', true);
+  shipMat.bumpTexture.level = 0.85;
+  shipMat.ambientTexture = makeTexture('Fishing_Ship_Mixed_AO.png', true);
+  shipMat.metallic = 0.06;
+  shipMat.roughness = 0.65;
+  shipMat.twoSidedLighting = true;
+  shipMat.backFaceCulling = false;
+
+  // 2. Interior e apetrechos do navio (Boat_Interior — boia salva-vidas, defensas, porta de madeira, comando)
+  const interiorMat = new PBRMaterial('barco-pesca-interior-mat', scene);
+  interiorMat.albedoTexture = makeTexture('Boat_Interior_Base_Color.png', true);
+  interiorMat.bumpTexture = makeTexture('Boat_Interior_Normal_OpenGL.png', true);
+  interiorMat.bumpTexture.level = 0.85;
+  interiorMat.ambientTexture = makeTexture('Boat_Interior_Mixed_AO.png', true);
+  interiorMat.metallic = 0.06;
+  interiorMat.roughness = 0.65;
+  interiorMat.twoSidedLighting = true;
+  interiorMat.backFaceCulling = false;
+
+  // 3. Vidros da cabine (Windows)
+  const windowMat = new PBRMaterial('barco-pesca-vidros-mat', scene);
+  windowMat.albedoColor = new Color3(0.08, 0.16, 0.22);
+  windowMat.metallic = 0.1;
+  windowMat.roughness = 0.08;
+  windowMat.alpha = 0.45;
+  windowMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+  windowMat.backFaceCulling = false;
+
+  // 4. Luz de navegação (Light)
+  const lightMat = new PBRMaterial('barco-pesca-luz-mat', scene);
+  lightMat.albedoColor = new Color3(1.0, 0.85, 0.5);
+  lightMat.emissiveColor = new Color3(1.6, 0.9, 0.3);
+  lightMat.emissiveIntensity = 2.0;
+
+  multiMat.subMaterials.push(shipMat, interiorMat, windowMat, lightMat);
+  return multiMat;
+}
+
+export function createBoatSystem(
+  scene: Scene,
+  quality?: SceneQualityProfile,
+  onMeshLoaded?: (mesh: AbstractMesh) => void,
+): BoatSystem {
   const root = new TransformNode('barco-pesca-bts', scene);
   const solver = new BoatRigidBody6DOF(3.4, 0, 24, 1.22);
+  solver.setSubstepRate(quality?.physicsHz ?? DEFAULT_SUBSTEP_HZ);
 
   const hullMaterial = new PBRMaterial('barco-casco-material', scene);
   hullMaterial.albedoColor = new Color3(1, 1, 1);
@@ -793,6 +882,38 @@ export function createBoatSystem(scene: Scene): BoatSystem {
     });
   }
 
+  const proceduralParts: AbstractMesh[] = [
+    hull,
+    bulwark,
+    foreDeck,
+    cabin,
+    cabinWindowSide,
+    cabinWindowFront,
+    windowMullion,
+    roof,
+    lifebuoy,
+    ...fenders,
+    mast,
+    bowBollard,
+    lamp,
+  ];
+
+  const solidMeshes: AbstractMesh[] = [
+    hull,
+    bulwark,
+    foreDeck,
+    cabin,
+    roof,
+    lifebuoy,
+    ...fenders,
+    mast,
+    bowBollard,
+  ];
+
+  hull.receiveShadows = true;
+  foreDeck.receiveShadows = true;
+  roof.receiveShadows = true;
+
   const meshes: AbstractMesh[] = [
     hull,
     bulwark,
@@ -816,12 +937,70 @@ export function createBoatSystem(scene: Scene): BoatSystem {
     if (m !== foamSource) m.applyFog = false;
   }
 
+  // Carregamento do modelo 3D FBX de alta fidelidade do barco de pesca
+  const targetLength = 4.4;
+  const fbxLength = 8.4782;
+  const scaleFactor = (targetLength / fbxLength) * 0.01;
+
+  SceneLoader.LoadAssetContainerAsync(
+    '',
+    assetUrl('models/boat/Fishing_Ship_Asset.fbx'),
+    scene,
+    null,
+    '.fbx',
+  )
+    .then((container) => {
+      // A cena pode ser desmontada enquanto o FBX ainda carrega (voltar ao mapa
+      // logo após entrar no laboratório). Nunca toque em sombras, água ou
+      // materiais de uma cena já descartada.
+      if (scene.isDisposed) {
+        container.dispose();
+        return;
+      }
+
+      container.addAllToScene();
+      const fbxRoot = container.transformNodes[0];
+      if (fbxRoot) {
+        fbxRoot.parent = root;
+        // Preserva a escala Z negativa do loader FBX para não espelhar a malha nem inverter normais e UVs
+        fbxRoot.scaling.set(scaleFactor, scaleFactor, -scaleFactor);
+        fbxRoot.position.set(-0.5285, 0.12, -0.914);
+      }
+      const shipMesh =
+        container.meshes.find((m) => m.name.includes('Fishing_Ship')) || container.meshes[0];
+      if (shipMesh) {
+        shipMesh.material = createFishingShipMaterials(scene);
+        shipMesh.receiveShadows = true;
+        shipMesh.applyFog = false;
+
+        // Desativa completamente os sólidos procedurais de fallback
+        for (const part of proceduralParts) {
+          part.setEnabled(false);
+          part.isVisible = false;
+        }
+
+        solidMeshes.length = 0;
+        solidMeshes.push(shipMesh);
+        meshes.push(shipMesh);
+
+        if (onMeshLoaded) {
+          onMeshLoaded(shipMesh);
+        }
+      }
+    })
+    .catch((err) => {
+      console.warn('Carregamento do barco FBX falhou, mantendo casco procedural:', err);
+    });
+
   const rootPosition = new Vector3();
   const rootRotation = Quaternion.Identity();
+  const localCmOffset = new Vector3();
+  const rotatedCmOffset = new Vector3();
   let initialized = false;
 
   return {
     meshes,
+    shadowCasters: solidMeshes,
     root,
     solver,
 
@@ -842,9 +1021,9 @@ export function createBoatSystem(scene: Scene): BoatSystem {
         y: solver.y,
         z: solver.z,
         yaw: solver.yaw,
-        halfLength: 2.35 * solver.hullScale,
-        halfBeam: 0.95 * solver.hullScale,
-        draft: 0.62 * solver.hullScale,
+        halfLength: HULL_HALF_LENGTH_LOCAL * solver.hullScale,
+        halfBeam: HULL_HALF_BEAM_LOCAL * solver.hullScale,
+        draft: HULL_DRAFT_LOCAL * solver.hullScale,
       };
     },
 
@@ -869,8 +1048,8 @@ export function createBoatSystem(scene: Scene): BoatSystem {
     update(seconds: number, dt: number, clarity: number): void {
       if (!initialized) {
         // Pré-aquece 0.6s no instante inicial para que o barco já comece no equilíbrio dinâmico da onda
-        const warmupSteps = 24;
-        const warmupDt = 0.025;
+        const warmupSteps = Math.max(16, Math.round(0.6 * solver.substepHz));
+        const warmupDt = 1 / solver.substepHz;
         for (let s = warmupSteps; s >= 1; s -= 1) {
           solver.step(warmupDt, Math.max(0, seconds - s * warmupDt), sampleOcean);
         }
@@ -883,15 +1062,23 @@ export function createBoatSystem(scene: Scene): BoatSystem {
       const currentCos = Math.cos(solver.yaw);
       const currentSin = Math.sin(solver.yaw);
 
-      // Posição visual da raiz do modelo a partir do centro de massa do solver 6-DOF
-      const visualOffsetY = -solver.localCmY * hullScale + 0.14;
-      rootPosition.set(solver.x, solver.y + visualOffsetY, solver.z);
-      root.position.copyFrom(rootPosition);
-
       // Em Babylon.js, pitch positivo em RotationYawPitchRoll inclina o eixo +Z (proa) para baixo;
       // por isso invertemos o sinal de solver.pitch (onde pitch > 0 = proa subindo).
       Quaternion.RotationYawPitchRollToRef(solver.yaw, -solver.pitch, solver.roll, rootRotation);
       root.rotationQuaternion = rootRotation;
+
+      // A raiz visual fica na linha d'água de projeto (y local = 0). O centro de
+      // massa do solver está em localCmY; rotacionamos esse braço com o mesmo
+      // quaternion do casco para que o centro de massa visual coincida com o
+      // físico em pitch/roll. Nenhum offset vertical arbitrário é somado.
+      localCmOffset.set(0, solver.localCmY * hullScale, solver.localCmZ * hullScale);
+      localCmOffset.rotateByQuaternionToRef(rootRotation, rotatedCmOffset);
+      rootPosition.set(
+        solver.x - rotatedCmOffset.x,
+        solver.y - rotatedCmOffset.y,
+        solver.z - rotatedCmOffset.z,
+      );
+      root.position.copyFrom(rootPosition);
 
       if (debugProbesVisible) {
         for (let i = 0; i < debugProbes.length; i += 1) {

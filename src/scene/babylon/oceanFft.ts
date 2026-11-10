@@ -21,7 +21,7 @@ const GRAVITY = 9.81;
 const KM_CAPILLARY = 370.0;
 const MEAN_DEPTH = 14.0;
 
-export interface CascadeSpec {
+interface CascadeSpec {
   /** Comprimento físico do ladrilho da cascata em metros (incomensuráveis entre si). */
   readonly length: number;
   /** Número de onda mínimo (rad/m) para evitar dupla contagem espectral entre cascatas. */
@@ -38,7 +38,7 @@ export interface CascadeSpec {
  * 3 cascatas incomensuráveis calibradas para a escala do diorama da Baía de Todos-os-Santos,
  * inspiradas na arquitetura de `noniv/web-ocean` (`deepsea/js/ocean.js`) e `Popov72/OceanDemo`.
  */
-export const OCEAN_FFT_CASCADES: readonly CascadeSpec[] = [
+const OCEAN_FFT_CASCADES: readonly CascadeSpec[] = [
   { length: 156.0, kMin: 0.0, kMax: 0.52, choppiness: 0.34, weight: 1.0 },
   { length: 39.0, kMin: 0.42, kMax: 2.15, choppiness: 0.28, weight: 0.92 },
   { length: 9.7, kMin: 1.85, kMax: 8.8, choppiness: 0.18, weight: 0.72 },
@@ -255,7 +255,7 @@ export class SpectralOceanSimulator {
   readonly cascades: readonly CascadeBuffers[];
   private lastSteppedTime = Number.NaN;
 
-  constructor(size = 64, seed = 20261109) {
+  constructor(size = 64, seed = 20261109, cascadeCount = OCEAN_FFT_CASCADES.length) {
     this.size = size;
     const random = mulberry32(seed);
     const windSpeed = 8.4;
@@ -272,7 +272,12 @@ export class SpectralOceanSimulator {
     const rawCascades: CascadeBuffers[] = [];
     let totalRawVariance = 0;
 
-    for (const spec of OCEAN_FFT_CASCADES) {
+    const activeCascades = OCEAN_FFT_CASCADES.slice(
+      0,
+      Math.max(1, Math.min(OCEAN_FFT_CASCADES.length, Math.round(cascadeCount))),
+    );
+
+    for (const spec of activeCascades) {
       const count = size * size;
       const h0 = new Float32Array(count * 4);
       const omega = new Float32Array(count);
@@ -526,6 +531,31 @@ export class SpectralOceanSimulator {
         }
       }
     }
+  }
+
+  /**
+   * Empacota os campos espectrais de todas as cascatas em um atlas RGBA float32
+   * contíguo (`R = altura`, `G = inclinação X`, `B = inclinação Z`, `A = Jacobiano`).
+   *
+   * O deslocamento vertical/normais da superfície é reconstruído na GPU a partir
+   * deste atlas, eliminando a atualização de dezenas de milhares de vértices por
+   * quadro no JavaScript. O solver do barco e os efeitos continuam usando
+   * `sample()` na CPU para manter a física coerente.
+   */
+  packFieldAtlas(target: Float32Array): { width: number; height: number; layers: number } {
+    const n = this.size;
+    const count = n * n;
+    let offset = 0;
+    for (const c of this.cascades) {
+      for (let i = 0; i < count; i += 1) {
+        target[offset] = c.heightField[i];
+        target[offset + 1] = c.slopeXField[i];
+        target[offset + 2] = c.slopeZField[i];
+        target[offset + 3] = c.jacobianField[i];
+        offset += 4;
+      }
+    }
+    return { width: n, height: n * this.cascades.length, layers: this.cascades.length };
   }
 
   /**

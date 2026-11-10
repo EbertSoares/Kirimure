@@ -49,43 +49,6 @@ export function getQualityLabel(quality: DataQuality): string {
   }
 }
 
-export interface CommonProvenance {
-  origin: DataOrigin;
-  provider: string;
-  product?: string;
-  dataset?: string;
-  version?: string;
-  retrievedAt?: string;
-  observedAt?: string;
-  periodStart?: string;
-  periodEnd?: string;
-  depthMeters?: number;
-  resolution?: string;
-  quality: DataQuality;
-  flags?: string[];
-  caveat?: string;
-}
-
-export interface EnvironmentalValue {
-  variable: string;
-  value: number | null;
-  unit: string;
-  origin: DataOrigin;
-  provider: string;
-  product?: string;
-  dataset?: string;
-  version?: string;
-  observedAt?: string;
-  periodStart?: string;
-  periodEnd?: string;
-  depthMeters?: number;
-  spatialResolution?: string;
-  temporalResolution?: string;
-  quality: DataQuality;
-  flags?: string[];
-  caveat?: string;
-}
-
 export interface DatasetProvenance {
   sourceName: string;
   sourceUrl: string;

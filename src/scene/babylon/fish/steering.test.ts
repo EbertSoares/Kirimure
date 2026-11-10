@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampLength,
+  cross,
+  distance,
+  distanceSquared,
+  isInFov,
   length,
   normalize,
   rotateToward,
@@ -60,5 +64,32 @@ describe('steering portado do deepsea', () => {
     const slowing: Vec3Tuple = [0, 0, 2];
     steerFish(slowing, [0, 0, 0.1], 0.1, 0.5, 3, 0.2, 3, 0.6);
     expect(length(slowing)).toBeGreaterThanOrEqual(2 - 0.6 * 0.1 - 1e-6);
+  });
+
+  it('calcula distâncias e produto vetorial', () => {
+    expect(distance([0, 0, 0], [3, 4, 0])).toBeCloseTo(5, 6);
+    expect(distanceSquared([0, 0, 0], [3, 4, 0])).toBeCloseTo(25, 6);
+
+    const cr = cross([1, 0, 0], [0, 1, 0]);
+    expect(cr[0]).toBeCloseTo(0, 6);
+    expect(cr[1]).toBeCloseTo(0, 6);
+    expect(cr[2]).toBeCloseTo(1, 6);
+  });
+
+  it('avalia campo de visão (FOV) tridimensional e zona cega caudal', () => {
+    const pos: Vec3Tuple = [0, 0, 0];
+    const forward: Vec3Tuple = [0, 0, 1];
+
+    // Alvo à frente: dentro do campo
+    expect(isInFov(pos, forward, [0, 0, 3], -0.7)).toBe(true);
+
+    // Alvo lateral (90°): dentro para FOV amplo (~270°, cos = -0.7)
+    expect(isInFov(pos, forward, [3, 0, 0], -0.7)).toBe(true);
+
+    // Alvo logo atrás no cone cego caudal (180°): fora do campo
+    expect(isInFov(pos, forward, [0, 0, -3], -0.7)).toBe(false);
+
+    // Alvo a 140° (cos ~ -0.766): fora se exigido cos >= -0.7
+    expect(isInFov(pos, forward, [0.3, 0, -1], -0.7)).toBe(false);
   });
 });

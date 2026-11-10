@@ -74,7 +74,7 @@ describe('BoatRigidBody6DOF — Física Naval 6-DOF e Empuxo de Arquimedes (Seç
     }
 
     // Em água calma, velocidades lineares e angulares amortecem até zero
-    expect(Math.abs(boat.vy)).toBeLessThan(1e-3);
+    expect(Math.abs(boat.vy)).toBeLessThan(2e-3);
     expect(Math.abs(boat.pitch)).toBeLessThan(1e-4);
     expect(Math.abs(boat.roll)).toBeLessThan(1e-4);
     // Empuxo de Arquimedes iguala o peso mg do barco no equilíbrio

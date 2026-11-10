@@ -8,6 +8,8 @@ import { Icon } from './components/Icons';
 import { IndicatorProgress } from './components/IndicatorProgress';
 import { RegionSelector } from './components/RegionSelector';
 import { useOceanData } from './hooks/useOceanData';
+import type { DiveState } from './scene/babylon/runtime';
+import type { DiveToggleApi } from './scene/MarineScene';
 import { getSavedSst, saveSst } from './services/oceanStorage';
 import { calculateRespirationPhImpact } from './simulation/carbonate';
 import {
@@ -54,7 +56,7 @@ export type ContextualIndicatorId =
   | 'trophic'
   | 'turbidity';
 
-export const ALL_INDICATOR_OPTIONS: { id: ContextualIndicatorId; label: string; desc: string }[] = [
+const ALL_INDICATOR_OPTIONS: { id: ContextualIndicatorId; label: string; desc: string }[] = [
   { id: 'coral', label: 'Corais', desc: 'Saúde integrada da estrutura recifal' },
   { id: 'fish', label: 'Peixes', desc: 'Biomassa e diversidade da ictiofauna' },
   { id: 'oxygen', label: 'Oxigênio', desc: 'Concentração de oxigênio dissolvido' },
@@ -95,7 +97,21 @@ function getEffectiveBaselineTemperature(sectorId: BtsSectorId, liveSst?: number
   return sector.baselineTemperature;
 }
 
-function createSectorBaselineState(sectorId: BtsSectorId, targetTemp?: number): SimulationState {
+function getInitialConditionSource(
+  sectorId: BtsSectorId,
+  isLive: boolean,
+  fallback: string,
+): string {
+  if (isLive) return 'NOAA_CRW_LIVE';
+  // A SST persistida é uma observação salva, não uma leitura atual da API.
+  return getSavedSst(sectorId) !== null ? 'SST_SALVA_LOCAL' : fallback;
+}
+
+function createSectorBaselineState(
+  sectorId: BtsSectorId,
+  targetTemp?: number,
+  sstSource?: 'live' | 'saved',
+): SimulationState {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const base = createInitialState(sectorId);
   const baselineTemp = targetTemp ?? getEffectiveBaselineTemperature(sectorId);
@@ -119,7 +135,11 @@ function createSectorBaselineState(sectorId: BtsSectorId, targetTemp?: number): 
       dissolvedOxygen: initialDo,
       saturationOxygen: initialDo,
     })),
-    initialConditionSource: getSavedSst(sectorId) !== null ? 'NOAA_CRW_LIVE' : base.initialConditionSource,
+    initialConditionSource: sstSource === 'live'
+      ? 'NOAA_CRW_LIVE'
+      : sstSource === 'saved' || getSavedSst(sectorId) !== null
+        ? 'SST_SALVA_LOCAL'
+        : base.initialConditionSource,
   };
 }
 
@@ -162,7 +182,17 @@ export function App() {
     'ph',
   ]);
   const [metricsSelectorOpen, setMetricsSelectorOpen] = useState(false);
+  const [diveState, setDiveState] = useState<DiveState>('surface');
+  const diveApiRef = useRef<DiveToggleApi | null>(null);
   const [windowWidth, setWindowWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1200));
+
+  const handleDiveToggle = useCallback(() => {
+    diveApiRef.current?.toggle();
+  }, []);
+
+  const handleDiveApiReady = useCallback((api: DiveToggleApi | null) => {
+    diveApiRef.current = api;
+  }, []);
 
   useEffect(() => {
     simulationRef.current = simulation;
@@ -183,9 +213,14 @@ export function App() {
   const oceanData = useOceanData(simulation.sector, true);
 
   const liveSst = useMemo(() => {
+    // Somente leitura remota atual entra na série "ao vivo". Snapshots históricos
+    // carregados manualmente permanecem identificados como contingência.
+    if (oceanData.noaaStatus.state !== 'success' || oceanData.noaaStatus.isFallback) {
+      return undefined;
+    }
     const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
     return typeof sst === 'number' && Number.isFinite(sst) ? parseFloat(sst.toFixed(1)) : undefined;
-  }, [oceanData.latestCrw]);
+  }, [oceanData.latestCrw, oceanData.noaaStatus.state, oceanData.noaaStatus.isFallback]);
 
   const effectiveBaselineTemp = useMemo(() => {
     return getEffectiveBaselineTemperature(simulation.sector, liveSst);
@@ -428,7 +463,11 @@ export function App() {
     setResetToken((t) => t + 1);
     setSimulation((curr) => {
       const baseline = getEffectiveBaselineTemperature(curr.sector, liveSst);
-      return createSectorBaselineState(curr.sector, baseline);
+      return createSectorBaselineState(
+        curr.sector,
+        baseline,
+        liveSst !== undefined ? 'live' : undefined,
+      );
     });
   }, [liveSst]);
 
@@ -468,10 +507,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
-    if (typeof sst !== 'number' || !Number.isFinite(sst)) return;
-    const rounded = parseFloat(sst.toFixed(1));
-    saveSst(simulation.sector, rounded);
+    if (liveSst === undefined) return;
+    const rounded = liveSst;
+    const dataSector = oceanData.latestCrw?.provenance.isCachedFallback ? null : simulation.sector;
+    if (!dataSector) return;
+    saveSst(dataSector, rounded);
 
     // Se estiver na tela do mapa (antes de entrar na cena 3D), atualiza
     // a simulação silenciosamente para que abra já com o dado ao vivo pronto
@@ -499,7 +539,7 @@ export function App() {
       return () => window.clearTimeout(timer);
     }
     return undefined;
-  }, [oceanData.latestCrw, simulation.sector, screen]);
+  }, [liveSst, oceanData.latestCrw?.provenance.isCachedFallback, simulation.sector, screen]);
 
   const handleToggleIntervention = useCallback((id: InterventionId) => {
     setSimulation((current) => {
@@ -778,9 +818,10 @@ export function App() {
     // Aplica a temperatura ao vivo antes de montar a cena 3D, garantindo que o usuário
     // nunca veja qualquer salto ou transição de 26,8 °C para o dado da API em cena.
     window.setTimeout(() => {
-      const sst = oceanData.latestCrw?.seaSurfaceTemperatureDegC;
-      const effectiveTemp = getEffectiveBaselineTemperature(simulation.sector, sst);
-      saveSst(simulation.sector, effectiveTemp);
+      const effectiveTemp = getEffectiveBaselineTemperature(simulation.sector, liveSst);
+      if (liveSst !== undefined) {
+        saveSst(simulation.sector, liveSst);
+      }
 
       setSimulation((curr) => {
         const sector = BTS_SECTORS.find((s) => s.id === curr.sector) ?? BTS_SECTORS[0];
@@ -791,7 +832,11 @@ export function App() {
           env: { ...curr.env, temperature: effectiveTemp },
           targets: { ...curr.targets, temperature: effectiveTemp },
           dissolvedOxygen: doSat,
-          initialConditionSource: 'NOAA_CRW_LIVE',
+          initialConditionSource: getInitialConditionSource(
+            curr.sector,
+            liveSst !== undefined,
+            curr.initialConditionSource ?? 'PADRAO_CALIBRADO',
+          ),
           history: curr.history.map((pt) => ({
             ...pt,
             temperature: effectiveTemp,
@@ -966,7 +1011,12 @@ export function App() {
                 </div>
               }
             >
-              <MarineScene state={simulation} resetToken={resetToken} />
+              <MarineScene
+                state={simulation}
+                resetToken={resetToken}
+                onDiveStateChange={setDiveState}
+                onDiveApiReady={handleDiveApiReady}
+              />
             </Suspense>
 
             <div className="fps-counter-overlay" aria-label="Desempenho da cena 3D">
@@ -1010,7 +1060,35 @@ export function App() {
                   <span>Editar</span>
                 </button>
               </div>
+
+              {(diveState === 'underwater' || diveState === 'ascending') && (
+                <button
+                  type="button"
+                  className="scene-dive-btn scene-dive-btn--ascend"
+                  onClick={handleDiveToggle}
+                  disabled={diveState === 'ascending'}
+                  aria-label={diveState === 'ascending' ? 'Subindo para a superfície' : 'Subir para a superfície'}
+                  title={diveState === 'ascending' ? 'Subindo para a superfície…' : 'Subir para a superfície'}
+                >
+                  <Icon name="arrowUp" />
+                  <span>{diveState === 'ascending' ? 'Subindo…' : 'Subir'}</span>
+                </button>
+              )}
             </div>
+
+            {(diveState === 'surface' || diveState === 'descending') && (
+              <button
+                type="button"
+                className="scene-dive-btn scene-dive-btn--descend"
+                onClick={handleDiveToggle}
+                disabled={diveState === 'descending'}
+                aria-label={diveState === 'descending' ? 'Descendo para o fundo' : 'Descer ao fundo do mar'}
+                title={diveState === 'descending' ? 'Descendo para o fundo…' : 'Descer ao fundo do mar'}
+              >
+                <Icon name="arrowDown" />
+                <span>{diveState === 'descending' ? 'Descendo…' : 'Descer'}</span>
+              </button>
+            )}
           </div>
         </section>
 

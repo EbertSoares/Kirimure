@@ -1,6 +1,7 @@
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import type { Scene } from '@babylonjs/core/scene';
 import type { SimulationState } from '../../simulation/types';
+import type { DiveState } from './dive';
 import { createOceanEngine, type RendererBackend } from './engine';
 import type { CameraProfileId } from './framing';
 import {
@@ -10,8 +11,7 @@ import {
 } from './oceanScene';
 import { detectSceneQualityProfile, type SceneQualityProfile } from './quality';
 
-export type { FishDeathStage, FishDiagnostic } from './fish/FishSystem';
-export type { OceanPerformanceTelemetry, SceneDebugVisualizationMode };
+export type { DiveState, OceanPerformanceTelemetry, SceneDebugVisualizationMode };
 
 export class BabylonOceanRuntime {
   readonly backend: RendererBackend;
@@ -57,6 +57,20 @@ export class BabylonOceanRuntime {
 
   getDiagnostics(): OceanPerformanceTelemetry {
     return this.scene3D.getDiagnostics();
+  }
+
+  get diveState(): DiveState {
+    return this.scene3D.diveState;
+  }
+
+  toggleDive(): boolean {
+    if (this.disposed) return false;
+    return this.scene3D.toggleDive();
+  }
+
+  onDiveStateChange(listener: (state: DiveState) => void): () => void {
+    if (this.disposed) return () => {};
+    return this.scene3D.onDiveStateChange(listener);
   }
 
   setDebugMode(mode: SceneDebugVisualizationMode): void {

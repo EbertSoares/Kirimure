@@ -34,11 +34,11 @@ import type {
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
-export function stressAbove(value: number, start: number, maximum: number) {
+function stressAbove(value: number, start: number, maximum: number) {
   return clamp((value - start) / (maximum - start));
 }
 
-export function stressBelow(value: number, start: number, maximum: number) {
+function stressBelow(value: number, start: number, maximum: number) {
   return clamp((start - value) / (start - maximum));
 }
 
@@ -276,7 +276,7 @@ function pollutionPressures(pressures: Pressures, weights: Partial<Record<string
     .map((id) => (weights[id] ?? 0) * pressures[id]);
 }
 
-export function coralStress(pressures: Pressures) {
+function coralStress(pressures: Pressures) {
   const weights = PARAMETERS.pollutantWeights.coral as Partial<Record<string, number>>;
   const direct = [pressures.thermal, pressures.acidification];
   const pollution = pollutionPressures(pressures, weights);
@@ -479,7 +479,12 @@ function sampleHistory(state: SimulationState, next: SimulationState): Simulatio
     coral: next.health.coral,
     fish: next.health.fish,
     overall: next.overall,
-    algae: calculateAlgae(next.env, next.health),
+    algae: calculateAlgae(
+      next.env,
+      next.health,
+      next.sewageDischargeMode,
+      next.biochemicalOxygenDemand,
+    ),
     temperature: next.env.temperature,
     ph: effectivePh(next.env, next.biochemicalOxygenDemand, next.sector, next.respiratoryDicUmolKg),
     dhw: next.degreeHeatingWeeks,
@@ -758,13 +763,21 @@ export function getDissolvedOxygenBreakdown(
   env: Environment,
   algae = 0,
   sectorId: BtsSectorId = 'frades',
+  bodConcentrationMgL = 0,
+  sewageDischargeMode: 'continuous' | 'pulse' = 'continuous',
 ): DissolvedOxygenBreakdown {
   const sector = BTS_SECTORS.find((s) => s.id === sectorId) ?? BTS_SECTORS[0];
   const saturation = calculateWeissOxygenSaturation(env.temperature, sector.baselineSalinity);
   const baselineSat = calculateWeissOxygenSaturation(BASELINE.temperature, sector.baselineSalinity);
   const temperatureEffect = baselineSat - saturation;
 
-  const dissolvedOxygen = calculateEquilibriumOxygen(env, sectorId, algae);
+  const dissolvedOxygen = calculateEquilibriumOxygen(
+    env,
+    sectorId,
+    algae,
+    sewageDischargeMode === 'pulse' ? 'instant_pulse' : 'continuous_daily',
+    bodConcentrationMgL,
+  );
   const totalDeficit = Math.max(0, saturation - dissolvedOxygen);
   const algalShare = Math.min(1, (algae / 100) * 0.35);
   const algalDemand = totalDeficit * algalShare;
@@ -783,25 +796,45 @@ export function getDissolvedOxygenBreakdown(
  * Estimativa físico-química de oxigênio dissolvido em mg/L [Produto de Modelo / Padrão CONAMA 357].
  * Baseada no balanço analítico em estado estacionário acoplado à equação de Weiss (1970).
  */
-export function calculateDissolvedOxygen(
+function calculateDissolvedOxygen(
   state: {
     env: Environment;
     pressures?: Pressures;
     health?: Health;
     dissolvedOxygen?: number;
+    biochemicalOxygenDemand?: number;
     sector?: BtsSectorId;
     sewageDischargeMode?: 'continuous' | 'pulse';
   },
   algae?: number,
 ) {
-  const currentAlgae = algae ?? (state.health ? calculateAlgae(state.env, state.health) : 0);
+  const currentAlgae = algae
+    ?? (state.health
+      ? calculateAlgae(
+        state.env,
+        state.health,
+        state.sewageDischargeMode,
+        state.biochemicalOxygenDemand,
+      )
+      : 0);
   const dischargeType = state.sewageDischargeMode === 'pulse' ? 'instant_pulse' : 'continuous_daily';
-  return calculateEquilibriumOxygen(state.env, state.sector ?? 'frades', currentAlgae, dischargeType);
+  return calculateEquilibriumOxygen(
+    state.env,
+    state.sector ?? 'frades',
+    currentAlgae,
+    dischargeType,
+    state.biochemicalOxygenDemand ?? 0,
+  );
 }
 
 /** Indicadores derivados que o aluno acompanha no painel. */
 export function deriveIndicators(state: SimulationState): Indicator[] {
-  const algae = calculateAlgae(state.env, state.health);
+  const algae = calculateAlgae(
+    state.env,
+    state.health,
+    state.sewageDischargeMode,
+    state.biochemicalOxygenDemand,
+  );
   const oxygen = state.elapsedDays > 0
     ? state.dissolvedOxygen
     : calculateDissolvedOxygen(state, algae);
@@ -875,7 +908,7 @@ export function deriveIndicators(state: SimulationState): Indicator[] {
   ];
 }
 
-export type ImpactMetricId =
+type ImpactMetricId =
   | 'dissolvedOxygen'
   | 'coralHealth'
   | 'fishHealth'

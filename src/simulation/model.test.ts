@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { CHALLENGES, evaluateChallenge } from './challenges';
 import { BASELINE, BTS_SECTORS, ITEM_DEFINITIONS, MICROPLASTICS_OPTIONS_PARTICLES_M3, PARAMETERS } from './config';
 import {
   buildTargets,
@@ -271,7 +270,6 @@ describe('modelo de simulação', () => {
         sewage: PARAMETERS.receivedLoads.sewage.maximumKg,
         turbidity: 100,
         fishing: 100,
-        recovery: 0,
       },
     };
     const after = run(state, 200);
@@ -313,19 +311,6 @@ describe('modelo de simulação', () => {
     expect(after.elapsedDays).toBeCloseTo(10);
   });
 
-  it('não permite que recovery legada reduza dano magicamente sob poluição não mitigada', () => {
-    const polluted = { ...createInitialState(), paused: false };
-    polluted.targets.oil = PARAMETERS.receivedLoads.oil.maximumKg * 0.8;
-    const legacyProtectedReef = {
-      ...polluted,
-      targets: { ...polluted.targets, recovery: 100 },
-    };
-    const bare = run(polluted, 45);
-    const guarded = run(legacyProtectedReef, 45);
-    // Sem atenuação física real do estressor, a saúde cai de forma equivalente
-    expect(guarded.health.coral).toBeCloseTo(bare.health.coral, 1);
-  });
-
   it('permite regeneração biológica natural quando o estresse ambiental cai abaixo do limiar', () => {
     const initial = { ...createInitialState(), paused: false };
     // Reduz saúde inicial para simular histórico prévio de perturbação
@@ -345,6 +330,30 @@ describe('modelo de simulação', () => {
     expect(after.history.at(-1)?.day).toBeLessThanOrEqual(12);
   });
 
+  it('propaga a DBO de pulso para algas, oxigênio e histórico', () => {
+    const clean = createInitialState();
+    const pulse = {
+      ...clean,
+      sewageDischargeMode: 'pulse' as const,
+      biochemicalOxygenDemand: 8,
+    };
+
+    expect(
+      calculateAlgae(pulse.env, pulse.health, 'pulse', pulse.biochemicalOxygenDemand),
+    ).toBeGreaterThan(calculateAlgae(pulse.env, pulse.health, 'pulse', 0));
+
+    const pick = (list: ReturnType<typeof deriveIndicators>, id: string) =>
+      list.find((indicator) => indicator.id === id)?.value ?? 0;
+    expect(pick(deriveIndicators(pulse), 'oxygen')).toBeLessThan(
+      pick(deriveIndicators(clean), 'oxygen'),
+    );
+
+    const after = run({ ...pulse, paused: false }, 2);
+    const lastPoint = after.history.at(-1);
+    expect(lastPoint?.bod).toBeGreaterThan(0);
+    expect(lastPoint?.algae).toBeGreaterThan(20);
+  });
+
   it('faz os indicadores reagirem ao ambiente', () => {
     const clean = createInitialState();
     const dirty = {
@@ -359,20 +368,6 @@ describe('modelo de simulação', () => {
     expect(calculateAlgae(dirty.env, dirty.health)).toBeGreaterThan(calculateAlgae(clean.env, clean.health));
     expect(pick(dirtyIndicators, 'algae')).toBeGreaterThan(pick(cleanIndicators, 'algae'));
     expect(pick(dirtyIndicators, 'oxygen')).toBeLessThan(pick(cleanIndicators, 'oxygen'));
-  });
-
-  it('avança o desafio enquanto as condições se mantêm', () => {
-    const challenge = CHALLENGES[0];
-    const clean = { ...createInitialState(), paused: false };
-    const after = run(clean, 10);
-    const progress = evaluateChallenge(challenge, after);
-    expect(progress.status).toBe('running');
-    expect(progress.daysHeld).toBeGreaterThanOrEqual(8);
-
-    const polluted = { ...createInitialState(), paused: false };
-    polluted.targets.sewage = PARAMETERS.receivedLoads.sewage.maximumKg;
-    const troubled = evaluateChallenge(challenge, run(polluted, 10));
-    expect(troubled.status).toBe('pending');
   });
 
   it('projeta o prazo crítico pela dose acumulada do cenário', () => {
@@ -395,15 +390,6 @@ describe('modelo de simulação', () => {
     expect(lastPoint).toHaveProperty('microplastics');
     expect(lastPoint).toHaveProperty('oil');
     expect(lastPoint.sewage).toBeGreaterThan(0);
-  });
-
-  it('impede que o desafio de restaurar o recife conclua sem ter havido degradação prévia', () => {
-    const challenge = CHALLENGES.find((c) => c.id === 'restored-reef')!;
-    const pristine = { ...createInitialState(), paused: false };
-    const afterThirtyDays = run(pristine, 35);
-    // Em um recife virgem de 100% que nunca caiu, everDegraded continua falso
-    expect(afterThirtyDays.everDegraded).toBe(false);
-    expect(evaluateChallenge(challenge, afterThirtyDays).status).toBe('pending');
   });
 
   it('acopla a desoxigenação (hipóxia) ao estresse dos peixes', () => {
@@ -436,6 +422,11 @@ describe('modelo de simulação', () => {
     const sewagePlusAlgaeBreakdown = getDissolvedOxygenBreakdown({ ...BASELINE, sewage: 5000 }, 60);
     expect(sewagePlusAlgaeBreakdown.algalDemand).toBeGreaterThan(0);
     expect(sewagePlusAlgaeBreakdown.dissolvedOxygen).toBeLessThan(sewageOnlyBreakdown.dissolvedOxygen);
+
+    // 3. Pulso isolado: a DBO já dissolvida na caixa de mistura também consome oxigênio.
+    const pulseBreakdown = getDissolvedOxygenBreakdown(BASELINE, 0, 'frades', 4, 'pulse');
+    expect(pulseBreakdown.organicDemand).toBeGreaterThan(baselineBreakdown.organicDemand);
+    expect(pulseBreakdown.dissolvedOxygen).toBeLessThan(baselineBreakdown.dissolvedOxygen);
   });
 
   it('projeta prazo crítico em modo pulso de DBO considerando o estado inicial da massa injetada', () => {

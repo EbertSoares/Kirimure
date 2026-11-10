@@ -1,13 +1,41 @@
+# Sistema operacional e arquivos de apoio
 .DS_Store
 **/.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Dependências
 node_modules/
+
+# Build e artefatos locais
 dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+
+# Testes e cobertura
 test-results/
 playwright-report/
-*.local
-src-tauri/
-.github/workflows/windows-desktop.yml
+coverage/
 
-# Fonte do mapa do IBGE (17 MB). Usada apenas por scripts/build-brazil-map.mjs,
+# Ambiente local (nunca versionar credenciais)
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editores e IDEs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Fonte original do mapa do IBGE (17 MB). Usada apenas por scripts/build-brazil-map.mjs,
 # que gera o arquivo já simplificado em src/components/brazilStates.data.ts.
 src/assets/svg/brasil-estados*.svg

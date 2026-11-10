@@ -153,7 +153,7 @@ describe('Validação Científica, Casos de Referência da BTS e Sensibilidade (
     });
 
     it('classifica parâmetros por nível de evidência e organiza os controles em grupos com indicadores', () => {
-      expect(FACTOR_ORDER).toHaveLength(8);
+      expect(FACTOR_ORDER).toHaveLength(7);
       const groupedItems = CONTROL_GROUPS.flatMap((g) => g.items);
       expect(groupedItems).toHaveLength(7);
       expect(new Set(groupedItems).size).toBe(7);
@@ -221,7 +221,6 @@ describe('Validação Científica, Casos de Referência da BTS e Sensibilidade (
         oil: 100000,
         microplastics: 33000,
         fishing: 100,
-        recovery: 0,
       };
       extreme.targets = buildTargets(extreme.controls, 'paraguacu', 'continuous');
 

@@ -18,10 +18,9 @@ export const BASELINE: Environment = {
   sewage: 0,
   turbidity: 0,
   fishing: 0,
-  recovery: 0,
 };
 
-export const MASS_LOAD_IDS = ['oil', 'sewage'] as const;
+const MASS_LOAD_IDS = ['oil', 'sewage'] as const;
 export type MassLoadId = (typeof MASS_LOAD_IDS)[number];
 
 /**
@@ -142,7 +141,6 @@ export const PARAMETERS = {
     sewage: 4,
     turbidity: 4,
     fishing: 2,
-    recovery: 20,
   } satisfies Record<ItemId, number>,
   temperature: {
     // Cenário didático da Baía de Todos-os-Santos: águas internas podem chegar
@@ -216,15 +214,9 @@ export const PARAMETERS = {
   } satisfies Record<'coral', Partial<Record<PressureId, number>>>,
   synergy: 0.5,
   collapseDays: { coral: 75 },
+  // Regeneração biológica natural quando o estresse cai abaixo do limiar.
   recoveryFactor: 5,
   recoveryThreshold: 0.1,
-  // Recuperação ambiental: reduz o dano, acelera a volta e permite recuperar
-  // mesmo sob estresse moderado.
-  recovery: {
-    damageReduction: 0.6,
-    speedBoost: 3,
-    thresholdBoost: 0.35,
-  },
   history: {
     sampleDays: 1,
     maxPoints: 240,
@@ -283,8 +275,9 @@ export const FISH_SPECIES: readonly FishSpeciesDefinition[] = [
 ];
 
 /**
- * Ordem completa dos oito controles ambientais agrupados nas três categorias da bancada:
- * Água (temperatura, pH, turbidez), Poluição (esgoto, óleo, microplásticos) e Ecossistema (pesca, recuperação).
+ * Ordem completa dos sete controles ambientais agrupados nas três categorias da bancada:
+ * Água (temperatura, pH, turbidez), Poluição (esgoto, óleo, microplásticos) e Ecossistema (pesca).
+ * A recuperação é operada pelas intervenções concretas do painel.
  */
 export const FACTOR_ORDER: readonly ItemId[] = [
   'temperature',
@@ -294,7 +287,6 @@ export const FACTOR_ORDER: readonly ItemId[] = [
   'oil',
   'microplastics',
   'fishing',
-  'recovery',
 ];
 
 export interface ControlGroupDefinition {
@@ -506,23 +498,6 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
     evidenceLevel: 'Parâmetro Didático',
     causalChain: 'Pressão pesqueira maior → declínio mais rápido de herbívoros (peixe-papagaio) → menor raspagem → expansão de algas sobre o recife.',
     primaryIndicators: ['fish', 'trophic', 'algae'],
-  },
-  recovery: {
-    label: 'Recuperação ecológica',
-    shortLabel: 'Recuperação',
-    category: 'ecosystem',
-    min: 0,
-    max: 100,
-    step: 1,
-    unit: '% índice',
-    reference: 'Proteção e manejo (0–100%)',
-    tooltip: 'Ações de mitigação e recuperação ecológica.',
-    help: 'Parâmetro Didático: Representa áreas marinhas protegidas, zonas de exclusão de pesca e manejo costeiro. No modelo, atenua a taxa diária de dano (até 60%) e acelera a regeneração quando as pressões caem abaixo do limiar de recuperação.',
-    icon: 'shield',
-    scaleType: 'linear',
-    evidenceLevel: 'Parâmetro Didático',
-    causalChain: 'Manejo e proteção maiores → amortecimento da taxa diária de dano + regeneração acelerada quando os estressores recuam.',
-    primaryIndicators: ['coral', 'fish', 'trophic'],
   },
 };
 

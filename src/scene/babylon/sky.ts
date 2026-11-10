@@ -12,6 +12,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Scene } from '@babylonjs/core/scene';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import { assetUrl } from './assetPaths';
 import type { SceneQualityProfile } from './quality';
 import { clamp, fbm2D, hash2D, mix, smoothstep } from './procedural';
 import type { VisualState } from './visualState';
@@ -317,8 +318,8 @@ function buildHorizonRidgeMesh(scene: Scene, ridge: HorizonRidge): Mesh {
 }
 
 function buildHorizonLayers(scene: Scene): Mesh[] {
-  const skyHaze: RidgeColor = [0.52, 0.68, 0.8];
-  const farHaze: RidgeColor = [0.58, 0.72, 0.82];
+  const skyHaze: RidgeColor = [0.56, 0.7, 0.81];
+  const farHaze: RidgeColor = [0.62, 0.74, 0.84];
 
   // Serra continental muito distante: uma linha baixa e azulada, quase
   // dissolvida na bruma, que fecha o fundo da baía sem roubar a atenção.
@@ -336,9 +337,9 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
       return envelope * (2.2 + hills);
     },
     color(rowT) {
-      const top: RidgeColor = [0.33, 0.46, 0.57];
-      const base: RidgeColor = [0.5, 0.64, 0.74];
-      return hazed(mixColor(base, top, rowT), 0.2, farHaze);
+      const top: RidgeColor = [0.4, 0.52, 0.62];
+      const base: RidgeColor = [0.55, 0.67, 0.76];
+      return hazed(mixColor(base, top, rowT), 0.3, farHaze);
     },
   };
 
@@ -360,13 +361,13 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
       return envelope * (3.2 + rolling + peak + shoulder);
     },
     color(rowT) {
-      const top: RidgeColor = [0.2, 0.34, 0.37];
-      const middle: RidgeColor = [0.26, 0.4, 0.43];
-      const base: RidgeColor = [0.42, 0.56, 0.64];
+      const top: RidgeColor = [0.26, 0.38, 0.42];
+      const middle: RidgeColor = [0.32, 0.44, 0.48];
+      const base: RidgeColor = [0.47, 0.6, 0.68];
       const local = rowT < 0.55
         ? mixColor(base, middle, rowT / 0.55)
         : mixColor(middle, top, (rowT - 0.55) / 0.45);
-      return hazed(local, 0.42 * (1 - rowT * 0.4), skyHaze);
+      return hazed(local, 0.5 * (1 - rowT * 0.4), skyHaze);
     },
   };
 
@@ -387,9 +388,9 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
       return envelope * (1.4 + ridge + peak);
     },
     color(rowT) {
-      const top: RidgeColor = [0.28, 0.41, 0.47];
-      const base: RidgeColor = [0.44, 0.57, 0.66];
-      return hazed(mixColor(base, top, rowT), 0.48, skyHaze);
+      const top: RidgeColor = [0.34, 0.46, 0.52];
+      const base: RidgeColor = [0.5, 0.62, 0.7];
+      return hazed(mixColor(base, top, rowT), 0.55, skyHaze);
     },
   };
 
@@ -401,9 +402,9 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
     z: 262,
     xMin: 28,
     xMax: 350,
-    segments: 280,
+    segments: 300,
     baseY: -3.2,
-    rows: 14,
+    rows: 16,
     height(t) {
       const envelope = smoothstep(0.015, 0.12, t) * (1 - smoothstep(0.86, 1, t));
       const canopy = fbm2D(t * 21 + 3.4, 1.2, 4) * 2.3;
@@ -418,11 +419,12 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
       return envelope * (1.8 + canopy + canopyFine + peakA + peakB + peakC + saddleA + saddleB);
     },
     color(rowT) {
-      // Rocha molhada e algas na base; dossel verde-escuro no topo.
-      const rockDark: RidgeColor = [0.25, 0.27, 0.26];
-      const rockLit: RidgeColor = [0.33, 0.34, 0.3];
-      const greenMid: RidgeColor = [0.19, 0.35, 0.24];
-      const greenTop: RidgeColor = [0.27, 0.46, 0.32];
+      // Rocha molhada e algas na base; dossel verde-escuro no topo, sempre
+      // puxado para o azul pela perspectiva atmosférica.
+      const rockDark: RidgeColor = [0.26, 0.29, 0.29];
+      const rockLit: RidgeColor = [0.38, 0.4, 0.37];
+      const greenMid: RidgeColor = [0.22, 0.37, 0.29];
+      const greenTop: RidgeColor = [0.31, 0.47, 0.37];
 
       let local: RidgeColor;
       if (rowT < 0.3) {
@@ -435,7 +437,7 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
 
       // A base dissolve no azul da baía; o topo mantém o verde da Mata
       // Atlântica. Sem isso a ilha lê como um recorte preto colado no céu.
-      return hazed(local, 0.5 * Math.pow(1 - rowT, 1.35) + 0.06, skyHaze);
+      return hazed(local, 0.56 * Math.pow(1 - rowT, 1.35) + 0.12, skyHaze);
     },
   };
 
@@ -454,9 +456,10 @@ function buildHorizonLayers(scene: Scene): Mesh[] {
 function buildHorizonHazeMesh(scene: Scene): Mesh {
   const z = 205;
   const rows: ReadonlyArray<readonly [number, number]> = [
-    [-1, 0.5],
-    [1.6, 0.3],
-    [6.8, 0],
+    [-1.0, 0.58],
+    [2.4, 0.42],
+    [8.0, 0.24],
+    [18.0, 0],
   ];
   const positions: number[] = [];
   const colors: number[] = [];
@@ -530,6 +533,10 @@ export function createSkySystem(scene: Scene, _quality: SceneQualityProfile): Sk
   skyTexture.level = skyBaseLevel;
 
   const usePanorama = (texture: Texture, level: number): void => {
+    // O HDR/JPG pode terminar de carregar depois que o usuário voltou ao mapa.
+    // Aplicar o panorama em uma cena descartada reativaria texturas mortas.
+    if (scene.isDisposed) return;
+
     texture.wrapU = Texture.WRAP_ADDRESSMODE;
     texture.wrapV = Texture.CLAMP_ADDRESSMODE;
     texture.level = level;
@@ -541,8 +548,10 @@ export function createSkySystem(scene: Scene, _quality: SceneQualityProfile): Sk
   };
 
   const loadLdrFallback = (): void => {
+    if (scene.isDisposed) return;
+
     const panorama = new Texture(
-      '/textures/sky/kirimure-sky.jpg',
+      assetUrl('textures/sky/kirimure-sky.jpg'),
       scene,
       false,
       false,
@@ -555,7 +564,7 @@ export function createSkySystem(scene: Scene, _quality: SceneQualityProfile): Sk
   };
 
   const hdrTexture = new Texture(
-    '/textures/sky/kirimure-sky.hdr',
+    assetUrl('textures/sky/kirimure-sky.hdr'),
     scene,
     false,
     false,
@@ -568,17 +577,28 @@ export function createSkySystem(scene: Scene, _quality: SceneQualityProfile): Sk
   const horizonHaze = buildHorizonHazeMesh(scene);
 
   const hemiLight = new HemisphericLight('luz-ambiente-marinha', new Vector3(0, 1, 0), scene);
-  hemiLight.intensity = 0.88;
-  hemiLight.diffuse = new Color3(0.44, 0.72, 0.94);
+  hemiLight.intensity = 0.8;
+  hemiLight.diffuse = new Color3(0.4, 0.68, 0.92);
   // Luz de preenchimento vinda do leito: sem ela as faces verticais dos corais
   // ficavam quase pretas sob o véu azul.
-  hemiLight.groundColor = new Color3(0.16, 0.36, 0.46);
+  hemiLight.groundColor = new Color3(0.13, 0.3, 0.4);
   hemiLight.specular = new Color3(0.08, 0.14, 0.18);
 
   const sunLight = new DirectionalLight('luz-solar-hdr', LIGHT_SUN.scale(-1), scene);
-  sunLight.intensity = 1.34;
+  sunLight.intensity = 1.48;
   sunLight.diffuse = new Color3(1.0, 0.94, 0.82);
   sunLight.specular = new Color3(0.95, 0.92, 0.84);
+
+  // Configuração precisa da projeção ortográfica de sombras:
+  // Posiciona a montante de toda a cena do diorama (centro em 0, -2, 26).
+  // Com o raio solar em LIGHT_SUN = (0.28, 0.68, 0.68), o recuo ao longo da direção
+  // do sol enquadra perfeitamente barco, peixes, recifes e o leito marinho com máxima nitidez.
+  sunLight.position = new Vector3(14, 32, 60);
+  sunLight.shadowFrustumSize = 56;
+  sunLight.shadowMinZ = 1;
+  sunLight.shadowMaxZ = 90;
+  sunLight.autoUpdateExtends = false;
+  sunLight.autoCalcShadowZBounds = false;
 
   return {
     meshes: [skybox, ...horizonRidges, horizonHaze],
@@ -593,8 +613,8 @@ export function createSkySystem(scene: Scene, _quality: SceneQualityProfile): Sk
       skyMaterial.emissiveColor.set(MURK_TINT.r * veil, MURK_TINT.g * veil, MURK_TINT.b * veil);
 
       const clarity = visual.waterClarity;
-      sunLight.intensity = 1.34 * (0.58 + clarity * 0.42);
-      hemiLight.intensity = 0.88 * (0.62 + clarity * 0.38);
+      sunLight.intensity = 1.48 * (0.58 + clarity * 0.42);
+      hemiLight.intensity = 0.8 * (0.62 + clarity * 0.38);
       hemiLight.diffuse.set(
         0.4 + 0.06 * (1 - visual.turbidity),
         0.68 + 0.08 * (1 - visual.turbidity),

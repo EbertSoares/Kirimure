@@ -44,7 +44,7 @@ export interface BtsSectorThermodynamicReference {
  * Avalia o oxigênio dissolvido estacionário sob parâmetros cinéticos/hidrodinâmicos
  * explicitamente perturbados, sem alterar as constantes globais da aplicação.
  */
-export function evaluateSteadyStateOxygenWithOverrides(
+function evaluateSteadyStateOxygenWithOverrides(
   env: Environment,
   sectorId: BtsSectorId,
   overrides: {

@@ -30,7 +30,7 @@ Para garantir integridade perante os estudantes (11–14 anos) e pesquisadores, 
   - Alimenta a dose térmica acumulada (Graus de Aquecimento Semanal — DHW):
     $$\text{HotSpot} = \max(0, T - MMM)$$
     $$\text{DHW} = \frac{1}{7} \sum_{i=1}^{84} \text{HotSpot}_i \quad (\text{para } \text{HotSpot} \ge 1.0 \text{ °C})$$
-- **Componentes Consumidores:** `MarineScene.tsx` (branqueamento visual), `EnvironmentDrawer.tsx` (slider térmico), `SciencePanel.tsx` (painel oceanográfico), `OxygenTrendChart.tsx`.
+- **Componentes Consumidores:** `MarineScene.tsx` (branqueamento visual), `EnvironmentDrawer.tsx` (slider térmico), `EvidenceDrawer.tsx` (painel oceanográfico), `OxygenTrendChart.tsx`.
 - **Premissas e Limitações:** A MMM (Média Máxima Mensal) da BTS é calibrada em 28,0 °C para fins didáticos. O produto NOAA 5km possui grade regional e não resolve canais estuarinos estreitos.
 
 ---
@@ -59,7 +59,7 @@ Para garantir integridade perante os estudantes (11–14 anos) e pesquisadores, 
   - $2.0 - 3.0\text{ mg/L}$: Hipóxia (fuga de peixes móveis)
   - $0.2 - 2.0\text{ mg/L}$: Hipóxia severa (asfixia e necrose de tecidos)
   - $< 0.2\text{ mg/L}$ (piso computacional $0.05\text{ mg/L}$): Anóxia (mortalidade massiva aeróbia)
-- **Componentes Consumidores:** `MarineScene.tsx` (respiração e nado de peixes), `IndicatorProgress.tsx`, `OxygenTrendChart.tsx`, `SciencePanel.tsx`.
+- **Componentes Consumidores:** `MarineScene.tsx` (respiração e nado de peixes), `IndicatorProgress.tsx`, `OxygenTrendChart.tsx`, `EvidenceDrawer.tsx`.
 - **Premissa de Estabilidade:** Salvaguarda numérica de saturação estequiométrica mínima em 0,05 mg/L para evitar indefinições diferenciais, declarada expressamente como limite computacional e não ausência absoluta matemática de oxigênio.
 
 ---
@@ -107,7 +107,7 @@ Para garantir integridade perante os estudantes (11–14 anos) e pesquisadores, 
   - $2.0 \le \Omega_{\text{arag}} < 3.0$: Marginal (redução de crescimento esquelético)
   - $1.0 \le \Omega_{\text{arag}} < 2.0$: Estresse severo (fragilização de ramos)
   - $\Omega_{\text{arag}} < 1.0$: Corrosivo (dissolução mineral espontânea de aragonita)
-- **Componentes Consumidores:** `MarineScene.tsx` (aparência de corais), `SciencePanel.tsx`, `EvidenceDrawer.tsx`.
+- **Componentes Consumidores:** `MarineScene.tsx` (aparência de corais), `EvidenceDrawer.tsx`.
 
 ---
 
@@ -139,7 +139,7 @@ Para garantir integridade perante os estudantes (11–14 anos) e pesquisadores, 
 - **Intervenções Operacionais:**
   - Barreiras de contenção: reduzem o fator de espalhamento superficial (de 150 para $85\text{ m}^2/\text{kg}$), contendo a área da mancha.
   - Skimming mecânico: recolhe massa exclusivamente do filme superficial acessível, transferindo-a para $M_{\text{recolhido}}$ e preservando as frações já evaporadas, dispersas ou dissolvidas.
-- **Componentes Consumidores:** `MarineScene.tsx` (filme superficial translúcido, gotículas na coluna), `EnvironmentDrawer.tsx`, `SciencePanel.tsx`.
+- **Componentes Consumidores:** `MarineScene.tsx` (filme superficial translúcido, gotículas na coluna), `EnvironmentDrawer.tsx`, `EvidenceDrawer.tsx`.
 
 ---
 

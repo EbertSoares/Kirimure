@@ -9,13 +9,15 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import { RawTexture } from '@babylonjs/core/Materials/Textures/rawTexture';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
+import { Constants } from '@babylonjs/core/Engines/constants';
 import type { Scene } from '@babylonjs/core/scene';
 import { WaterMaterial } from '@babylonjs/materials/water/waterMaterial';
 import type { DioramaFrame } from './framing';
 import type { SceneQualityProfile } from './quality';
 import { clamp, mix } from './procedural';
-import { sampleOcean, stepOceanSpectrum, type WaveSample } from './waves';
+import { configureOceanSpectrum, getOceanFftAtlas, sampleOcean, stepOceanSpectrum, type WaveSample } from './waves';
 import type { VisualState } from './visualState';
 
 /**
@@ -303,7 +305,7 @@ void main(void) {
   // Fresnel dielétrico exato (n1 = 1.0, n2 = 1.333) com compensação de rugosidade distante
   float NoV = clamp(dot(normalW, viewDirectionW), 0.0, 1.0);
   float fresnel = exactWaterFresnel(NoV);
-  float reflectionWeight = clamp(fresnel * mix(0.42, 0.76, horizonFactor), 0.04, 0.78);
+  float reflectionWeight = clamp(fresnel * mix(0.9, 0.42, horizonFactor), 0.03, 0.55);
 
 #ifdef REFLECTION
   vec2 refrUV = clamp(vRefractionMapTexCoord.xy / vRefractionMapTexCoord.z + perturbation * 0.34 * nearFactor, 0.002, 0.998);
@@ -358,8 +360,10 @@ void main(void) {
   float sssFactor = (crestHeight * (0.36 + 0.64 * smoothstep(0.02, 0.28, crestSteepness)) + vertexBreaker * 0.42) * (0.45 + 0.55 * midFactor) * (0.68 + 0.32 * backLit);
   vec3 sssColor = vec3(0.05, 0.86, 0.84) * sssFactor * 0.88;
 
-  // Reflexo do céu e das montanhas modulado pelo Fresnel físico
-  vec3 skyReflect = mix(reflectiveColor.rgb, mix(shallowTurquoise, reflectiveColor.rgb, 0.75), 0.22);
+  // Reflexo do céu e das montanhas modulado pelo Fresnel físico. No horizonte,
+  // a silhueta da serra é diluída em azul atmosférico antes de entrar na cor.
+  vec3 softReflection = mix(reflectiveColor.rgb, vec3(0.4, 0.61, 0.76), horizonFactor * 0.7);
+  vec3 skyReflect = mix(softReflection, mix(shallowTurquoise, softReflection, 0.75), 0.22);
   vec3 oceanCol = mix(transmitted + sssColor, skyReflect, reflectionWeight);
 
   // Espuma física advectada por curl (foamLacePattern) + Jacobiano FFT + colisão + esteira Kelvin do barco
@@ -389,9 +393,10 @@ void main(void) {
   vec3 ggxSun = vec3(1.0, 0.96, 0.86) * (min(sunGlint, 12.0) * 0.18 + glitterPath * 0.24) * fresnel;
   vec3 finalSpecular = (specularBase * specularColor * 0.32 + ggxSun) * (1.0 - foamMask * 0.72);
 
-  // Perspectiva aérea suave junto ao horizonte
-  vec3 horizonHaze = mix(deepHorizonBlue + vec3(0.08, 0.24, 0.36), reflectiveColor.rgb, 0.52);
-  oceanCol = mix(oceanCol, horizonHaze, horizonFactor * 0.34);
+  // Perspectiva aérea: bruma clara que casa a água com o céu e enfraquece a
+  // mancha escura do reflexo da serra no horizonte.
+  vec3 horizonHaze = mix(deepHorizonBlue + vec3(0.1, 0.26, 0.38), vec3(0.46, 0.65, 0.79), 0.66);
+  oceanCol = mix(oceanCol, horizonHaze, horizonFactor * 0.7);
 
   vec4 color = vec4(clamp(oceanCol, 0.0, 1.0) + finalSpecular, alpha);
 #include<logDepthFragment>
@@ -525,6 +530,318 @@ void main(void) {
 }
 
 /**
+ * Shaders WGSL da superfície oceânica (WebGPU).
+ *
+ * O deslocamento vertical, as normais e a energia de quebra/espuma são
+ * reconstruídos diretamente no vertex shader a partir do atlas FFT RGBA
+ * (`R = altura`, `G = inclinação X`, `B = inclinação Z`, `A = Jacobiano`).
+ * O JavaScript deixa de reescrever ~36 mil vértices por quadro; a física do
+ * barco e dos efeitos continua usando o mesmo espectro na CPU.
+ *
+ * O fragment shader faz a óptica completa: Fresnel dielétrico, Beer-Lambert,
+ * espalhamento interno, SSS turquesa nas cristas, glints GGX de duplo lóbulo,
+ * espuma filamentar advectada e whitecaps nas cristas comprimidas.
+ */
+function installDeepseaWaterShaderWGSL(): void {
+  ShaderStore.ShadersStoreWGSL['waterVertexShader'] = `attribute position: vec3f;
+attribute normal: vec3f;
+attribute uv: vec2f;
+
+uniform world: mat4x4f;
+uniform view: mat4x4f;
+uniform viewProjection: mat4x4f;
+uniform reflectionViewProjection: mat4x4f;
+uniform waveSpeed: f32;
+uniform waveHeight: f32;
+uniform waveLength: f32;
+uniform waveCount: f32;
+uniform windForce: f32;
+uniform windDirection: vec2f;
+
+var normalSamplerSampler: sampler;
+var normalSampler: texture_2d<f32>;
+
+varying vPositionW: vec3f;
+varying vNormalW: vec3f;
+varying vFoam: f32;
+varying vHeight: f32;
+varying vWake: f32;
+varying vRefractionMapTexCoord: vec3f;
+varying vReflectionMapTexCoord: vec3f;
+
+struct FftTap {
+  h: f32,
+  sx: f32,
+  sz: f32,
+  j: f32,
+};
+
+fn wrapIndex(v: i32, n: i32) -> i32 {
+  var r = v % n;
+  if (r < 0) { r = r + n; }
+  return r;
+}
+
+// Amostragem bilinear periódica do atlas FFT. Barata no vertex e suficiente
+// para uma malha já densa; o filtro de Nyquist por cascata evita aliasing.
+fn sampleFft(pos: vec2f, layer: i32, length: f32, dims: vec2i) -> FftTap {
+  let n = f32(dims.x);
+  let g = pos * (n / length);
+  let bx = i32(floor(g.x));
+  let bz = i32(floor(g.y));
+  let ux = g.x - floor(g.x);
+  let uz = g.y - floor(g.y);
+  let x0 = wrapIndex(bx, dims.x);
+  let x1 = wrapIndex(bx + 1, dims.x);
+  let y0 = wrapIndex(bz, dims.x) + layer * dims.x;
+  let y1 = wrapIndex(bz + 1, dims.x) + layer * dims.x;
+  let s00 = textureLoad(normalSampler, vec2i(x0, y0), 0);
+  let s10 = textureLoad(normalSampler, vec2i(x1, y0), 0);
+  let s01 = textureLoad(normalSampler, vec2i(x0, y1), 0);
+  let s11 = textureLoad(normalSampler, vec2i(x1, y1), 0);
+  let w00 = (1.0 - ux) * (1.0 - uz);
+  let w10 = ux * (1.0 - uz);
+  let w01 = (1.0 - ux) * uz;
+  let w11 = ux * uz;
+  var out: FftTap;
+  out.h = s00.r * w00 + s10.r * w10 + s01.r * w01 + s11.r * w11;
+  out.sx = s00.g * w00 + s10.g * w10 + s01.g * w01 + s11.g * w11;
+  out.sz = s00.b * w00 + s10.b * w10 + s01.b * w01 + s11.b * w11;
+  out.j = s00.a * w00 + s10.a * w10 + s01.a * w01 + s11.a * w11;
+  return out;
+}
+
+fn cascadeLength(index: i32) -> f32 {
+  if (index == 0) { return 156.0; }
+  if (index == 1) { return 39.0; }
+  return 9.7;
+}
+
+@vertex
+fn main(input: VertexInputs) -> FragmentInputs {
+  let finalWorld = uniforms.world;
+  let base = (finalWorld * vec4f(vertexInputs.position, 1.0)).xyz;
+  let t = uniforms.waveSpeed;
+  let dims = vec2i(textureDimensions(normalSampler));
+  let layerCount = dims.y / dims.x;
+  // A malha é frustum-adaptativa; estima o espaçamento local para aplicar o
+  // mesmo filtro de Nyquist que a CPU usa (evita aliasing de cascatas curtas).
+  let spacing = 0.24 + max(0.0, base.z - 21.5) * 0.0055;
+
+  var height = 0.0;
+  var slopeX = 0.0;
+  var slopeZ = 0.0;
+  var jac = 0.0;
+  var dispX = 0.0;
+  var dispZ = 0.0;
+
+  for (var i: i32 = 0; i < 3; i = i + 1) {
+    if (i < layerCount) {
+      let len = cascadeLength(i);
+      let charLambda = len / 8.0;
+      let gain = smoothstep(spacing * 1.35, spacing * 3.4, charLambda);
+      let tap = sampleFft(base.xz, i, len, dims);
+      height += tap.h * gain;
+      slopeX += tap.sx * gain;
+      slopeZ += tap.sz * gain;
+      jac += (tap.j - 1.0) * gain;
+      let kRep = 6.2831853 / charLambda;
+      dispX += 0.26 * tap.sx * gain / kRep;
+      dispZ += 0.26 * tap.sz * gain / kRep;
+    }
+  }
+
+  // Uma única swell longa analítica complementa a cascata FFT de 156 m,
+  // garantindo rolos largos e legíveis sem o custo de quatro senoides.
+  let swellGate = smoothstep(spacing * 1.4, spacing * 3.2, 22.0);
+  let swellK = 6.2831853 / 22.0;
+  let swellDir = vec2f(0.84, 0.5426);
+  let swellPhase = swellK * dot(swellDir, base.xz) - 1.6737 * t + 0.35;
+  let swellSin = sin(swellPhase);
+  let swellCos = cos(swellPhase);
+  let swellAmp = 0.2 * swellGate;
+
+  height += swellAmp * swellSin;
+  slopeX += swellAmp * swellK * swellDir.x * swellCos;
+  slopeZ += swellAmp * swellK * swellDir.y * swellCos;
+  dispX += 0.28 * swellAmp * swellDir.x * swellCos;
+  dispZ += 0.28 * swellAmp * swellDir.y * swellCos;
+
+  let jacobian = clamp(1.0 + jac - 0.26 * swellAmp * swellK * swellSin, 0.18, 1.85);
+
+  // Normal analítica arredondada n = normalize(-dh/dx, 1, -dh/dz).
+  let nLen = inverseSqrt(slopeX * slopeX + 1.0 + slopeZ * slopeZ);
+  let normalW = vec3f(-slopeX * nLen, nLen, -slopeZ * nLen);
+
+  let worldPos = vec3f(base.x + dispX, height, base.z + dispZ);
+
+  // Esteira Kelvin do barco (mesma formulação do passe CPU anterior).
+  let boatX = uniforms.windDirection.x;
+  let boatZ = uniforms.windDirection.y;
+  let yaw = uniforms.waveHeight;
+  let halfL = max(2.5, uniforms.waveCount * 0.5);
+  let halfB = max(1.2, uniforms.waveLength * 0.5);
+  let slam = uniforms.windForce;
+  var wake = 0.0;
+  let dxB = worldPos.x - boatX;
+  let dzB = worldPos.z - boatZ;
+  if (abs(dxB) < 22.0 && abs(dzB) < 22.0) {
+    let cy = cos(yaw);
+    let sy = sin(yaw);
+    let localLong = dxB * sy + dzB * cy;
+    let localLat = dxB * cy - dzB * sy;
+    let ellipDist = sqrt((localLong / halfL) * (localLong / halfL) + (localLat / halfB) * (localLat / halfB));
+    let collarDelta = (ellipDist - 1.02) / 0.28;
+    let collar = exp(-collarDelta * collarDelta) * (0.45 + 0.55 * slam);
+    var kelvin = 0.0;
+    if (localLong < halfL * 0.35 && localLong > -halfL * 2.6) {
+      let wakeDist = max(0.0, halfL * 0.35 - localLong);
+      let armOffset = wakeDist * 0.34;
+      let armDist = abs(abs(localLat) - armOffset - halfB * 0.35);
+      let decay = exp(-wakeDist / (halfL * 1.65));
+      let armDelta = armDist / 0.65;
+      kelvin = exp(-armDelta * armDelta) * decay * 0.65;
+    }
+    wake = clamp(collar + kelvin, 0.0, 1.0);
+  }
+
+  // Whitecaps: compressão Jacobiana + crista alta + esteira do barco.
+  let crestLift = clamp(height / 0.55, 0.0, 1.0);
+  let compression = clamp((1.06 - jacobian) / 0.42, 0.0, 1.0);
+  let foam = clamp(compression * (0.7 + 0.9 * crestLift) + crestLift * 0.22, 0.0, 1.0);
+
+  vertexOutputs.vPositionW = worldPos;
+  vertexOutputs.vNormalW = normalW;
+  vertexOutputs.vFoam = foam;
+  vertexOutputs.vHeight = height;
+  vertexOutputs.vWake = wake;
+
+  let clip = uniforms.viewProjection * vec4f(worldPos, 1.0);
+  vertexOutputs.position = clip;
+  vertexOutputs.vRefractionMapTexCoord = vec3f(
+    0.5 * (clip.w + clip.x),
+    0.5 * (clip.w + clip.y),
+    clip.w
+  );
+  let refl = uniforms.reflectionViewProjection * vec4f(worldPos, 1.0);
+  vertexOutputs.vReflectionMapTexCoord = vec3f(
+    0.5 * (refl.w + refl.x),
+    0.5 * (refl.w + refl.y),
+    refl.w
+  );
+}`;
+
+  ShaderStore.ShadersStoreWGSL['waterPixelShader'] = `uniform vEyePosition: vec4f;
+uniform vDiffuseColor: vec4f;
+uniform vSpecularColor: vec4f;
+uniform waterColor: vec4f;
+uniform waterColor2: vec4f;
+uniform colorBlendFactor: f32;
+uniform colorBlendFactor2: f32;
+uniform bumpHeight: f32;
+uniform waveSpeed: f32;
+
+varying vPositionW: vec3f;
+varying vNormalW: vec3f;
+varying vFoam: f32;
+varying vHeight: f32;
+varying vWake: f32;
+varying vRefractionMapTexCoord: vec3f;
+varying vReflectionMapTexCoord: vec3f;
+
+var refractionSamplerSampler: sampler;
+var refractionSampler: texture_2d<f32>;
+var reflectionSamplerSampler: sampler;
+var reflectionSampler: texture_2d<f32>;
+
+// Fresnel de Schlick para água (n = 1.333): barato e visualmente equivalente
+// ao Fresnel dielétrico exato para ângulos de câmera de diorama.
+fn waterFresnel(cosTheta: f32) -> f32 {
+  let c = clamp(cosTheta, 0.0, 1.0);
+  return clamp(0.02 + 0.98 * pow(1.0 - c, 5.0), 0.02, 1.0);
+}
+
+@fragment
+fn main(input: FragmentInputs) -> FragmentOutputs {
+  let debugFlag = uniforms.bumpHeight;
+  let t = uniforms.waveSpeed;
+  let world = fragmentInputs.vPositionW;
+  let viewDir = normalize(uniforms.vEyePosition.xyz - world);
+  let horizon = smoothstep(110.0, 430.0, world.z);
+
+  // Achata a normal no horizonte: elimina cintilação de FFT distante.
+  var normalW = normalize(mix(fragmentInputs.vNormalW, vec3f(0.0, 1.0, 0.0), horizon * 0.75));
+
+  if (debugFlag < 0.95) {
+    // Modos de diagnóstico (normais / altura FFT / espuma). Sem 'return':
+    // o processador WGSL do Babylon anexa o retorno de FragmentOutputs.
+    if (debugFlag < 0.3) {
+      fragmentOutputs.color = vec4f(normalW * 0.5 + vec3f(0.5), 1.0);
+    } else if (debugFlag < 0.5) {
+      let h = clamp(fragmentInputs.vHeight * 0.7 + 0.5, 0.0, 1.0);
+      fragmentOutputs.color = vec4f(h, h * 0.62, 0.92 - h * 0.7, 1.0);
+    } else {
+      fragmentOutputs.color = vec4f(fragmentInputs.vFoam, fragmentInputs.vWake, 0.15, 1.0);
+    }
+  } else {
+    let noV = clamp(dot(normalW, viewDir), 0.0, 1.0);
+    let fresnel = waterFresnel(noV);
+    let nearFactor = 1.0 - smoothstep(21.5, 160.0, world.z);
+
+    let refrUV = clamp(fragmentInputs.vRefractionMapTexCoord.xy / max(fragmentInputs.vRefractionMapTexCoord.z, 1e-4) + normalW.xz * (0.045 * nearFactor), vec2f(0.002), vec2f(0.998));
+    let reflUV = clamp(fragmentInputs.vReflectionMapTexCoord.xy / max(fragmentInputs.vReflectionMapTexCoord.z, 1e-4) + normalW.xz * 0.09, vec2f(0.002), vec2f(0.998));
+    let refr = textureSample(refractionSampler, refractionSamplerSampler, refrUV);
+    let refl = textureSample(reflectionSampler, reflectionSamplerSampler, reflUV);
+
+    // A reflexão do RTT carrega a silhueta da serra; vista de rasante, ela
+    // vira uma mancha escura sobre a água. Antes de aplicar Fresnel, diluímos
+    // essa silhueta em azul atmosférico — a montanha continua insinuada, mas
+    // sem parecer uma sombra sólida projetada na baía.
+    let horizonFade = smoothstep(70.0, 300.0, world.z);
+    let softRefl = mix(refl.rgb, vec3f(0.4, 0.61, 0.76), horizonFade * 0.72);
+
+    // Corpo d'água: espalhamento simples por distância + turbidez/clareza.
+    let turbidity = clamp(uniforms.colorBlendFactor, 0.0, 1.0);
+    let clarity = clamp(uniforms.colorBlendFactor2, 0.0, 1.0);
+    let inscatter = mix(uniforms.waterColor2.rgb, uniforms.waterColor.rgb, smoothstep(14.0, 210.0, world.z));
+    let murk = 1.0 - exp(-max(0.0, world.z - 21.5) * (0.012 + turbidity * 0.022 + (1.0 - clarity) * 0.012));
+    var color = mix(inscatter, refr.rgb * vec3f(0.62, 0.92, 1.0), (1.0 - murk) * (0.38 + clarity * 0.32));
+
+    // Reflexo do céu/recife com Fresnel: no horizonte o peso cai para 0.5
+    // (não 1.35), o que também enfraquece a sombra da montanha.
+    let reflectionWeight = clamp(fresnel * mix(1.15, 0.42, horizon), 0.02, 0.5);
+    color = mix(color, softRefl * vec3f(1.02, 1.06, 1.1), reflectionWeight);
+
+    // SSS barato nas cristas.
+    let crest = smoothstep(0.14, 0.6, fragmentInputs.vHeight);
+    color += vec3f(0.01, 0.15, 0.13) * crest * (1.0 - horizon);
+
+    // Glint solar Blinn-Phong (substitui o GGX de duplo lóbulo).
+    let sunDir = normalize(vec3f(0.28, 0.68, 0.68));
+    let halfDir = normalize(sunDir + viewDir);
+    let spec = pow(max(dot(normalW, halfDir), 0.0), 220.0);
+    color += vec3f(1.0, 0.95, 0.86) * spec * fresnel * 1.6;
+
+    // Espuma: quebra de crista (vFoam) + esteira Kelvin (vWake), com
+    // rompimento barato em duas senoides em vez de FBM/renda filamentar.
+    let breakup = 0.62 + 0.38 * sin(world.x * 1.9 + t * 0.8) * sin(world.z * 2.3 - t * 0.55);
+    let foamMask = clamp((fragmentInputs.vFoam * 1.45 + fragmentInputs.vWake * 1.05) * breakup, 0.0, 0.95);
+    color = mix(color, vec3f(0.95, 0.985, 1.0), foamMask);
+    color += vec3f(1.0, 0.95, 0.86) * spec * (1.0 - foamMask) * 0.45;
+
+    // Perspectiva aérea no horizonte: a água dissolve numa bruma clara que
+    // casa com o céu, em vez de manter a mancha escura do reflexo da serra.
+    let hazeColor = mix(vec3f(0.3, 0.5, 0.66), vec3f(0.48, 0.66, 0.8), horizon);
+    color = mix(color, hazeColor, smoothstep(90.0, 420.0, world.z) * 0.88);
+
+    // Punch de gamma + espaço linear, coerente com ACES/bloom do pipeline.
+    let punched = pow(clamp(color, vec3f(0.0), vec3f(8.0)), vec3f(0.84));
+    fragmentOutputs.color = vec4f(pow(punched, vec3f(2.2)), 1.0);
+  }
+}`;
+}
+
+/**
  * Mapa de normais procedural multiescala + máscara de renda de espuma no canal B.
  */
 function createWaterNormalTexture(scene: Scene): DynamicTexture {
@@ -625,6 +942,8 @@ export interface WaterSystem {
   layout(frame: DioramaFrame): void;
   /** Atualiza estado da esteira Kelvin do barco na superfície oceânica. */
   setBoatWakeState(wake: BoatWakeState): void;
+  /** Profundidade da câmera (m): ajusta o véu e a extinção subaquática. */
+  setCameraDepth(depth: number): void;
   /** Alterna modo de visualização de diagnóstico técnico (Seção 13). */
   setDebugMode(mode: OceanDebugMode): void;
   getDebugMode(): OceanDebugMode;
@@ -633,11 +952,21 @@ export interface WaterSystem {
 }
 
 export function createWaterSystem(scene: Scene, quality: SceneQualityProfile): WaterSystem {
+  // A síntese espectral precisa existir antes da textura de atlas: o perfil do
+  // dispositivo define resolução e número de cascatas do FFT.
+  configureOceanSpectrum(quality.fftSize, quality.fftCascades);
   installDeepseaWaterShader();
   installMeniscusCrossSectionShader();
+  // Em WebGPU o deslocamento/normais da superfície saem da CPU e vão para o
+  // vertex shader (atlas FFT em textura). O caminho GLSL/CPU permanece como
+  // fallback fiel para WebGL2.
+  const gpuSurface = scene.getEngine().isWebGPU;
+  if (gpuSurface) {
+    installDeepseaWaterShaderWGSL();
+  }
 
-  const columns = Math.max(160, quality.waterSegmentsX);
-  const rows = Math.max(112, quality.waterSegmentsZ);
+  const columns = quality.waterSegmentsX;
+  const rows = quality.waterSegmentsZ;
   const vertexCount = (columns + 1) * (rows + 1);
   const basePositions = new Float32Array(vertexCount * 3);
   const vertexSpacings = new Float32Array(vertexCount);
@@ -704,11 +1033,34 @@ export function createWaterSystem(scene: Scene, quality: SceneQualityProfile): W
   mesh.receiveShadows = false;
 
   const normalTexture = createWaterNormalTexture(scene);
+
+  // Atlas FFT empilhado (até 3 cascatas): R=altura, G=slopeX, B=slopeZ,
+  // A=Jacobiano. Atualizado por upload de um Float32Array por quadro.
+  const atlasWidth = quality.fftSize;
+  const atlasHeight = quality.fftSize * quality.fftCascades;
+  const oceanFftTexture = gpuSurface
+    ? RawTexture.CreateRGBATexture(
+        new Float32Array(atlasWidth * atlasHeight * 4),
+        atlasWidth,
+        atlasHeight,
+        scene,
+        false,
+        false,
+        Texture.NEAREST_SAMPLINGMODE,
+        Constants.TEXTURETYPE_FLOAT,
+      )
+    : null;
+  if (oceanFftTexture) {
+    oceanFftTexture.name = 'atlas-fft-oceano';
+    oceanFftTexture.wrapU = Texture.CLAMP_ADDRESSMODE;
+    oceanFftTexture.wrapV = Texture.CLAMP_ADDRESSMODE;
+  }
+
   const renderTargetSize = new Vector2(quality.waterRenderTargetSize, quality.waterRenderTargetSize);
   const material = new WaterMaterial('agua-gerstner-material', scene, renderTargetSize);
-  material.bumpTexture = normalTexture;
-  material.bumpSuperimpose = true;
-  material.bumpAffectsReflection = true;
+  material.bumpTexture = gpuSurface && oceanFftTexture ? oceanFftTexture : normalTexture;
+  material.bumpSuperimpose = !gpuSurface;
+  material.bumpAffectsReflection = !gpuSurface;
   material.waveHeight = 0;
   material.waveLength = 0.1;
   material.windForce = 6.4;
@@ -858,6 +1210,7 @@ export function createWaterSystem(scene: Scene, quality: SceneQualityProfile): W
   veilMesh.material = veilMaterial;
 
   let currentFrame: DioramaFrame | null = null;
+  let cameraDepth = 0;
   let debugMode: OceanDebugMode = 'none';
   let boatWake: BoatWakeState = {
     x: -10,
@@ -870,24 +1223,34 @@ export function createWaterSystem(scene: Scene, quality: SceneQualityProfile): W
 
   const updateVeilVertices = (frame: DioramaFrame, visual?: VisualState): void => {
     const horizon = frame.horizonScreenY;
+    const under = clamp(cameraDepth / 1.4);
     const murk = visual ? clamp(visual.turbidity * 0.45 + visual.sewage * 0.35 + visual.oil * 0.25) : 0;
-    const deepR = mix(0.042, 0.088, murk);
-    const deepG = mix(0.33, 0.32, murk);
-    const deepB = mix(0.66, 0.5, murk);
+    const depthAbs = clamp(cameraDepth / 12);
 
-    const nearR = mix(0.14, 0.19, murk);
-    const nearG = mix(0.62, 0.53, murk);
-    const nearB = mix(0.88, 0.7, murk);
+    const deepR = mix(mix(0.028, 0.07, murk), 0.008, depthAbs);
+    const deepG = mix(mix(0.27, 0.27, murk), 0.12, depthAbs);
+    const deepB = mix(mix(0.6, 0.46, murk), 0.29, depthAbs);
+
+    const nearR = mix(mix(0.1, 0.15, murk), 0.02, depthAbs);
+    const nearG = mix(mix(0.52, 0.46, murk), 0.24, depthAbs);
+    const nearB = mix(mix(0.78, 0.62, murk), 0.43, depthAbs);
+
+    // Acima da água o véu começa no horizonte. Ao submergir, o horizonte real
+    // sai do quadro e o véu passa a cobrir a tela inteira, com alfa crescente
+    // rumo ao fundo — a leitura de extinção da luz na coluna d'água.
+    const startV = mix(horizon, 0, under);
+    const startAlpha = under * 0.14;
+    const endAlpha = mix(0.2, 0.34, under);
 
     const rowsConfig = [
       { v: 0, r: deepR, g: deepG, b: deepB, alpha: 0 },
-      { v: Math.max(0, horizon + 0.03), r: deepR, g: deepG, b: deepB, alpha: 0 },
-      { v: Math.min(1, horizon + 0.075), r: deepR, g: deepG, b: deepB, alpha: 0.21 },
-      { v: Math.min(1, horizon + 0.15), r: deepR, g: deepG, b: deepB, alpha: 0.31 },
-      { v: Math.min(1, horizon + 0.26), r: mix(deepR, nearR, 0.5), g: mix(deepG, nearG, 0.5), b: mix(deepB, nearB, 0.5), alpha: 0.36 },
-      { v: Math.min(1, horizon + 0.42), r: nearR, g: nearG, b: nearB, alpha: 0.36 },
-      { v: Math.min(1, horizon + 0.68), r: nearR, g: nearG, b: nearB, alpha: 0.32 },
-      { v: 1, r: nearR, g: nearG, b: nearB, alpha: 0.28 },
+      { v: startV, r: deepR, g: deepG, b: deepB, alpha: startAlpha },
+      { v: startV + (1 - startV) * 0.18, r: deepR, g: deepG, b: deepB, alpha: mix(startAlpha, endAlpha, 0.3) },
+      { v: startV + (1 - startV) * 0.38, r: mix(deepR, nearR, 0.5), g: mix(deepG, nearG, 0.5), b: mix(deepB, nearB, 0.5), alpha: mix(startAlpha, endAlpha, 0.55) },
+      { v: startV + (1 - startV) * 0.6, r: nearR, g: nearG, b: nearB, alpha: mix(startAlpha, endAlpha, 0.78) },
+      { v: startV + (1 - startV) * 0.8, r: nearR, g: nearG, b: nearB, alpha: mix(startAlpha, endAlpha, 0.9) },
+      { v: 1, r: nearR, g: nearG, b: nearB, alpha: endAlpha },
+      { v: 1, r: nearR, g: nearG, b: nearB, alpha: endAlpha },
     ];
     const halfHeight = VEIL_DISTANCE * frame.tanHalfFov;
     const halfWidth = halfHeight * frame.aspect;
@@ -955,6 +1318,10 @@ export function createWaterSystem(scene: Scene, quality: SceneQualityProfile): W
       boatWake = wake;
     },
 
+    setCameraDepth(depth: number): void {
+      cameraDepth = Math.max(0, depth);
+    },
+
     setDebugMode(mode: OceanDebugMode): void {
       debugMode = mode;
       material.wireframe = mode === 'wireframe';
@@ -965,69 +1332,93 @@ export function createWaterSystem(scene: Scene, quality: SceneQualityProfile): W
     },
 
     update(seconds: number, visual: VisualState): void {
-      stepOceanSpectrum(seconds);
+      const gpuAtlas = gpuSurface && oceanFftTexture;
 
-      const debugAlpha =
-        debugMode === 'normals'
-          ? 0.2
-          : debugMode === 'height'
-            ? 0.4
-            : debugMode === 'foam'
-              ? 0.6
-              : 1.0;
+      if (gpuAtlas && oceanFftTexture) {
+        // Caminho WebGPU: um único upload de 64x192 RGBA float32 por quadro.
+        // Toda a reconstrução de altura/normais/espuma acontece na GPU.
+        const atlas = getOceanFftAtlas(seconds);
+        oceanFftTexture.update(atlas.data);
 
-      const wakeCos = Math.cos(boatWake.yaw);
-      const wakeSin = Math.sin(boatWake.yaw);
-      const halfL = Math.max(2.5, boatWake.hullLength * 0.5);
-      const halfB = Math.max(1.2, boatWake.hullBeam * 0.5);
-
-      for (let index = 0; index < vertexCount; index += 1) {
-        const baseX = basePositions[index * 3];
-        const baseZ = basePositions[index * 3 + 2];
-        const sp = vertexSpacings[index];
-        const sample = sampleOcean(baseX, baseZ, seconds, sp, scratchSample);
-
-        const worldX = baseX + sample.displacementX;
-        const worldZ = baseZ + sample.displacementZ;
-
-        positions[index * 3] = worldX;
-        positions[index * 3 + 1] = sample.height;
-        positions[index * 3 + 2] = worldZ;
-        normals[index * 3] = sample.normalX;
-        normals[index * 3 + 1] = sample.normalY;
-        normals[index * 3 + 2] = sample.normalZ;
-
-        // Calcula o anel de espuma de linha d'água e a esteira em V de Kelvin ao redor do casco do barco
-        let hullWakeFoam = 0;
-        const dxB = worldX - boatWake.x;
-        const dzB = worldZ - boatWake.z;
-        if (Math.abs(dxB) < 22 && Math.abs(dzB) < 22) {
-          const localLong = dxB * wakeSin + dzB * wakeCos;
-          const localLat = dxB * wakeCos - dzB * wakeSin;
-          const ellipDist = Math.hypot(localLong / halfL, localLat / halfB);
-          // Anel de espuma colado à linha d'água do casco (ellipDist ~ 1.0)
-          const collar = Math.exp(-Math.pow((ellipDist - 1.02) / 0.28, 2)) * (0.45 + 0.55 * boatWake.slam);
-          // Esteira em V de Kelvin abrindo atrás da popa (localLong < 0)
-          let kelvinV = 0;
-          if (localLong < halfL * 0.35 && localLong > -halfL * 2.6) {
-            const wakeDist = Math.max(0, halfL * 0.35 - localLong);
-            const armOffset = wakeDist * 0.34; // Ângulo de Kelvin ~ 19.5°
-            const armDist = Math.abs(Math.abs(localLat) - armOffset - halfB * 0.35);
-            const decay = Math.exp(-wakeDist / (halfL * 1.65));
-            kelvinV = Math.exp(-Math.pow(armDist / 0.65, 2)) * decay * 0.65;
-          }
-          hullWakeFoam = clamp(collar + kelvinV, 0, 1);
-        }
-
-        colors[index * 4] = sample.foam;
-        colors[index * 4 + 1] = sample.breaker;
-        colors[index * 4 + 2] = hullWakeFoam;
-        colors[index * 4 + 3] = debugAlpha;
+        material.waveSpeed = seconds;
+        material.windDirection.set(boatWake.x, boatWake.z);
+        material.waveHeight = boatWake.yaw;
+        material.waveCount = boatWake.hullLength;
+        material.waveLength = boatWake.hullBeam;
+        material.windForce = boatWake.slam;
+        material.bumpHeight =
+          debugMode === 'normals'
+            ? 0.1
+            : debugMode === 'height'
+              ? 0.4
+              : debugMode === 'foam'
+                ? 0.7
+                : 1.0;
+      } else {
+        stepOceanSpectrum(seconds);
       }
 
-      mesh.updateVerticesData(VertexBuffer.PositionKind, positions, false, false);
-      mesh.updateVerticesData(VertexBuffer.NormalKind, normals, false, false);
-      mesh.updateVerticesData(VertexBuffer.ColorKind, colors, false, false);
+      if (!gpuAtlas) {
+        const debugAlpha =
+          debugMode === 'normals'
+            ? 0.2
+            : debugMode === 'height'
+              ? 0.4
+              : debugMode === 'foam'
+                ? 0.6
+                : 1.0;
+
+        const wakeCos = Math.cos(boatWake.yaw);
+        const wakeSin = Math.sin(boatWake.yaw);
+        const halfL = Math.max(2.5, boatWake.hullLength * 0.5);
+        const halfB = Math.max(1.2, boatWake.hullBeam * 0.5);
+
+        for (let index = 0; index < vertexCount; index += 1) {
+          const baseX = basePositions[index * 3];
+          const baseZ = basePositions[index * 3 + 2];
+          const sp = vertexSpacings[index];
+          const sample = sampleOcean(baseX, baseZ, seconds, sp, scratchSample);
+
+          const worldX = baseX + sample.displacementX;
+          const worldZ = baseZ + sample.displacementZ;
+
+          positions[index * 3] = worldX;
+          positions[index * 3 + 1] = sample.height;
+          positions[index * 3 + 2] = worldZ;
+          normals[index * 3] = sample.normalX;
+          normals[index * 3 + 1] = sample.normalY;
+          normals[index * 3 + 2] = sample.normalZ;
+
+          // Anel de espuma na linha d'água e esteira Kelvin ao redor do casco.
+          let hullWakeFoam = 0;
+          const dxB = worldX - boatWake.x;
+          const dzB = worldZ - boatWake.z;
+          if (Math.abs(dxB) < 22 && Math.abs(dzB) < 22) {
+            const localLong = dxB * wakeSin + dzB * wakeCos;
+            const localLat = dxB * wakeCos - dzB * wakeSin;
+            const ellipDist = Math.hypot(localLong / halfL, localLat / halfB);
+            const collar = Math.exp(-Math.pow((ellipDist - 1.02) / 0.28, 2)) * (0.45 + 0.55 * boatWake.slam);
+            let kelvinV = 0;
+            if (localLong < halfL * 0.35 && localLong > -halfL * 2.6) {
+              const wakeDist = Math.max(0, halfL * 0.35 - localLong);
+              const armOffset = wakeDist * 0.34;
+              const armDist = Math.abs(Math.abs(localLat) - armOffset - halfB * 0.35);
+              const decay = Math.exp(-wakeDist / (halfL * 1.65));
+              kelvinV = Math.exp(-Math.pow(armDist / 0.65, 2)) * decay * 0.65;
+            }
+            hullWakeFoam = clamp(collar + kelvinV, 0, 1);
+          }
+
+          colors[index * 4] = sample.foam;
+          colors[index * 4 + 1] = sample.breaker;
+          colors[index * 4 + 2] = hullWakeFoam;
+          colors[index * 4 + 3] = debugAlpha;
+        }
+
+        mesh.updateVerticesData(VertexBuffer.PositionKind, positions, false, false);
+        mesh.updateVerticesData(VertexBuffer.NormalKind, normals, false, false);
+        mesh.updateVerticesData(VertexBuffer.ColorKind, colors, false, false);
+      }
 
       // Atualiza o menisco frontal (`frente-onda-corte`):
       // O topo (r = 0) usa o mesmo espaçamento de Nyquist da linha frontal da superfície
@@ -1097,11 +1488,17 @@ export function createWaterSystem(scene: Scene, quality: SceneQualityProfile): W
         clamp(nearB, 0.24, 0.96),
       );
 
-      material.colorBlendFactor = clamp(
-        0.52 + turbidity * 0.18 + sewage * 0.12 + oil * 0.08,
-        0.46,
-        0.82,
-      );
+      if (gpuAtlas) {
+        // Semântica GPU: colorBlendFactor = turbidez; colorBlendFactor2 = clareza.
+        material.colorBlendFactor = clamp(turbidity * 0.85 + sewage * 0.45 + oil * 0.25, 0, 1);
+        material.colorBlendFactor2 = clamp(clarity, 0, 1);
+      } else {
+        material.colorBlendFactor = clamp(
+          0.52 + turbidity * 0.18 + sewage * 0.12 + oil * 0.08,
+          0.46,
+          0.82,
+        );
+      }
       material.specularPower = 200 + clarity * 80;
 
       if (currentFrame) {
